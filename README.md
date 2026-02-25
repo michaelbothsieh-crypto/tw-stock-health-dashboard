@@ -21,6 +21,21 @@ C --> D[Next.js API<br/>(/api/stock)]
 D --> E[UI Dashboard<br/>(Next.js Client)]
 ```
 
+## 🛠 自動診斷與驗證 (Self-Check Test)
+
+專案內建了自我檢測腳本，用於確保不同的股票 (例如：台積電、鴻海、聯發科) 在獲取與計算動能分數上具有合理的區別，並會自動嘗試捕捉可能的問題（包含 API Provider、Cache Keys 以及正規化邏輯故障）：
+
+```bash
+npm run selfcheck
+```
+
+此外，亦有專門針對基本面防爆分 (Fundamental Score Cap) 的腳本：
+```bash
+npm run selfcheck:fundamental
+```
+
+執行後會於 Console 輸出詳細的分數清單、API 實際擷取的資料數量，最後並判定 `flowScore` 與 `fundamentalScore` 是否符合實務要求（針對多檔股票必須產生有區別度的動態分數）。
+
 ## 📊 計分方法 (Scoring Methodology)
 
 ### 📈 1. 趨勢分數 (Trend Score) - 0~100 分

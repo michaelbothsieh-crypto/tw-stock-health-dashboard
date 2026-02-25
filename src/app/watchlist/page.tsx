@@ -29,16 +29,24 @@ export default function WatchlistPage() {
 
     const handleAdd = () => {
         setError("");
-        const ticker = newTicker.trim();
-        if (!/^\d{4}$/.test(ticker) && !/^[A-Za-z0-9]+\.TW$/.test(ticker)) {
-            setError("請輸入正確的 4 碼台股代號 (例如：2330)");
+        const ticker = newTicker.trim().toUpperCase();
+
+        // 配合新的正規化邏輯簡單防呆
+        const pureNumberMatch = ticker.match(/^(\d{4})$/);
+        const suffixMatch = ticker.match(/^(\d{4})\.(TW|TWO)$/);
+
+        if (!pureNumberMatch && !suffixMatch) {
+            setError("請輸入正確的 4 碼台股代號 (例如：2330 或 2330.TW)");
             return;
         }
-        if (watchlist.includes(ticker)) {
+
+        const symbolToSave = pureNumberMatch ? pureNumberMatch[1] : (suffixMatch ? suffixMatch[1] : ticker);
+
+        if (watchlist.includes(symbolToSave)) {
             setError("該代號已在自選清單中");
             return;
         }
-        const newList = [...watchlist, ticker];
+        const newList = [...watchlist, symbolToSave];
         saveWatchlist(newList);
         setNewTicker("");
     };
