@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertCircle } from "lucide-react";
 
 const NewsList = ({ items }: { items: any[] }) => {
-  if (!items || items.length === 0) return <div className="text-sm text-muted-foreground py-4 text-center">近期無相關重大快訊。</div>;
+  if (!items || items.length === 0) return <div className="text-sm text-muted-foreground py-4 text-center">近 7 天無可用新聞資料</div>;
 
   return (
     <div className="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-2">
@@ -108,7 +108,7 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight mb-2">台股健康儀表板</h1>
           {data?.normalizedTicker && (
             <p className="text-sm text-muted-foreground flex items-center gap-2">
-              代號: {data.normalizedTicker.display} | 市場: {data.normalizedTicker.market} | Yahoo: {data.normalizedTicker.yahoo}
+              代號: {data.normalizedTicker.displayName || data.normalizedTicker.display} | 市場: {data.normalizedTicker.market} | Yahoo: {data.normalizedTicker.yahoo}
             </p>
           )}
         </div>
