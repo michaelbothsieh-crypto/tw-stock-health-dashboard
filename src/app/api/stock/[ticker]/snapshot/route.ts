@@ -10,6 +10,7 @@ import { detectMarket } from "@/lib/market";
 import { fetchRecentBars } from "@/lib/range";
 import { getTaiwanStockNews } from "@/lib/providers/finmind";
 import { calculateCatalystScore } from "@/lib/news/catalystScore";
+import { getCompanyNameZh } from "@/lib/companyName";
 
 export async function GET(
     req: NextRequest,
@@ -34,6 +35,10 @@ export async function GET(
         norm.yahoo = marketInfo.yahoo;
         if (marketInfo.ambiguous) warnings.push("ambiguous_market");
         if (norm.market === 'UNKNOWN') warnings.push("市場未識別");
+
+        // 2.5 取得中文股名
+        const companyNameZh = await getCompanyNameZh(norm.symbol);
+        const displayName = companyNameZh ? `${norm.symbol} ${companyNameZh}` : norm.symbol;
 
         // 3. 獲取 OHLCV (最近 180 根)
         const rangeResult = await fetchRecentBars(norm.symbol, 180);
@@ -83,7 +88,11 @@ export async function GET(
         const aiExplanation = generateExplanation(norm.symbol, trendSignals, flowSignals, fundamentalSignals, catalystResult);
 
         return NextResponse.json({
-            normalizedTicker: norm,
+            normalizedTicker: {
+                ...norm,
+                companyNameZh,
+                displayName
+            },
             dataWindow: {
                 barsRequested: rangeResult.barsRequested,
                 barsReturned: rangeResult.barsReturned,

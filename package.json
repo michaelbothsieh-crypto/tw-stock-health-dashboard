@@ -9,7 +9,10 @@
     "lint": "next lint",
     "test": "vitest",
     "selfcheck": "npx tsx scripts/self_check_scores.ts",
-    "selfcheck:fundamental": "npx tsx scripts/self_check_fundamental_cap.ts"
+    "selfcheck:fundamental": "npx tsx scripts/self_check_fundamental_cap.ts",
+    "selfcheck:names": "npx tsx scripts/self_check_company_names.ts",
+    "selfcheck:news": "npx tsx scripts/self_check_news.ts",
+    "selfcheck:all": "npm run selfcheck:names && npm run selfcheck:fundamental && npm run selfcheck:news"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
