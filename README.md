@@ -3,7 +3,7 @@
 這個專案是一個台股儀表板，用來快速檢查個股的波段多空趨勢與體質。我們從技術面、籌碼面、基本面三個維度切入給出分數，並透過 AI 統整出一份簡短的總結報告。
 
 ## 🌟 Demo
-> 🔗 **[Vercel Demo URL (即將上線)]()**
+> 🔗 **[Vercel Demo URL](https://tw-stock-health-dashboard.vercel.app/)**
 
 ## 📸 核心功能
 - **Dashboard**: 一眼看出 5 檔自選股的三大面向分數與 AI 解讀。
@@ -67,35 +67,6 @@ npm run selfcheck:fundamental
 
 ---
 
-## 🚀 本地開發與啟動
-
-### 1. 取得 API Key
-- 前往 [FinMind 官網](https://finmindtrade.com/) 註冊，申請一組免費的 **API Token**。
-
-### 2. 環境變數設定
-把範本檔案複製一份出來改：
-```bash
-cp .env.example .env
-```
-編輯 `.env`，貼上你的 Token：
-```env
-FINMIND_API_TOKEN=你的_FinMind_Token
-```
-（如果是要在本地跑前面的測試腳本，建議在 `.env.local` 裡也設定同樣的值。）
-
-### 3. 安裝與執行
-```bash
-npm install
-npm run dev
-```
-打開 [http://localhost:3000](http://localhost:3000) 就能看到結果。
-
-## 部署提醒
-如果要部署到 Vercel 上：
-1. 記得去 Vercel 的專案設定把 `FINMIND_API_TOKEN` 補上去。
-2. 部署上去後，可以直接用瀏覽器打 `/api/health/news?symbol=2330` 這個路由，看看有沒有回傳 `env_has_finmind_token: true` 還有 `data_count > 0`，順便確定環境變數沒漏掉。
-
----
 
 ## ⚠️ 免責聲明
 > 此為開源專題展示 (Demo Project)，並非投資建議。\n> 上面的分數與訊號都是基於固定規則和歷史回測計算的結果，實際市場瞬息萬變。盈虧自負，下單前請動腦。
