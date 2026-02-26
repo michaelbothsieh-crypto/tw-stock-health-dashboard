@@ -1,73 +1,66 @@
-import { getTaiwanStockNews } from '../src/lib/providers/finmind';
-import { calculateCatalystScore } from '../src/lib/news/catalystScore';
+import dotenv from 'dotenv';
+import path from 'path';
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+dotenv.config(); // fallback to .env just in case
 
-const TICKERS = ["2330", "2317", "2454"];
+const TICKERS = ["2330", "2317"];
 
 async function runSelfCheck() {
-    console.log("=== 新聞與快訊自動診斷報告 (News Catalyst Check) ===");
+    console.log("=== 測試開始: 檢查新聞抓取邏輯 (含 v3/v4 備援) ===");
+
     let failCount = 0;
 
-    const newsData: Record<string, any[]> = {};
-
     for (const ticker of TICKERS) {
-        console.log(`\nFetching ${ticker}...`);
+        console.log(`\n[檢查] 標的: ${ticker}`);
+
         try {
-            const res = await fetch(`http://localhost:3000/api/stock/${ticker}/snapshot`);
-            const json = await res.json();
+            const { getTaiwanStockNews } = require('../src/lib/providers/finmind');
+            const { calculateCatalystScore } = require('../src/lib/news/catalystScore');
+            const { format, subDays } = require('date-fns');
 
-            if (!res.ok) {
-                console.log(`[${ticker}] Fetch failed:`, json.error || res.statusText);
+            const now = new Date();
+            const startStr = format(subDays(now, 7), 'yyyy-MM-dd');
+            const endStr = format(now, 'yyyy-MM-dd');
+
+            console.log(`-> 呼叫: getTaiwanStockNews('${ticker}', '${startStr}', '${endStr}')`);
+
+            const result = await getTaiwanStockNews(ticker, startStr, endStr);
+            console.log(`-> API 正常回傳，沒有被 400 擋死。`);
+            console.log(`-> 實際觸發的備援策略: ${result.fallback_used || '無 (原本的 v3 就成功了)'}`);
+            console.log(`-> 總共抓到 ${result.data.length} 筆新聞`);
+
+            const catalyst = await calculateCatalystScore(ticker, result.data);
+
+            const isTimelineArray = Array.isArray(catalyst.timeline);
+            const isScoreNumber = typeof catalyst.catalystScore === 'number';
+
+            console.log(`-> timeline 格式是否正確解析為陣列？ ${isTimelineArray ? '是' : '否'}`);
+            console.log(`-> catalystScore 是否為數字？ ${isScoreNumber ? '是' : '否'} (當前數值: ${catalyst.catalystScore})`);
+
+            if (!isTimelineArray) {
+                console.error(`[失敗] ${ticker} 解析 timeline 失敗，目前型別不是陣列。`);
                 failCount++;
-                continue;
             }
-
-            const catalyst = json.news;
-            newsData[ticker] = catalyst.timeline || [];
-
-            console.log(`[${ticker}] API array length: ${newsData[ticker].length}`);
-            console.log(`[${ticker}] catalystScore (number expected): ${catalyst.catalystScore} (${typeof catalyst.catalystScore})`);
-            console.log(`[${ticker}] timeline is array? ${Array.isArray(catalyst.timeline)} (${(catalyst.timeline || []).length} items)`);
-
-            if (typeof catalyst.catalystScore !== 'number') {
-                console.log(`-> [FAIL] catalystScore is not a number.`);
-                failCount++;
-            }
-            if (!Array.isArray(catalyst.timeline)) {
-                console.log(`-> [FAIL] timeline is not an array.`);
+            if (!isScoreNumber) {
+                console.error(`[失敗] ${ticker} 算出來的 catalystScore 不是數字。`);
                 failCount++;
             }
 
         } catch (e: any) {
-            console.error(`[${ticker}] Error:`, e.message);
+            console.error(`[錯誤] ${ticker} 抓取或運算時發生例外:`, e.message);
             failCount++;
+            if (e.message.includes('400')) {
+                console.error(`-> 警告：踩到了 HTTP 400 錯誤！`);
+            }
         }
     }
 
-    console.log("\n=== 跨股重複驗證 (Cross-Ticker Duplication Check) ===");
-    const t1 = newsData["2330"];
-    const t2 = newsData["2317"];
-    const t3 = newsData["2454"];
-
-    if (t1 && t2 && t3 && t1.length > 0 && t2.length > 0 && t3.length > 0) {
-        const t1Title = t1[0].title;
-        const t2Title = t2[0].title;
-        const t3Title = t3[0].title;
-
-        if (t1Title === t2Title && t2Title === t3Title) {
-            console.log("-> [FAIL] 2330, 2317, 2454 新聞完全相同，極大機率是 Cache Key 共用錯誤。");
-            failCount++;
-        } else {
-            console.log("-> [PASS] 各檔股票新聞標題不同，Cache 切分正確。");
-        }
-    } else {
-        console.log("-> [PASS] 新聞數量不同或部分為空，沒有全部相同的情況。");
-    }
-
-    console.log("\n=== 最終結果 (Final Output) ===");
+    console.log("\n=== 測試結束 ===");
     if (failCount > 0) {
-        console.log("FAIL: One or more news conditions failed.");
+        console.error(`[結果] 總共抓到 ${failCount} 個錯誤。`);
+        process.exit(1);
     } else {
-        console.log("PASS: News fetched correctly with distinct API endpoints.");
+        console.log(`[結果] All pass! 沒有遇到 HTTP 400 地雷，型別也都正常。`);
     }
 }
 

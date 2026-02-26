@@ -1,87 +1,91 @@
 # 台股波段健康/多空儀表板 (Taiwan Stock Health Dashboard)
 
-這是一個 AI 輔助的台股波段多空與健康度檢查儀表板。提供可量化的技術面、籌碼面、基本面分數評估，並產生綜合分析報告。
+這個專案是一個台股儀表板，用來快速檢查個股的波段多空趨勢與體質。我們從技術面、籌碼面、基本面三個維度切入給出分數，並透過 AI 統整出一份簡短的總結報告。
 
 ## 🌟 Demo
-> 🔗 **[Vercel Demo URL (Coming Soon)]()**
+> 🔗 **[Vercel Demo URL (即將上線)]()**
 
-## 📸 功能預覽
-- **Dashboard**: 即時計算 5 檔個股的三大面向分數與 AI 解讀。
-- **Watchlist**: 追蹤自選股清單（LocalStorage）。
-- **Reports**: 每日股市/個股 AI 分析簡報。
+## 📸 核心功能
+- **Dashboard**: 一眼看出 5 檔自選股的三大面向分數與 AI 解讀。
+- **Watchlist**: 自選股清單直接存在瀏覽器的 LocalStorage 裡，不用登入。
+- **Reports**: 每日自動產生大盤或個股的文字簡報。
 
 ## 🏗️ 系統架構
-本系統分為四大層級：
 
 ```mermaid
 graph LR
-A[Provider<br/>(FinMind API)] --> B[Signals<br/>(Trend/Flow/Fund)]
-B --> C[Explain<br/>(AI Rules/LLM)]
+A[Provider<br/>(FinMind 等)] --> B[Signals<br/>(技術/籌碼/基本)]
+B --> C[Explain<br/>(AI 規則/LLM)]
 C --> D[Next.js API<br/>(/api/stock)]
-D --> E[UI Dashboard<br/>(Next.js Client)]
+D --> E[UI Dashboard<br/>(前端)]
 ```
 
-## 🛠 自動診斷與驗證 (Self-Check Test)
+## 🛠 自動測試與診斷
 
-專案內建了自我檢測腳本，用於確保不同的股票 (例如：台積電、鴻海、聯發科) 在獲取與計算動能分數上具有合理的區別，並會自動嘗試捕捉可能的問題（包含 API Provider、Cache Keys 以及正規化邏輯故障）：
+專案裡有寫好的幾支腳本可以當作自我檢測，跑一下就能知道 API 有沒有壞掉、快取有沒有命裡，或是算出來的分數正不正常。像是台積電、鴻海、聯發科算出來的分數不應該都長得一樣：
 
 ```bash
 npm run selfcheck
 ```
 
-此外，亦有專門針對基本面防爆分 (Fundamental Score Cap) 的腳本：
+如果你只擔心營收等基本面 API 壞掉：
 ```bash
 npm run selfcheck:fundamental
 ```
 
-執行後會於 Console 輸出詳細的分數清單、API 實際擷取的資料數量，最後並判定 `flowScore` 與 `fundamentalScore` 是否符合實務要求（針對多檔股票必須產生有區別度的動態分數）。
+腳本跑完會在終端機印出詳細分數跟實際拿到的資料筆數，最後還會自動檢查 `flowScore` 和 `fundamentalScore` 的波動區間有沒有達到實務上能用的標準。如果 API 斷線或資料抓不到會直接噴警告。
 
-## 📊 計分方法 (Scoring Methodology)
+## 📊 計分邏輯
 
 ### 📈 1. 趨勢分數 (Trend Score) - 0~100 分
-判斷技術面強弱：
-- **40% 趨勢排列**: 依據 20MA, 60MA, 120MA 多空排列判斷。
-- **20% RSI 動能**: RSI(14) 區間動能，>50 強勢，>70 留意超買風險。
-- **20% MACD 柱狀**: 趨勢加速指標，紅柱加分。
-- **20% 波段報酬**: 近 60 日累積報酬表現。
+看目前的技術面強弱：
+- **40% 趨勢排列**: 檢查 20MA、60MA、120MA 目前是多頭還是空頭排隊。
+- **20% RSI 動能**: RSI(14) 區間動能，大於 50 偏強，大於 70 留意超買風險。
+- **20% MACD 柱狀**: 趨勢加速指標，紅柱會加分。
+- **20% 波段報酬**: 最近 60 天內這檔股票幫你賺（或賠）了多少。
 
 ### 💰 2. 籌碼分數 (Flow Score) - 0~100 分
-判斷大戶與散戶動向：
-- **外資買賣 (+/-25)**: 統計近 5 日與 20 日外資淨買賣超。
-- **投信買賣 (+/-25)**: 統計近 5 日與 20 日投信淨買賣超。
-- **融資餘額 (+/-10)**: 檢視散戶籌碼，20 日增幅若過大予以扣分並提示風險。
+追蹤法人的大錢跟散戶動向：
+- **外資買賣 (+/-25)**: 近 5 天與近 20 天外資淨買賣超狀況。
+- **投信買賣 (+/-25)**: 近 5 天與近 20 天投信淨買賣超狀況。
+- **融資餘額 (+/-10)**: 看看散戶有沒有過度熱情，如果近 20 天融資暴增，通常會直接扣分。
 
 ### 🏭 3. 基本面分數 (Fundamental Score) - 0~100 分
-判斷財報實質支撐：
-- **YoY 平均**: 最近 3 個月的月營收 YoY 成長率。
-- **YoY 趨勢**: YoY 是否保持連續數個月上升。
+找尋有沒有實質的獲利數字在支撐股價：
+- **YoY 平均**: 最近三個月份的單月營收年增率大約多少。
+- **YoY 趨勢**: 營收成長是不是這幾個月持續在放大。
 
 ---
 
-## 🚀 本地開發與啟動 (Getting Started)
+## 🚀 本地開發與啟動
 
 ### 1. 取得 API Key
-- 需要前往 [FinMind 官網](https://finmindtrade.com/) 註冊並取得免費的 **API Token**。
+- 前往 [FinMind 官網](https://finmindtrade.com/) 註冊，申請一組免費的 **API Token**。
 
 ### 2. 環境變數設定
-複製專案中的環境變數範本並填入 Token：
+把範本檔案複製一份出來改：
 ```bash
 cp .env.example .env
 ```
-編輯 `.env`：
+編輯 `.env`，貼上你的 Token：
 ```env
-FINMIND_API_TOKEN=您的_FinMind_Token
+FINMIND_API_TOKEN=你的_FinMind_Token
 ```
+（如果是要在本地跑前面的測試腳本，建議在 `.env.local` 裡也設定同樣的值。）
 
 ### 3. 安裝與執行
 ```bash
 npm install
 npm run dev
 ```
-啟動後請前往 [http://localhost:3000](http://localhost:3000) 檢視 Dashboard。
+打開 [http://localhost:3000](http://localhost:3000) 就能看到結果。
+
+## 部署提醒
+如果要部署到 Vercel 上：
+1. 記得去 Vercel 的專案設定把 `FINMIND_API_TOKEN` 補上去。
+2. 部署上去後，可以直接用瀏覽器打 `/api/health/news?symbol=2330` 這個路由，看看有沒有回傳 `env_has_finmind_token: true` 還有 `data_count > 0`，順便確定環境變數沒漏掉。
 
 ---
 
-## ⚠️ 免責聲明 (Disclaimer)
-> **非投資建議 (Not Financial Advice)**
-> 本專案為展示用途 (Demo Project)。所有分數、訊號與 AI 分析均基於歷史統計及規則產生，**不代表未來的實際走勢**。專案結果**不可**作為買賣判斷之唯一依據。投資有賺有賠，交易前請自行審慎評估風險。
+## ⚠️ 免責聲明
+> 此為開源專題展示 (Demo Project)，並非投資建議。\n> 上面的分數與訊號都是基於固定規則和歷史回測計算的結果，實際市場瞬息萬變。盈虧自負，下單前請動腦。
