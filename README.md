@@ -14,10 +14,10 @@
 
 ```mermaid
 graph LR
-A[Provider<br/>(FinMind 等)] --> B[Signals<br/>(技術/籌碼/基本)]
-B --> C[Explain<br/>(AI 規則/LLM)]
-C --> D[Next.js API<br/>(/api/stock)]
-D --> E[UI Dashboard<br/>(前端)]
+A["Provider<br/>(FinMind 等)"] --> B["Signals<br/>(技術/籌碼/基本)"]
+B --> C["Explain<br/>(AI 規則/LLM)"]
+C --> D["Next.js API<br/>(/api/stock)"]
+D --> E["UI Dashboard<br/>(前端)"]
 ```
 
 ## 🛠 自動測試與診斷
