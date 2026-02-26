@@ -1,0 +1,29 @@
+import { NextResponse } from "next/server";
+import { handleTelegramMessage } from "@/lib/telegram/botEngine";
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json();
+
+    // Validate the typical Telegram Webhook shape
+    if (!body || !body.message) {
+      return NextResponse.json({ ok: true, reason: "No message present" });
+    }
+
+    const { chat, text } = body.message;
+
+    if (!chat || !chat.id || !text) {
+      return NextResponse.json({ ok: true, reason: "No text or text missing" });
+    }
+
+    // Process asynchronously (Vercel Serverless allows short execution background tasks or awaiting here if it's within 10s)
+    // We will await it directly to ensure we reply before lambda freezing.
+    await handleTelegramMessage(chat.id, text.trim());
+
+    return NextResponse.json({ ok: true });
+  } catch (error: any) {
+    console.error("[TelegramWebhook] Fatal Error:", error);
+    // Always return 200 OK so Telegram stops retrying the bad payload
+    return NextResponse.json({ ok: true, error: error.message });
+  }
+}

@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { format, subDays } from "date-fns";
 import {
   FinmindProviderError,
@@ -26,6 +26,15 @@ import { calculateConsistency } from "@/lib/consistency";
 import { calculateInstitutionCorrelation } from "@/lib/analytics/correlation";
 import { calculateKeyLevels } from "@/lib/signals/keyLevels";
 import { buildUxSummary } from "@/lib/ux/summaryBuilder";
+import { resolveStockProfile } from "@/lib/industry/stockProfileResolver";
+import { getOrComputeClusters } from "@/lib/global/clusteringEngine";
+import { mapThemeToUS } from "@/lib/global/themeMapper";
+import { selectDrivers } from "@/lib/global/driverSelector";
+import { calculateRelativeStrength } from "@/lib/analytics/relativeStrength";
+import { fetchYahooFinanceBars } from "@/lib/global/yahooFinance";
+import { evaluateCrashWarning } from "@/lib/global/crash/crashEngine";
+import { selectTwPeers } from "@/lib/global/twPeerSelector";
+import { getMarketIndicators } from "@/lib/providers/marketIndicators";
 
 export async function GET(
   req: NextRequest,
@@ -167,11 +176,11 @@ export async function GET(
       upProb5D: predictions.upProb5D,
     });
     const riskFlags = [
-        ...trendSignals.risks,
-        ...flowSignals.risks,
-        ...fundamentalSignals.risks,
-        ...shortTerm.breakdown.riskFlags,
-      ];
+      ...trendSignals.risks,
+      ...flowSignals.risks,
+      ...fundamentalSignals.risks,
+      ...shortTerm.breakdown.riskFlags,
+    ];
     const mappedPrices = prices.map(p => ({
       date: p.date,
       open: p.open,
@@ -181,7 +190,7 @@ export async function GET(
       volume: p.Trading_Volume
     }));
     const keyLevels = calculateKeyLevels(mappedPrices);
-    
+
     const strategy = generateStrategy({
       trendScore: trendSignals.trendScore,
       flowScore: flowSignals.flowScore,
@@ -212,9 +221,9 @@ export async function GET(
       latestClose,
     });
 
-    
-    const topContradiction = strategy.explain.contradictions.length > 0 
-      ? strategy.explain.contradictions[0].why 
+
+    const topContradiction = strategy.explain.contradictions.length > 0
+      ? strategy.explain.contradictions[0].why
       : undefined;
 
     const uxSummary = buildUxSummary({
@@ -226,6 +235,78 @@ export async function GET(
     });
 
     const institutionCorrelation = calculateInstitutionCorrelation(prices, investors, 60);
+
+    // --- New Global Linkage Pipeline (Clustering & Auto-Mapping) ---
+    const stockProfile = await resolveStockProfile(norm.symbol, displayName);
+    const mappedPricesTw = prices.map(p => ({ date: p.date, close: p.close }));
+    
+    // 1. Compute dynamic clusters
+    const { members: allMembers, targetClusterId } = await getOrComputeClusters(
+        norm.symbol,
+        mappedPricesTw,
+        15
+    );
+    
+    // 2. Filter target's cluster members
+    const clusterMembers = Array.from(allMembers.values()).filter(m => m.clusterId === targetClusterId);
+    
+    // 3. Resolve dominant theme (Sector name)
+    const themeName = stockProfile.sectorZh;
+    const usMapping = mapThemeToUS(themeName);
+    
+    // 4. Local Peers (TW)
+    const twPeerLinkage = await selectTwPeers(norm.symbol, clusterMembers, themeName);
+    
+    // 5. Overseas Drivers
+    // Fetch Yahoo data for US candidates
+    const allUsSymbols = Array.from(new Set([usMapping.sector.id, ...usMapping.hints]));
+    const globalDataMap: Record<string, any[]> = {};
+    let globalFetchSuccess = true;
+
+    try {
+      const globalBars = await Promise.all(
+        allUsSymbols.map(async (sym) => {
+          return { symbol: sym, bars: await fetchYahooFinanceBars(sym, 120) };
+        })
+      );
+      for (const res of globalBars) {
+        if (res.bars.length === 0) {
+          globalFetchSuccess = false;
+        }
+        globalDataMap[res.symbol] = res.bars;
+      }
+    } catch (e) {
+      console.error("Failed to fetch overseas data for Global Linkage", e);
+      globalFetchSuccess = false;
+    }
+
+    let selectedDrivers = selectDrivers(mappedPricesTw, usMapping, globalDataMap);
+    let relativeStrength = calculateRelativeStrength(mappedPricesTw, selectedDrivers.sector, globalDataMap);
+
+    if (!globalFetchSuccess || !selectedDrivers.sector || selectedDrivers.peers.length === 0) {
+      warnings.push("目前海外資料暫時無法取得，連動指標以可用資料估算/或暫停顯示數值");
+      if (!selectedDrivers.sector) {
+         selectedDrivers = { sector: null, peers: [] };
+      }
+    }
+
+    const globalLinkage = {
+      profile: stockProfile,
+      drivers: selectedDrivers,
+      relativeStrength,
+      twPeerLinkage
+    };
+    // ---------------------------------------------
+
+    // Fetch Crash Warning Data
+    const crashSymbols = ["^VIX", "^MOVE", "SOXX", "QQQ", "^DXY", "DX-Y.NYB", "UUP", "USDJPY=X", "JPY=X"];
+    const marketData = await getMarketIndicators({ symbols: crashSymbols, rangeDays: 65 });
+    const crashWarning = evaluateCrashWarning(marketData);
+
+    // Adjust strategy confidence based on crash score
+    if (crashWarning.score !== null) {
+      strategy.confidence = Math.max(0, strategy.confidence * (1 - crashWarning.score / 150));
+    }
 
     return NextResponse.json({
       normalizedTicker: {
@@ -283,6 +364,8 @@ export async function GET(
       consistency,
       strategy,
       institutionCorrelation,
+      globalLinkage,
+      crashWarning,
       keyLevels,
       uxSummary,
       aiSummary: {

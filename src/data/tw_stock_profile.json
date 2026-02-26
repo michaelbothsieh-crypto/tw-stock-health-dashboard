@@ -1,0 +1,102 @@
+{
+  "2867": {
+    "nameZh": "三商壽",
+    "sectorZh": "金融保險",
+    "subIndustryZh": "壽險",
+    "themeTags": ["壽險", "金融股"],
+    "twPeers": ["2881", "2882", "2884", "2885", "2886", "2887", "2891", "2892"],
+    "usPeersHint": ["MET", "PRU", "AIG"],
+    "sectorBenchTw": ["^TWII", "^TWFN"],
+    "sectorBenchUsHint": ["XLF", "KIE"]
+  },
+  "2330": {
+    "nameZh": "台積電",
+    "sectorZh": "半導體",
+    "subIndustryZh": "晶圓代工",
+    "themeTags": ["AI", "HPC", "蘋概", "先進製程"],
+    "twPeers": ["2303", "5347", "6770"],
+    "usPeersHint": ["TSM", "INTC", "NVDA", "AMD"],
+    "sectorBenchTw": ["^TWII", "0052.TW"],
+    "sectorBenchUsHint": ["SOXX", "SMH"]
+  },
+  "2317": {
+    "nameZh": "鴻海",
+    "sectorZh": "其他電子",
+    "subIndustryZh": "EMS組裝",
+    "themeTags": ["蘋概", "伺服器", "AI", "電動車"],
+    "twPeers": ["3231", "2382", "2356", "4938"],
+    "usPeersHint": ["AAPL", "SMCI"],
+    "sectorBenchTw": ["^TWII", "0050.TW"],
+    "sectorBenchUsHint": ["QQQ", "XLK"]
+  },
+  "2454": {
+    "nameZh": "聯發科",
+    "sectorZh": "半導體",
+    "subIndustryZh": "IC設計",
+    "themeTags": ["手機晶片", "網通", "AI PC"],
+    "twPeers": ["3034", "3661", "2379", "3443"],
+    "usPeersHint": ["QCOM", "AVGO", "NVDA"],
+    "sectorBenchTw": ["^TWII", "0052.TW"],
+    "sectorBenchUsHint": ["SOXX", "SMH"]
+  },
+  "2303": {
+    "nameZh": "聯電",
+    "sectorZh": "半導體",
+    "subIndustryZh": "晶圓代工",
+    "themeTags": ["成熟製程", "晶圓代工"],
+    "twPeers": ["2330", "5347", "6770"],
+    "usPeersHint": ["GFS", "TSM"],
+    "sectorBenchTw": ["^TWII", "0052.TW"],
+    "sectorBenchUsHint": ["SOXX", "SMH"]
+  },
+  "3231": {
+    "nameZh": "緯創",
+    "sectorZh": "電腦及週邊設備",
+    "subIndustryZh": "代工",
+    "themeTags": ["伺服器", "AI", "PC"],
+    "twPeers": ["2382", "2317", "2356", "2376"],
+    "usPeersHint": ["SMCI", "HPE", "DELL"],
+    "sectorBenchTw": ["^TWII", "0052.TW"],
+    "sectorBenchUsHint": ["QQQ", "XLK"]
+  },
+  "2382": {
+    "nameZh": "廣達",
+    "sectorZh": "電腦及週邊設備",
+    "subIndustryZh": "代工",
+    "themeTags": ["伺服器", "AI", "蘋概", "雲端"],
+    "twPeers": ["3231", "2317", "2356", "2376"],
+    "usPeersHint": ["SMCI", "HPE", "DELL"],
+    "sectorBenchTw": ["^TWII", "0052.TW"],
+    "sectorBenchUsHint": ["QQQ", "XLK"]
+  },
+  "3037": {
+    "nameZh": "欣興",
+    "sectorZh": "電子零組件",
+    "subIndustryZh": "PCB",
+    "themeTags": ["ABF", "載板", "伺服器", "蘋概"],
+    "twPeers": ["8046", "3189", "2368", "2313"],
+    "usPeersHint": ["AMD", "NVDA"],
+    "sectorBenchTw": ["^TWII", "0052.TW"],
+    "sectorBenchUsHint": ["QQQ", "XLK"]
+  },
+  "2344": {
+    "nameZh": "華邦電",
+    "sectorZh": "半導體",
+    "subIndustryZh": "記憶體",
+    "themeTags": ["NOR", "NAND", "利基型"],
+    "twPeers": ["2408", "2337", "8299", "3260"],
+    "usPeersHint": ["MU", "WDC"],
+    "sectorBenchTw": ["^TWII"],
+    "sectorBenchUsHint": ["SOXX", "SMH"]
+  },
+  "2603": {
+    "nameZh": "長榮",
+    "sectorZh": "航運業",
+    "subIndustryZh": "貨櫃航運",
+    "themeTags": ["高股息", "SCFI", "長榮集團"],
+    "twPeers": ["2609", "2615", "2606", "2618"],
+    "usPeersHint": ["ZIM", "DAC"],
+    "sectorBenchTw": ["^TWII"],
+    "sectorBenchUsHint": ["IYT"]
+  }
+}
