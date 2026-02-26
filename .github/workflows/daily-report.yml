@@ -1,0 +1,46 @@
+name: Daily Stock Health Report
+
+on:
+  schedule:
+    # 08:10 UTC is 16:10 TPE (Taiwan Time), running Mon-Fri
+    - cron: '10 8 * * 1-5'
+  workflow_dispatch:
+    # Allows manual triggering
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    
+    # Optional parameters that you can tweak via Repository Variables/Secrets if needed
+    env:
+      WATCHLIST_TW: "2330,8299,2867,2881,0050,2317,2454,2308,3231"
+      BACKTEST_WINDOW: "120"
+      REPORT_TIMEZONE: "Asia/Taipei"
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Generate Daily Report
+        run: npm run report:daily
+
+      - name: Commit and Push Report
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git add reports/
+          # Commit will only happen if there are changes
+          git diff --quiet && git diff --staged --quiet || (git commit -m "docs: 📈 Add daily stock report [skip ci]" && git push)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

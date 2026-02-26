@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   CartesianGrid,
@@ -9,6 +9,7 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  ReferenceLine,
 } from "recharts";
 import { DarkTooltip } from "@/components/charts/DarkTooltip";
 import { zhTW } from "@/i18n/zh-TW";
@@ -21,6 +22,11 @@ interface ChartPoint {
 
 interface ChartProps {
   data: ChartPoint[];
+  keyLevels?: {
+    breakoutLevel: number | null;
+    supportLevel: number | null;
+    invalidationLevel: number | null;
+  };
 }
 
 function truncate2(value: number): number {
@@ -41,7 +47,7 @@ function formatLineValue(value: number | null): string {
   return truncate2(value).toFixed(2);
 }
 
-export function StockChart({ data }: ChartProps) {
+export function StockChart({ data, keyLevels }: ChartProps) {
   if (!data || data.length === 0) {
     return <div className="py-8 text-center text-base text-neutral-400">{zhTW.chart.noPrice}</div>;
   }
@@ -77,12 +83,21 @@ export function StockChart({ data }: ChartProps) {
 
       <div className="h-72 w-full sm:h-80">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+          <LineChart data={chartData} margin={{ top: 8, right: 40, left: 0, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
             <XAxis dataKey="date" tickFormatter={(tick) => tick.slice(5)} minTickGap={22} />
             <YAxis width={58} domain={["auto", "auto"]} tickFormatter={(value) => formatLineValue(Number(value))} />
             <Tooltip content={<DarkTooltip />} />
             <Legend />
+            {keyLevels?.breakoutLevel && (
+               <ReferenceLine y={keyLevels.breakoutLevel} stroke="#10b981" strokeDasharray="4 4" label={{ position: 'right', value: '轉強', fill: '#10b981', fontSize: 12 }} />
+            )}
+            {keyLevels?.supportLevel && (
+               <ReferenceLine y={keyLevels.supportLevel} stroke="#f59e0b" strokeDasharray="4 4" label={{ position: 'right', value: '支撐', fill: '#f59e0b', fontSize: 12 }} />
+            )}
+            {keyLevels?.invalidationLevel && (
+               <ReferenceLine y={keyLevels.invalidationLevel} stroke="#f43f5e" strokeDasharray="4 4" label={{ position: 'right', value: '失效', fill: '#f43f5e', fontSize: 12 }} />
+            )}
             <Line type="monotone" dataKey="close" name={zhTW.chart.close} stroke="#3b82f6" dot={false} strokeWidth={2} />
             <Line type="monotone" dataKey="sma20" name={zhTW.chart.sma20} stroke="#f59e0b" dot={false} strokeWidth={1.8} />
             <Line type="monotone" dataKey="sma60" name={zhTW.chart.sma60} stroke="#2dd4bf" dot={false} strokeWidth={1.8} />

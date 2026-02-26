@@ -20,6 +20,28 @@ C --> D["Next.js API<br/>(/api/stock)"]
 D --> E["UI Dashboard<br/>(前端)"]
 ```
 
+### Telegram 機器人整合 (互動指令 `/daily` & `/stock`)
+最新版本現已支援雙向的 Telegram 小幫手：
+1. **GitHub Actions 主動推播**：每日收盤後自動發送極簡總覽至指定群組。
+2. **Vercel Webhook 互動查詢**：群組成員可隨時下指令查詢最新報告，報告內容 100% 來自 Actions 產出的 `reports/YYYY-MM-DD-watchlist.json`，確保數據完全一致。
+
+**【部署教學】**
+- **GitHub Secrets** (供 Actions 推播):
+  - `TELEGRAM_BOT_TOKEN`:向 @BotFather 申請的機器人 Token。
+  - `TELEGRAM_CHAT_ID`:推播目標群組或個人的 Chat ID。
+  - `WATCHLIST_TW` (選填): "2330,8299,2867"
+- **Vercel Env Variables** (供 Webhook 解析):
+  - `TELEGRAM_BOT_TOKEN`: 同上。
+  - `GITHUB_OWNER`: 你的 GitHub 帳號名。
+  - `GITHUB_REPO`: `tw-stock-health-dashboard`。
+  - `GITHUB_PAT` (選填): 右上角設定申請的 Personal Access Token (若 Repo 為 Private 必填)。
+  
+**【註冊 Webhook】**
+在你將 Vercel 發布完成後，開啟終端機執行一次以下指令，將你的 Vercel API 綁定到 Telegram：
+```bash
+curl -F "url=https://<你的 Vercel 網域>/api/telegram/webhook" https://api.telegram.org/bot<你的TELEGRAM_BOT_TOKEN>/setWebhook
+```
+
 ## 🛠 自動測試與診斷
 
 專案裡有寫好的幾支腳本可以當作自我檢測，跑一下就能知道 API 有沒有壞掉、快取有沒有命裡，或是算出來的分數正不正常。像是台積電、鴻海、聯發科算出來的分數不應該都長得一樣：
