@@ -37,8 +37,59 @@ function downgradeSignalByConsistency(signal: StrategySignal): StrategySignal {
   return signal;
 }
 
-function finalizeStrategy(output: StrategyOutput, input: StrategyInput): StrategyOutput {
-  if ((input.consistencyScore ?? 50) >= 45) return output;
+function buildExplain(input: StrategyInput, confidence: number, originalSignal: StrategySignal): StrategyOutput["explain"] {
+  let direction: "偏多" | "中性" | "偏空" = "中性";
+  if (originalSignal === "偏多") direction = "偏多";
+  else if (originalSignal === "偏空" || originalSignal === "避開") direction = "偏空";
+  else {
+    const ts = input.trendScore ?? 50;
+    if (ts > 55) direction = "偏多";
+    else if (ts < 45) direction = "偏空";
+  }
+
+  const reasons: string[] = [];
+  const contradictions: Array<{ left: string; right: string; why: string }> = [];
+
+  // Reasons logic
+  if ((input.trendScore ?? 50) >= 60) reasons.push("趨勢維持偏多格局");
+  else if ((input.trendScore ?? 50) <= 40) reasons.push("趨勢處於偏空弱勢");
+
+  if (input.catalystScore >= 20) reasons.push("近期新聞偏向正面事件催化");
+  else if (input.catalystScore <= -20) reasons.push("近期新聞偏向負面事件催化");
+  else if (Math.abs(input.catalystScore) < 5) reasons.push("新聞催化不足：缺乏事件推動");
+
+  if ((input.consistencyScore ?? 50) < 45) {
+    contradictions.push({
+      left: `一致性偏低 ${(input.consistencyScore ?? 50).toFixed(1)}%`,
+      right: `方向${direction}`,
+      why: "多指標互相矛盾（如籌碼與技術面不同向）"
+    });
+  }
+  if (input.pullbackRiskScore > 70) {
+    contradictions.push({
+      left: `回檔風險偏高 ${input.pullbackRiskScore.toFixed(1)}%`,
+      right: "追高意願",
+      why: "短線過熱或乖離過大"
+    });
+  }
+  if (input.riskFlags.includes("flow_data_missing") || input.riskFlags.includes("fundamental_data_missing")) {
+    contradictions.push({
+      left: "資料不足",
+      right: "策略信心",
+      why: "部分基本面或籌碼資料缺乏"
+    });
+  }
+
+  if (reasons.length === 0) reasons.push("多空力道均衡，無單一強烈驅動因素");
+
+  return { direction, certainty: confidence, reasons, contradictions };
+}
+
+function finalizeStrategy(output: Omit<StrategyOutput, "explain">, input: StrategyInput): StrategyOutput {
+  const explain = buildExplain(input, output.confidence, output.signal);
+  if ((input.consistencyScore ?? 50) >= 45) {
+    return { ...output, explain };
+  }
 
   const planHint = "目前訊號分歧，建議等待一致性回升再加大操作";
   const actionCards = output.actionCards.map((card) => ({
@@ -50,6 +101,7 @@ function finalizeStrategy(output: StrategyOutput, input: StrategyInput): Strateg
     ...output,
     signal: downgradeSignalByConsistency(output.signal),
     actionCards,
+    explain,
   };
 }
 
