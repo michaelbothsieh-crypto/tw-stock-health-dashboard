@@ -1,8 +1,8 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 import { Providers } from "@/components/Providers";
+import "./globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Taiwan Stock Health Dashboard",
-  description: "AI-powered Taiwan Stock Health Dashboard",
+  title: "台股健康儀表板",
+  description: "AI 智慧台股健康儀表板",
 };
 
 export default function RootLayout({
@@ -25,16 +25,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
+    <html lang="zh-Hant" className="dark">
+      <body className={`${geistSans.variable} ${geistMono.variable} dark overflow-x-hidden bg-neutral-950 antialiased`}>
         <Providers>
-          <div className="flex min-h-screen">
+          <div className="min-h-screen">
             <Sidebar />
-            <main className="flex-1 overflow-auto">
-              {children}
-            </main>
+            <main className="min-h-screen overflow-x-hidden lg:ml-64">{children}</main>
           </div>
         </Providers>
       </body>

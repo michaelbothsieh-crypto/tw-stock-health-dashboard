@@ -79,7 +79,7 @@ export function calculateFlow(tradingDates: string[], investors: InstitutionalIn
     // 檢查缺值比例 > 20%
     let penalty = 0;
     if (missingDays / 20 > 0.2) {
-        risks.push("法人資料缺漏比例偏高，分數可信度下降。");
+        risks.push("flow_data_missing");
         penalty = 10;
     }
 
@@ -150,7 +150,7 @@ export function calculateFlow(tradingDates: string[], investors: InstitutionalIn
     } else {
         // 缺融資資料
         mScore = 50;
-        risks.push("融資資料缺漏，實質分數可能略有校正偏誤。");
+        risks.push("margin_data_missing");
     }
 
     const rawFlowScore = 0.70 * inst + 0.30 * mScore;

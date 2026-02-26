@@ -17,8 +17,9 @@ export async function getCompanyNameZh(symbol: string): Promise<string | null> {
 
     // 3. Fallback to FinMind dynamic lookup
     try {
-        const info = await getStockInfo(symbol);
-        if (info && info.length > 0) {
+        const infoResult = await getStockInfo(symbol);
+        const info = infoResult.data;
+        if (info.length > 0) {
             // FinMind stock_name property
             const name = info[info.length - 1].stock_name;
             if (name) {

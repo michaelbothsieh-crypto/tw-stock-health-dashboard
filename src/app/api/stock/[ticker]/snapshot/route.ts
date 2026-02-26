@@ -1,6 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { format, subDays } from "date-fns";
-import { getInstitutionalInvestors, getMarginShort, getMonthlyRevenue } from "@/lib/providers/finmind";
+import {
+  FinmindProviderError,
+  getInstitutionalInvestors,
+  getMarginShort,
+  getMonthlyRevenue,
+  getTaiwanStockNews,
+} from "@/lib/providers/finmind";
 import { calculateTrend } from "@/lib/signals/trend";
 import { calculateFlow } from "@/lib/signals/flow";
 import { calculateFundamental } from "@/lib/signals/fundamental";
@@ -8,133 +14,267 @@ import { generateExplanation } from "@/lib/ai/explain";
 import { normalizeTicker } from "@/lib/ticker";
 import { detectMarket } from "@/lib/market";
 import { fetchRecentBars } from "@/lib/range";
-import { getTaiwanStockNews } from "@/lib/providers/finmind";
 import { calculateCatalystScore } from "@/lib/news/catalystScore";
 import { getCompanyNameZh } from "@/lib/companyName";
+import { calculateShortTermVolatility } from "@/lib/signals/shortTermVolatility";
+import { calculateShortTermSignals } from "@/lib/signals/shortTerm";
+import { predictProbabilities } from "@/lib/predict/probability";
+import { getCalibrationModel } from "@/lib/predict/calibration";
+import { generateStrategy } from "@/lib/strategy/strategyEngine";
+import { buildExplainBreakdown } from "@/lib/explainBreakdown";
 
 export async function GET(
-    req: NextRequest,
-    { params }: { params: Promise<{ ticker: string }> }
+  req: NextRequest,
+  { params }: { params: Promise<{ ticker: string }> },
 ) {
+  try {
+    const { ticker } = await params;
+    const debugMode = req.nextUrl.searchParams.get("debug") === "1";
+    const warnings: string[] = [];
+
+    let norm;
     try {
-        const { ticker } = await params;
-        const debugMode = req.nextUrl.searchParams.get('debug') === '1';
-        const warnings: string[] = [];
-
-        // 1. Ticker 正規化
-        let norm;
-        try {
-            norm = normalizeTicker(ticker);
-        } catch (e: any) {
-            return NextResponse.json({ error: e.message || "Invalid Ticker" }, { status: 400 });
-        }
-
-        // 2. 市場探測
-        const marketInfo = await detectMarket(norm.symbol);
-        norm.market = marketInfo.market;
-        norm.yahoo = marketInfo.yahoo;
-        if (marketInfo.ambiguous) warnings.push("ambiguous_market");
-        if (norm.market === 'UNKNOWN') warnings.push("市場未識別");
-
-        // 2.5 取得中文股名
-        const companyNameZh = await getCompanyNameZh(norm.symbol);
-        const displayName = companyNameZh ? `${norm.symbol} ${companyNameZh}` : norm.symbol;
-
-        // 3. 獲取 OHLCV (最近 180 根)
-        const rangeResult = await fetchRecentBars(norm.symbol, 180);
-        const prices = rangeResult.data;
-        if (prices.length === 0) {
-            warnings.push("完全無法取得價格資料");
-            return NextResponse.json({ error: "No price data found for ticker" }, { status: 404 });
-        }
-
-        if (rangeResult.barsReturned < 130) {
-            warnings.push(`價格資料不足 (僅 ${rangeResult.barsReturned} 筆，少於最低要求的 130 筆)`);
-        }
-
-        const tradingDates = prices.map(p => p.date);
-        const t_end = prices[prices.length - 1].date;
-        const tEndObj = new Date(t_end);
-
-        // 4. 以 t_end 往前推算供其他資料抓取的區間
-        // 法人/融資抓約 120 日曆天 (足夠涵蓋 60 根交易日)
-        const flowStartDate = format(subDays(tEndObj, 120), 'yyyy-MM-dd');
-        // 營收抓 18 個月 (540 日曆天)，確保有足夠的 YoY 資料 (包含容錯與前置期)
-        const fundStartDate = format(subDays(tEndObj, 540), 'yyyy-MM-dd');
-        // 新聞抓 7 日曆天 (偏敏感題材)
-        const newsStartDate = format(subDays(tEndObj, 7), 'yyyy-MM-dd');
-
-        const [investors, margin, revenue, rawNews] = await Promise.all([
-            getInstitutionalInvestors(norm.symbol, flowStartDate, t_end).catch(() => []),
-            getMarginShort(norm.symbol, flowStartDate, t_end).catch(() => []),
-            getMonthlyRevenue(norm.symbol, fundStartDate, t_end).catch(() => []),
-            getTaiwanStockNews(norm.symbol, newsStartDate, t_end).catch(() => []),
-        ]);
-
-        // 5. 計算訊號
-        const trendSignals = calculateTrend(prices);
-        const flowSignals = calculateFlow(tradingDates, investors, margin);
-        const fundamentalSignals = calculateFundamental(revenue);
-
-        // 整理 flow 的風險到頂層 warnings
-        if (flowSignals.risks.includes("資料缺漏比例偏高，分數可信度下降。")) {
-            warnings.push("法人資料缺漏比例偏高");
-        }
-
-        // 6. 計算 Catalyst Score (近期題材面)
-        const catalystResult = calculateCatalystScore(rawNews, tEndObj, 7);
-
-        // 7. AI 解釋
-        const aiExplanation = generateExplanation(norm.symbol, trendSignals, flowSignals, fundamentalSignals, catalystResult);
-
-        return NextResponse.json({
-            normalizedTicker: {
-                ...norm,
-                companyNameZh,
-                displayName
-            },
-            dataWindow: {
-                barsRequested: rangeResult.barsRequested,
-                barsReturned: rangeResult.barsReturned,
-                endDate: rangeResult.endDate
-            },
-            warnings,
-            lastUpdate: t_end,
-            data: {
-                prices: prices.map(p => ({
-                    date: p.date,
-                    close: p.close,
-                    volume: p.Trading_Volume
-                })).slice(-120),
-            },
-            signals: {
-                trend: trendSignals,
-                flow: flowSignals,
-                fundamental: fundamentalSignals,
-            },
-            news: catalystResult,
-            explain: {
-                stance: aiExplanation.stance,
-                confidence: aiExplanation.confidence,
-                summary: aiExplanation.summary,
-                key_points: aiExplanation.key_points,
-                risks: aiExplanation.risks
-            },
-            ...(debugMode && {
-                debug: {
-                    request_params: {
-                        symbol: norm.symbol,
-                        market: norm.market,
-                        flowStartDate,
-                        fundStartDate,
-                        revenue_fetched_count: revenue.length
-                    },
-                    ...aiExplanation.debug
-                }
-            })
-        });
-    } catch (error: any) {
-        console.error("Snapshot API Error:", error);
-        return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+      norm = normalizeTicker(ticker);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Invalid Ticker";
+      return NextResponse.json({ error: message }, { status: 400 });
     }
+
+    const marketInfo = await detectMarket(norm.symbol);
+    norm.market = marketInfo.market;
+    norm.yahoo = marketInfo.yahoo;
+    if (marketInfo.ambiguous) warnings.push("ambiguous_market");
+    if (norm.market === "UNKNOWN") warnings.push("market_unknown");
+
+    const companyNameZh = await getCompanyNameZh(norm.symbol);
+    const displayName = companyNameZh ? `${norm.symbol} ${companyNameZh}` : norm.symbol;
+
+    const rangeResult = await fetchRecentBars(norm.symbol, 180);
+    const prices = rangeResult.data;
+
+    if (prices.length === 0) {
+      warnings.push("price_data_missing");
+      return NextResponse.json({ error: "No price data found for ticker" }, { status: 404 });
+    }
+
+    if (rangeResult.barsReturned < 130) {
+      warnings.push(`bars_insufficient_${rangeResult.barsReturned}`);
+    }
+
+    const tradingDates = prices.map((p) => p.date);
+    const latestDate = prices[prices.length - 1].date;
+    const latestDateObj = new Date(latestDate);
+
+    const flowStartDate = format(subDays(latestDateObj, 120), "yyyy-MM-dd");
+    const fundamentalStartDate = format(subDays(latestDateObj, 540), "yyyy-MM-dd");
+    const newsStartDate = format(subDays(latestDateObj, 7), "yyyy-MM-dd");
+
+    const [investorsResult, marginResult, revenueResult, newsResult] = await Promise.all([
+      getInstitutionalInvestors(norm.symbol, flowStartDate, latestDate).catch((error) => {
+        if (error instanceof FinmindProviderError) {
+          warnings.push(`investors_error:${error.errorCode}`);
+        }
+        return { data: [], meta: { authUsed: "anon", fallbackUsed: false } };
+      }),
+      getMarginShort(norm.symbol, flowStartDate, latestDate).catch((error) => {
+        if (error instanceof FinmindProviderError) {
+          warnings.push(`margin_error:${error.errorCode}`);
+        }
+        return { data: [], meta: { authUsed: "anon", fallbackUsed: false } };
+      }),
+      getMonthlyRevenue(norm.symbol, fundamentalStartDate, latestDate).catch((error) => {
+        if (error instanceof FinmindProviderError) {
+          warnings.push(`revenue_error:${error.errorCode}`);
+        }
+        return { data: [], meta: { authUsed: "anon", fallbackUsed: false } };
+      }),
+      getTaiwanStockNews(norm.symbol, newsStartDate, latestDate).catch((error) => {
+        if (error instanceof FinmindProviderError) {
+          return {
+            data: [],
+            meta: {
+              authUsed: error.meta.authUsed,
+              fallbackUsed: error.meta.fallbackUsed,
+              statusAnon: error.meta.statusAnon,
+              statusEnv: error.meta.statusEnv,
+              errorCode: error.errorCode,
+              message: error.message,
+            },
+          };
+        }
+
+        const message = error instanceof Error ? error.message : String(error);
+        return {
+          data: [],
+          meta: {
+            authUsed: "anon" as const,
+            fallbackUsed: false,
+            errorCode: "news_fetch_failed",
+            message,
+          },
+        };
+      }),
+    ]);
+
+    const investors = investorsResult.data;
+    const margin = marginResult.data;
+    const revenue = revenueResult.data;
+    const rawNews = newsResult.data;
+    const newsErrorCode = newsResult.meta.errorCode ?? null;
+    const newsErrorMessage = newsResult.meta.message ?? null;
+
+    const trendSignals = calculateTrend(prices);
+    const flowSignals = calculateFlow(tradingDates, investors, margin);
+    const fundamentalSignals = calculateFundamental(revenue);
+    const shortTermVolatility = calculateShortTermVolatility(prices);
+    const shortTerm = calculateShortTermSignals(prices, trendSignals, shortTermVolatility);
+
+    if (flowSignals.risks.includes("flow_data_missing")) {
+      warnings.push("flow_data_missing");
+    }
+
+    const catalystResult = calculateCatalystScore(rawNews, latestDateObj, 7);
+    const aiExplanation = generateExplanation(
+      norm.symbol,
+      trendSignals,
+      flowSignals,
+      fundamentalSignals,
+      catalystResult,
+    );
+    const calibration = await getCalibrationModel(["2330", "2317", "2454", "3231"]);
+    const predictions = predictProbabilities({
+      trendScore: trendSignals.trendScore,
+      flowScore: flowSignals.flowScore,
+      fundamentalScore: fundamentalSignals.fundamentalScore,
+      catalystScore: catalystResult.catalystScore,
+      volatilityScore: shortTermVolatility.volatilityScore,
+      shortTermOpportunityScore: shortTerm.shortTermOpportunityScore,
+      pullbackRiskScore: shortTerm.pullbackRiskScore,
+      volumeSpike: shortTermVolatility.volumeSpike,
+      gap: shortTermVolatility.gap,
+      calibration,
+    });
+    const strategy = generateStrategy({
+      trendScore: trendSignals.trendScore,
+      flowScore: flowSignals.flowScore,
+      fundamentalScore: fundamentalSignals.fundamentalScore,
+      catalystScore: catalystResult.catalystScore,
+      volatilityScore: shortTermVolatility.volatilityScore,
+      shortTermOpportunityScore: shortTerm.shortTermOpportunityScore,
+      pullbackRiskScore: shortTerm.pullbackRiskScore,
+      breakoutScore: shortTerm.breakoutScore,
+      upProb1D: predictions.upProb1D,
+      upProb3D: predictions.upProb3D,
+      upProb5D: predictions.upProb5D,
+      bigMoveProb3D: predictions.bigMoveProb3D,
+      riskFlags: [
+        ...trendSignals.risks,
+        ...flowSignals.risks,
+        ...fundamentalSignals.risks,
+        ...shortTerm.breakdown.riskFlags,
+      ],
+    });
+
+    const latestClose = prices[prices.length - 1].close;
+    const explainBreakdown = buildExplainBreakdown({
+      trend: trendSignals,
+      flow: flowSignals,
+      fundamental: fundamentalSignals,
+      ai: aiExplanation,
+      shortTermVolatility,
+      shortTerm,
+      predictions,
+      latestClose,
+    });
+
+    return NextResponse.json({
+      normalizedTicker: {
+        ...norm,
+        companyNameZh,
+        displayName,
+      },
+      dataWindow: {
+        barsRequested: rangeResult.barsRequested,
+        barsReturned: rangeResult.barsReturned,
+        endDate: rangeResult.endDate,
+      },
+      providerMeta: {
+        authUsed:
+          rangeResult.providerMeta?.authUsed === "env" ||
+          investorsResult.meta.authUsed === "env" ||
+          marginResult.meta.authUsed === "env" ||
+          revenueResult.meta.authUsed === "env"
+            ? "env"
+            : "anon",
+        fallbackUsed:
+          Boolean(rangeResult.providerMeta?.fallbackUsed) ||
+          investorsResult.meta.fallbackUsed ||
+          marginResult.meta.fallbackUsed ||
+          revenueResult.meta.fallbackUsed,
+      },
+      newsMeta: {
+        authUsed: newsResult.meta.authUsed,
+        fallbackUsed: newsResult.meta.fallbackUsed,
+        count: rawNews.length,
+        bullishCount: catalystResult.bullishCount,
+        bearishCount: catalystResult.bearishCount,
+        catalystScore: catalystResult.catalystScore,
+      },
+      warnings,
+      lastUpdate: latestDate,
+      data: {
+        prices: prices.slice(-120).map((p) => ({
+          date: p.date,
+          open: p.open,
+          high: p.max,
+          low: p.min,
+          close: p.close,
+          volume: p.Trading_Volume,
+        })),
+      },
+      signals: {
+        trend: trendSignals,
+        flow: flowSignals,
+        fundamental: fundamentalSignals,
+      },
+      shortTermVolatility,
+      shortTerm,
+      predictions,
+      strategy,
+      aiSummary: {
+        stance: aiExplanation.stance,
+        confidence: aiExplanation.confidence,
+        keyPoints: aiExplanation.keyPoints.slice(0, 5),
+        risks: aiExplanation.risks.slice(0, 3),
+      },
+      explainBreakdown,
+      news: {
+        ...catalystResult,
+        errorCode: newsErrorCode,
+        error: newsErrorMessage,
+      },
+      ...(debugMode && {
+        debug: {
+          requestParams: {
+            symbol: norm.symbol,
+            market: norm.market,
+            flowStartDate,
+            fundamentalStartDate,
+            revenueFetchedCount: revenue.length,
+            newsFallbackUsed: newsResult.meta.fallbackUsed,
+            priceProviderMeta: rangeResult.providerMeta,
+            investorsProviderMeta: investorsResult.meta,
+            marginProviderMeta: marginResult.meta,
+            revenueProviderMeta: revenueResult.meta,
+            newsProviderMeta: newsResult.meta,
+          },
+          ai: aiExplanation.debug,
+        },
+      }),
+    });
+  } catch (error: unknown) {
+    console.error("Snapshot API Error:", error);
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
