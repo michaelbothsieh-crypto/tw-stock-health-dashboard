@@ -23,6 +23,9 @@ import { getCalibrationModel } from "@/lib/predict/calibration";
 import { generateStrategy } from "@/lib/strategy/strategyEngine";
 import { buildExplainBreakdown } from "@/lib/explainBreakdown";
 import { calculateConsistency } from "@/lib/consistency";
+import { calculateInstitutionCorrelation } from "@/lib/analytics/correlation";
+import { calculateKeyLevels } from "@/lib/signals/keyLevels";
+import { buildUxSummary } from "@/lib/ux/summaryBuilder";
 
 export async function GET(
   req: NextRequest,
@@ -163,6 +166,22 @@ export async function GET(
       shortTermOpportunityScore: shortTerm.shortTermOpportunityScore,
       upProb5D: predictions.upProb5D,
     });
+    const riskFlags = [
+        ...trendSignals.risks,
+        ...flowSignals.risks,
+        ...fundamentalSignals.risks,
+        ...shortTerm.breakdown.riskFlags,
+      ];
+    const mappedPrices = prices.map(p => ({
+      date: p.date,
+      open: p.open,
+      high: p.max,
+      low: p.min,
+      close: p.close,
+      volume: p.Trading_Volume
+    }));
+    const keyLevels = calculateKeyLevels(mappedPrices);
+    
     const strategy = generateStrategy({
       trendScore: trendSignals.trendScore,
       flowScore: flowSignals.flowScore,
@@ -177,12 +196,7 @@ export async function GET(
       upProb5D: predictions.upProb5D,
       bigMoveProb3D: predictions.bigMoveProb3D,
       consistencyScore: consistency.score,
-      riskFlags: [
-        ...trendSignals.risks,
-        ...flowSignals.risks,
-        ...fundamentalSignals.risks,
-        ...shortTerm.breakdown.riskFlags,
-      ],
+      riskFlags,
     });
 
     const latestClose = prices[prices.length - 1].close;
@@ -198,6 +212,21 @@ export async function GET(
       latestClose,
     });
 
+    
+    const topContradiction = strategy.explain.contradictions.length > 0 
+      ? strategy.explain.contradictions[0].why 
+      : undefined;
+
+    const uxSummary = buildUxSummary({
+      direction: aiExplanation.stance,
+      strategyConfidence: strategy.confidence,
+      consistencyLevel: consistency.level,
+      topRiskFlag: riskFlags[0],
+      keyLevels,
+    });
+
+    const institutionCorrelation = calculateInstitutionCorrelation(prices, investors, 60);
+
     return NextResponse.json({
       normalizedTicker: {
         ...norm,
@@ -212,9 +241,9 @@ export async function GET(
       providerMeta: {
         authUsed:
           rangeResult.providerMeta?.authUsed === "env" ||
-          investorsResult.meta.authUsed === "env" ||
-          marginResult.meta.authUsed === "env" ||
-          revenueResult.meta.authUsed === "env"
+            investorsResult.meta.authUsed === "env" ||
+            marginResult.meta.authUsed === "env" ||
+            revenueResult.meta.authUsed === "env"
             ? "env"
             : "anon",
         fallbackUsed:
@@ -253,6 +282,9 @@ export async function GET(
       predictions,
       consistency,
       strategy,
+      institutionCorrelation,
+      keyLevels,
+      uxSummary,
       aiSummary: {
         stance: aiExplanation.stance,
         confidence: aiExplanation.confidence,

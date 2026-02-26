@@ -52,7 +52,7 @@ export function RadarOverview({ data }: { data: RadarOverviewDataItem[] }) {
         <RadarChart data={data}>
           <PolarGrid stroke="#3f3f46" />
           <PolarAngleAxis dataKey="label" tick={{ fill: "#a3a3a3", fontSize: 12 }} />
-          <PolarRadiusAxis domain={[0, 100]} tick={{ fill: "#737373", fontSize: 11 }} />
+          <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
           <Radar name="雷達總覽" dataKey="value" stroke="#9ca3af" fill="#9ca3af" fillOpacity={0.14} strokeWidth={1.5} />
           <Tooltip content={<RadarTooltip />} />
         </RadarChart>

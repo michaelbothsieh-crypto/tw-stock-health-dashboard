@@ -32,6 +32,12 @@ export interface StrategyOutput {
   mode: StrategyMode;
   signal: StrategySignal;
   confidence: number;
+  explain: {
+    direction: "偏多" | "中性" | "偏空";
+    certainty: number;
+    reasons: string[];
+    contradictions: Array<{ left: string; right: string; why: string }>;
+  };
   actionCards: StrategyActionCard[];
   debug: {
     chosenRuleId: string;
