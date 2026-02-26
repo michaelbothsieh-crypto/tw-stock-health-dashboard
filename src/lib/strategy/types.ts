@@ -24,6 +24,7 @@ export interface StrategyInput {
   upProb3D: number;
   upProb5D: number;
   bigMoveProb3D: number;
+  consistencyScore?: number;
   riskFlags: string[];
 }
 
