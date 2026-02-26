@@ -17,7 +17,12 @@
     "selfcheck:strategy": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/self_check_strategy.ts",
     "selfcheck:consistency": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/self_check_consistency.ts",
     "selfcheck:all": "npm run selfcheck:names && npm run selfcheck:fundamental && npm run selfcheck:news",
-    "report:daily": "npx tsx scripts/generateDailyReport.ts"
+    "report:daily": "npx tsx scripts/generateDailyReport.ts",
+    "verify:daily-report": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/verify-daily-report.ts",
+    "verify:telegram-bot": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/verify-telegram-bot.ts",
+    "verify:crash-v2": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/verify-crash-engine-v2.ts",
+    "verify:profile-linkage": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/verify-profile-linkage.ts",
+    "verify:clusters": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/verify-clusters.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",
@@ -31,6 +36,7 @@
     "react-dom": "19.2.3",
     "recharts": "^3.7.0",
     "tailwind-merge": "^3.5.0",
+    "usehooks-ts": "^3.1.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

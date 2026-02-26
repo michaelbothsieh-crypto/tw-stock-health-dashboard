@@ -3,7 +3,7 @@ export const zhTW = {
   actions: {
     switchStock: "切換",
     switchStockTitle: "切換股票",
-    manageWatchlist: "管理追蹤清單",
+    manageWatchlist: "管理自選股",
     openExplain: "ⓘ 查看計算",
     collapse: "收合",
     expand: "展開",
