@@ -1,4 +1,5 @@
 "use client";
+import { CrashWarningOutput } from "@/lib/global/crash/crashEngine";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -13,6 +14,7 @@ import { watchlistStore, WatchlistItem } from "@/lib/stores/watchlistStore";
 import { useStockSnapshot } from "@/hooks/useStockSnapshot";
 import { DesktopStockLayout } from "@/components/layout/DesktopStockLayout";
 import { MobileStockLayout } from "@/components/layout/MobileStockLayout";
+import { DesktopStockSkeleton, MobileStockSkeleton } from "@/components/layout/StockSkeleton";
 import { MainTab, ExplainTab, SnapshotResponse } from "@/components/layout/types";
 
 
@@ -268,7 +270,9 @@ export function DashboardBento({ initialTicker = "2330" }: { initialTicker?: str
       </header>
 
       <div className="mx-auto w-full max-w-[1400px] px-4 pb-12 pt-6 lg:px-8 lg:pt-12">
-        {query.isLoading && <div className="py-24 text-center text-[15px] text-neutral-400">載入中...</div>}
+        {query.isLoading && (
+          isDesktop ? <DesktopStockSkeleton /> : <MobileStockSkeleton />
+        )}
         {query.isError && <div className="py-24 text-center text-[15px] text-rose-400">{requestError}</div>}
 
         {snapshot && !query.isLoading && !query.isError && (

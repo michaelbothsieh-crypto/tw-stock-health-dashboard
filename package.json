@@ -16,7 +16,12 @@
     "selfcheck:prob": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/self_check_probabilities.ts",
     "selfcheck:strategy": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/self_check_strategy.ts",
     "selfcheck:consistency": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/self_check_consistency.ts",
-    "selfcheck:all": "npm run selfcheck:names && npm run selfcheck:fundamental && npm run selfcheck:news"
+    "report:daily": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/generateDailyReport.ts",
+    "verify:daily-report": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/verify-daily-report.ts",
+    "verify:telegram-bot": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/verify-telegram-bot.ts",
+    "verify:crash-v2": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/verify-crash-engine-v2.ts",
+    "verify:profile-linkage": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/verify-profile-linkage.ts",
+    "verify:clusters": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/verify-clusters.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.90.21",

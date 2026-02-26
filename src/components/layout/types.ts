@@ -1,9 +1,15 @@
+import { CrashWarningOutput } from "@/lib/global/crash/crashEngine";
 
 import { CorrelationResult } from "@/lib/analytics/correlation";
 import { StrategyOutput } from "@/lib/strategy/types";
 import { KeyLevelsResult } from "@/lib/signals/keyLevels";
 import { UxSummaryOutput } from "@/lib/ux/summaryBuilder";
 import { RadarOverviewDataItem } from "@/components/charts/RadarOverview";
+
+import { StockProfile } from "@/lib/industry/stockProfileResolver";
+import { SelectedDrivers } from "@/lib/global/driverSelector";
+import { RelativeStrengthResult } from "@/lib/analytics/relativeStrength";
+
 
 export type ExplainTab = "trend" | "flow" | "fundamental" | "volatility" | "news" | "prediction" | "strategy" | "consistency";
 
@@ -25,6 +31,8 @@ export type ConsistencyDetail = ExplainSection & {
 };
 
 export type SnapshotResponse = {
+  crashWarning?: CrashWarningOutput;
+  warnings?: string[];
   signals: {
     trend: { trendScore: number | null };
     flow: { flowScore: number | null };
@@ -39,6 +47,11 @@ export type SnapshotResponse = {
   };
   strategy: StrategyOutput;
   institutionCorrelation: CorrelationResult;
+  globalLinkage: {
+    profile: StockProfile;
+    drivers: SelectedDrivers;
+    relativeStrength: RelativeStrengthResult | null;
+  } | null;
   aiSummary: { stance: "Bullish" | "Neutral" | "Bearish"; keyPoints: string[] };
   keyLevels: KeyLevelsResult;
   uxSummary: UxSummaryOutput;
