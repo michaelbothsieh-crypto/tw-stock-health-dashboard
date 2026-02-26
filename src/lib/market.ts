@@ -21,9 +21,10 @@ export async function detectMarket(symbol: string): Promise<MarketDetectionResul
 
     try {
         // 利用 FinMind 的 TaiwanStockInfo 來取得股票市場分類
-        const info = await getStockInfo(symbol);
+        const infoResult = await getStockInfo(symbol);
+        const info = infoResult.data;
 
-        if (info && info.length > 0) {
+        if (info.length > 0) {
             // 取第一筆資料的 type
             const typeStr = info[info.length - 1].type?.toLowerCase();
 

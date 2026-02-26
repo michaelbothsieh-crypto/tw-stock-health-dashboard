@@ -1,191 +1,202 @@
-import { z } from "zod";
+﻿import { z } from "zod";
+import { FinmindFetchMeta, finmindFetch } from "./finmindFetch";
 
 const FINMIND_API_URL = "https://api.finmindtrade.com/api/v4/data";
-const REVALIDATE_TIME = 21600; // 6 hours
-
-// --- Schemas ---
+const REVALIDATE_TIME = 21600;
 
 const BaseResponseSchema = z.object({
-    msg: z.string(),
-    status: z.number(),
+  msg: z.string(),
+  status: z.number(),
 });
 
 export const PriceDailySchema = z.object({
-    date: z.string(),
-    stock_id: z.string(),
-    Trading_Volume: z.number(),
-    Trading_money: z.number().optional(),
-    open: z.number(),
-    max: z.number(),
-    min: z.number(),
-    close: z.number(),
-    spread: z.number().optional(),
-    Trading_turnover: z.number().optional(),
+  date: z.string(),
+  stock_id: z.string(),
+  Trading_Volume: z.number(),
+  Trading_money: z.number().optional(),
+  open: z.number(),
+  max: z.number(),
+  min: z.number(),
+  close: z.number(),
+  spread: z.number().optional(),
+  Trading_turnover: z.number().optional(),
 });
 export type PriceDaily = z.infer<typeof PriceDailySchema>;
 
 export const InstitutionalInvestorsSchema = z.object({
-    date: z.string(),
-    stock_id: z.string(),
-    name: z.string(),
-    buy: z.number(),
-    sell: z.number(),
+  date: z.string(),
+  stock_id: z.string(),
+  name: z.string(),
+  buy: z.number(),
+  sell: z.number(),
 });
 export type InstitutionalInvestor = z.infer<typeof InstitutionalInvestorsSchema>;
 
-export const MarginShortSchema = z.object({
+export const MarginShortSchema = z
+  .object({
     date: z.string(),
     stock_id: z.string(),
     MarginPurchaseTodayBalance: z.number().optional(),
     ShortSaleTodayBalance: z.number().optional(),
-}).passthrough();
+  })
+  .passthrough();
 export type MarginShort = z.infer<typeof MarginShortSchema>;
 
-export const StockInfoSchema = z.object({
+export const StockInfoSchema = z
+  .object({
     industry_category: z.string().optional(),
     stock_id: z.string(),
     stock_name: z.string().optional(),
     type: z.string().optional(),
     date: z.string().optional(),
-}).passthrough();
+  })
+  .passthrough();
 export type StockInfo = z.infer<typeof StockInfoSchema>;
 
 export const MonthlyRevenueSchema = z.object({
-    date: z.string(),
-    stock_id: z.string(),
-    revenue_month: z.number(),
-    revenue_year: z.number(),
-    revenue: z.number(),
-    revenue_year_on_year: z.number().optional(),
+  date: z.string(),
+  stock_id: z.string(),
+  revenue_month: z.number(),
+  revenue_year: z.number(),
+  revenue: z.number(),
+  revenue_year_on_year: z.number().optional(),
 });
 export type MonthlyRevenue = z.infer<typeof MonthlyRevenueSchema>;
 
-export const TaiwanStockNewsSchema = z.object({
+export const TaiwanStockNewsSchema = z
+  .object({
     date: z.string(),
     stock_id: z.string(),
     link: z.string().optional(),
     source: z.string().optional(),
     title: z.string(),
-}).passthrough();
+  })
+  .passthrough();
 export type TaiwanStockNews = z.infer<typeof TaiwanStockNewsSchema>;
 
-// --- Fetcher Wrapper ---
-
-async function fetchFromFinMind<T>(
-    dataset: string,
-    data_id: string,
-    start_date: string,
-    end_date: string,
-    schema: z.ZodType<T>
-): Promise<T[]> {
-    const token = process.env.FINMIND_API_TOKEN;
-    let url = `${FINMIND_API_URL}?dataset=${dataset}&data_id=${data_id}&start_date=${start_date}&end_date=${end_date}`;
-    if (token) {
-        url += `&token=${token}`;
-    }
-
-    const res = await fetch(url, {
-        next: { revalidate: REVALIDATE_TIME },
-        headers: {
-            "Content-Type": "application/json",
-        },
-    });
-
-    if (!res.ok) {
-        throw new Error(`FinMind API error: ${res.statusText}`);
-    }
-
-    const raw = await res.json();
-    const parsedBase = BaseResponseSchema.passthrough().safeParse(raw);
-
-    if (!parsedBase.success || parsedBase.data.status !== 200) {
-        throw new Error(`FinMind API returned error status: ${raw.msg}`);
-    }
-
-    const dataSchema = z.array(schema);
-    const parsedData = dataSchema.safeParse(raw.data);
-
-    if (!parsedData.success) {
-        console.error("Zod Parsing Error:", parsedData.error);
-        throw new Error("Failed to parse FinMind data");
-    }
-
-    return parsedData.data;
+export interface FinmindDatasetResult<T> {
+  data: T[];
+  meta: FinmindFetchMeta;
 }
 
-// --- API Methods ---
+export class FinmindProviderError extends Error {
+  errorCode: string;
+  meta: FinmindFetchMeta;
+
+  constructor(message: string, errorCode: string, meta: FinmindFetchMeta) {
+    super(message);
+    this.name = "FinmindProviderError";
+    this.errorCode = errorCode;
+    this.meta = meta;
+  }
+}
+
+async function fetchFromFinMind<T>(
+  dataset: string,
+  dataId: string,
+  startDate: string,
+  endDate: string,
+  schema: z.ZodType<T>,
+): Promise<FinmindDatasetResult<T>> {
+  const result = await finmindFetch({
+    url: FINMIND_API_URL,
+    params: {
+      dataset,
+      data_id: dataId,
+      start_date: startDate,
+      end_date: endDate,
+    },
+    revalidateSeconds: REVALIDATE_TIME,
+    cacheKeyBase: `${dataset}:${dataId}:${startDate}:${endDate}`,
+  });
+
+  if (!result.ok) {
+    const message = result.meta.message || "FinMind request failed";
+    const errorCode = result.meta.errorCode || "finmind_request_failed";
+    throw new FinmindProviderError(message, errorCode, result.meta);
+  }
+
+  const parsedBase = BaseResponseSchema.passthrough().safeParse(result.body);
+  if (!parsedBase.success || parsedBase.data.status !== 200) {
+    throw new FinmindProviderError(
+      result.body?.msg || "FinMind status is not 200",
+      "finmind_status_error",
+      result.meta,
+    );
+  }
+
+  const parsedData = z.array(schema).safeParse(result.body?.data || []);
+  if (!parsedData.success) {
+    throw new FinmindProviderError("Failed to parse FinMind data", "finmind_parse_error", result.meta);
+  }
+
+  return {
+    data: parsedData.data,
+    meta: result.meta,
+  };
+}
 
 export async function getPriceDaily(ticker: string, start: string, end: string) {
-    return fetchFromFinMind("TaiwanStockPrice", ticker, start, end, PriceDailySchema);
+  return fetchFromFinMind("TaiwanStockPrice", ticker, start, end, PriceDailySchema);
 }
 
 export async function getInstitutionalInvestors(ticker: string, start: string, end: string) {
-    return fetchFromFinMind("TaiwanStockInstitutionalInvestorsBuySell", ticker, start, end, InstitutionalInvestorsSchema);
+  return fetchFromFinMind(
+    "TaiwanStockInstitutionalInvestorsBuySell",
+    ticker,
+    start,
+    end,
+    InstitutionalInvestorsSchema,
+  );
 }
 
 export async function getMarginShort(ticker: string, start: string, end: string) {
-    return fetchFromFinMind("TaiwanStockMarginPurchaseShortSale", ticker, start, end, MarginShortSchema);
+  return fetchFromFinMind("TaiwanStockMarginPurchaseShortSale", ticker, start, end, MarginShortSchema);
 }
 
 export async function getMonthlyRevenue(ticker: string, start: string, end: string) {
-    // FinMind's Monthly Revenue might be slightly delayed, fetch a longer timeframe safely
-    return fetchFromFinMind("TaiwanStockMonthRevenue", ticker, start, end, MonthlyRevenueSchema);
+  return fetchFromFinMind("TaiwanStockMonthRevenue", ticker, start, end, MonthlyRevenueSchema);
 }
 
 export async function getStockInfo(ticker: string) {
-    // TaiwanStockInfo doesn't strictly need start/end date for basic lookups, but we can pass a dummy or use a specialized fetch
-    // However, finmind v4 data api Requires start_date sometimes or it fetches all history. For info, it's small.
-    // Let's use today's date minus 1 year to today just in case, or we can just fetch without dates if we bypass the wrapper.
-    const url = `${FINMIND_API_URL}?dataset=TaiwanStockInfo&data_id=${ticker}${process.env.FINMIND_API_TOKEN ? `&token=${process.env.FINMIND_API_TOKEN}` : ''}`;
+  const result = await finmindFetch({
+    url: FINMIND_API_URL,
+    params: {
+      dataset: "TaiwanStockInfo",
+      data_id: ticker,
+    },
+    revalidateSeconds: 86400 * 7,
+    cacheKeyBase: `TaiwanStockInfo:${ticker}:none:none`,
+  });
 
-    const res = await fetch(url, {
-        next: { revalidate: 86400 * 7 }, // Cache info for 7 days
-        headers: { "Content-Type": "application/json" }
-    });
+  if (!result.ok) {
+    throw new FinmindProviderError(
+      result.meta.message || "Failed to fetch stock info",
+      result.meta.errorCode || "finmind_request_failed",
+      result.meta,
+    );
+  }
 
-    if (!res.ok) throw new Error(`FinMind API error: ${res.statusText}`);
-    const raw = await res.json();
-    if (raw.status !== 200) throw new Error(`FinMind API returned error: ${raw.msg}`);
+  const parsedBase = BaseResponseSchema.passthrough().safeParse(result.body);
+  if (!parsedBase.success || parsedBase.data.status !== 200) {
+    throw new FinmindProviderError(
+      result.body?.msg || "FinMind status is not 200",
+      "finmind_status_error",
+      result.meta,
+    );
+  }
 
-    const dataSchema = z.array(StockInfoSchema);
-    const parsedData = dataSchema.safeParse(raw.data);
-    if (!parsedData.success) throw new Error("Failed to parse StockInfo data");
+  const parsedData = z.array(StockInfoSchema).safeParse(result.body?.data || []);
+  if (!parsedData.success) {
+    throw new FinmindProviderError("Failed to parse StockInfo data", "finmind_parse_error", result.meta);
+  }
 
-    return parsedData.data;
+  return {
+    data: parsedData.data,
+    meta: result.meta,
+  };
 }
 
 export async function getTaiwanStockNews(ticker: string, start: string, end: string) {
-    const token = process.env.FINMIND_API_TOKEN;
-    let url = `${FINMIND_API_URL}?dataset=TaiwanStockNews&data_id=${ticker}&start_date=${start}&end_date=${end}`;
-    if (token) {
-        url += `&token=${token}`;
-    }
-
-    const res = await fetch(url, {
-        next: { revalidate: 7200 }, // 2 hours
-        headers: {
-            "Content-Type": "application/json",
-        },
-    });
-
-    if (!res.ok) {
-        throw new Error(`FinMind API error: ${res.statusText}`);
-    }
-
-    const raw = await res.json();
-    const parsedBase = BaseResponseSchema.passthrough().safeParse(raw);
-
-    if (!parsedBase.success || parsedBase.data.status !== 200) {
-        throw new Error(`FinMind API returned error status: ${raw.msg}`);
-    }
-
-    const dataSchema = z.array(TaiwanStockNewsSchema);
-    const parsedData = dataSchema.safeParse(raw.data);
-
-    if (!parsedData.success) {
-        console.error("Zod Parsing Error:", parsedData.error);
-        return [];
-    }
-
-    return parsedData.data;
+  return fetchFromFinMind("TaiwanStockNews", ticker, start, end, TaiwanStockNewsSchema);
 }

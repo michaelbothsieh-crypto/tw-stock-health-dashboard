@@ -1,46 +1,94 @@
-"use client";
+﻿"use client";
 
 import {
-    LineChart,
-    Line,
-    XAxis,
-    YAxis,
-    CartesianGrid,
-    Tooltip,
-    ResponsiveContainer,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
+import { DarkTooltip } from "@/components/charts/DarkTooltip";
+import { zhTW } from "@/i18n/zh-TW";
+
+interface ChartPoint {
+  date: string;
+  close: number;
+  volume?: number;
+}
 
 interface ChartProps {
-    data: { date: string; close: number }[];
+  data: ChartPoint[];
+}
+
+function truncate2(value: number): number {
+  return Math.trunc(value * 100) / 100;
+}
+
+function calculateSma(series: number[], period: number): Array<number | null> {
+  return series.map((_, index) => {
+    if (index + 1 < period) return null;
+    const window = series.slice(index + 1 - period, index + 1);
+    const sum = window.reduce((acc, value) => acc + value, 0);
+    return truncate2(sum / period);
+  });
+}
+
+function formatLineValue(value: number | null): string {
+  if (value === null) return zhTW.states.noData;
+  return truncate2(value).toFixed(2);
 }
 
 export function StockChart({ data }: ChartProps) {
-    if (!data || data.length === 0) return <div>暫無股價圖表資料。</div>;
+  if (!data || data.length === 0) {
+    return <div className="py-8 text-center text-base text-neutral-400">{zhTW.chart.noPrice}</div>;
+  }
 
-    return (
-        <div className="h-64 sm:h-80 w-full mt-4">
-            <ResponsiveContainer width="100%" height="100%">
-                <LineChart
-                    data={data}
-                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                >
-                    <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                    <XAxis
-                        dataKey="date"
-                        tickFormatter={(tick) => tick.substring(5)}
-                        minTickGap={30}
-                    />
-                    <YAxis domain={['auto', 'auto']} />
-                    <Tooltip />
-                    <Line
-                        type="monotone"
-                        dataKey="close"
-                        stroke="#8884d8"
-                        dot={false}
-                        strokeWidth={2}
-                    />
-                </LineChart>
-            </ResponsiveContainer>
-        </div>
-    );
+  const closes = data.map((item) => item.close);
+  const sma20 = calculateSma(closes, 20);
+  const sma60 = calculateSma(closes, 60);
+
+  const latestClose = closes[closes.length - 1] ?? null;
+  const latestSma20 = sma20[sma20.length - 1] ?? null;
+  const latestSma60 = sma60[sma60.length - 1] ?? null;
+
+  const chartData = data.map((item, index) => ({
+    ...item,
+    sma20: sma20[index],
+    sma60: sma60[index],
+    volume: item.volume,
+  }));
+
+  return (
+    <div className="mt-1 w-full space-y-3">
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 text-sm lg:text-base">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-blue-500" /> {zhTW.chart.close}：{formatLineValue(latestClose)}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> {zhTW.chart.sma20}：{formatLineValue(latestSma20)}
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-teal-400" /> {zhTW.chart.sma60}：{formatLineValue(latestSma60)}
+        </span>
+      </div>
+
+      <div className="h-72 w-full sm:h-80">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+            <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+            <XAxis dataKey="date" tickFormatter={(tick) => tick.slice(5)} minTickGap={22} />
+            <YAxis width={58} domain={["auto", "auto"]} tickFormatter={(value) => formatLineValue(Number(value))} />
+            <Tooltip content={<DarkTooltip />} />
+            <Legend />
+            <Line type="monotone" dataKey="close" name={zhTW.chart.close} stroke="#3b82f6" dot={false} strokeWidth={2} />
+            <Line type="monotone" dataKey="sma20" name={zhTW.chart.sma20} stroke="#f59e0b" dot={false} strokeWidth={1.8} />
+            <Line type="monotone" dataKey="sma60" name={zhTW.chart.sma60} stroke="#2dd4bf" dot={false} strokeWidth={1.8} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
 }

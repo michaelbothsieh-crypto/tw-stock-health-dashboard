@@ -1,10 +1,12 @@
-import { getPriceDaily, PriceDaily } from './providers/finmind';
+import { FinmindFetchMeta } from "./providers/finmindFetch";
+import { getPriceDaily, PriceDaily } from "./providers/finmind";
 
 export interface FetchRangeResult {
     data: PriceDaily[];
     barsRequested: number;
     barsReturned: number;
     endDate: string;
+    providerMeta?: FinmindFetchMeta;
 }
 
 function formatDateToYYYYMMDD(date: Date): string {
@@ -25,6 +27,7 @@ export async function fetchRecentBars(
 
     let validData: PriceDaily[] = [];
     let currentEndDateStr = '';
+    let providerMeta: FinmindFetchMeta | undefined;
 
     while (retryCount <= maxRetries) {
         // 使用當時日期作為終點 (Asia/Taipei 的時間對應，在此可用系統日期近似)
@@ -37,7 +40,9 @@ export async function fetchRecentBars(
         currentEndDateStr = endStr;
 
         try {
-            const rawData = await getPriceDaily(symbol, startStr, endStr);
+            const priceResult = await getPriceDaily(symbol, startStr, endStr);
+            providerMeta = priceResult.meta;
+            const rawData = priceResult.data;
 
             // 排序與過濾
             const sortedAndFiltered = rawData
@@ -73,6 +78,7 @@ export async function fetchRecentBars(
         data: finalData,
         barsRequested: targetBars,
         barsReturned: finalData.length,
-        endDate: currentEndDateStr
+        endDate: currentEndDateStr,
+        providerMeta
     };
 }
