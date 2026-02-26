@@ -15,6 +15,7 @@
     "selfcheck:fallback": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/self_check_finmind_fallback.ts",
     "selfcheck:prob": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/self_check_probabilities.ts",
     "selfcheck:strategy": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/self_check_strategy.ts",
+    "selfcheck:consistency": "ts-node --transpile-only -P scripts/tsconfig.selfcheck.json scripts/self_check_consistency.ts",
     "selfcheck:all": "npm run selfcheck:names && npm run selfcheck:fundamental && npm run selfcheck:news"
   },
   "dependencies": {

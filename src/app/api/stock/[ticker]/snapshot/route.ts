@@ -22,6 +22,7 @@ import { predictProbabilities } from "@/lib/predict/probability";
 import { getCalibrationModel } from "@/lib/predict/calibration";
 import { generateStrategy } from "@/lib/strategy/strategyEngine";
 import { buildExplainBreakdown } from "@/lib/explainBreakdown";
+import { calculateConsistency } from "@/lib/consistency";
 
 export async function GET(
   req: NextRequest,
@@ -154,6 +155,14 @@ export async function GET(
       gap: shortTermVolatility.gap,
       calibration,
     });
+    const consistency = calculateConsistency({
+      trendScore: trendSignals.trendScore,
+      flowScore: flowSignals.flowScore,
+      fundamentalScore: fundamentalSignals.fundamentalScore,
+      catalystScore: catalystResult.catalystScore,
+      shortTermOpportunityScore: shortTerm.shortTermOpportunityScore,
+      upProb5D: predictions.upProb5D,
+    });
     const strategy = generateStrategy({
       trendScore: trendSignals.trendScore,
       flowScore: flowSignals.flowScore,
@@ -167,6 +176,7 @@ export async function GET(
       upProb3D: predictions.upProb3D,
       upProb5D: predictions.upProb5D,
       bigMoveProb3D: predictions.bigMoveProb3D,
+      consistencyScore: consistency.score,
       riskFlags: [
         ...trendSignals.risks,
         ...flowSignals.risks,
@@ -184,6 +194,7 @@ export async function GET(
       shortTermVolatility,
       shortTerm,
       predictions,
+      consistency,
       latestClose,
     });
 
@@ -240,6 +251,7 @@ export async function GET(
       shortTermVolatility,
       shortTerm,
       predictions,
+      consistency,
       strategy,
       aiSummary: {
         stance: aiExplanation.stance,

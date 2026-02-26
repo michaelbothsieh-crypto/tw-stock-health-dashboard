@@ -5,6 +5,7 @@ import { FlowSignals } from "@/lib/signals/flow";
 import { ShortTermSignals } from "@/lib/signals/shortTerm";
 import { ShortTermVolatility } from "@/lib/signals/shortTermVolatility";
 import { TrendSignals } from "@/lib/signals/trend";
+import { ConsistencyOutput } from "@/lib/consistency";
 
 export interface ExplainComponent {
   key: string;
@@ -30,6 +31,14 @@ export interface ExplainBreakdown {
   volatility: ExplainSection;
   shortTerm: ExplainSection;
   prediction: ExplainSection;
+  consistency: ExplainSection & {
+    level: "高一致性" | "中一致性" | "低一致性";
+    consensusDirection: "偏多" | "偏空" | "不明確";
+    consensusValue: number;
+    disagreement: number;
+    sameSignRatio: number;
+    contradictions: string[];
+  };
 }
 
 interface BuildExplainBreakdownInput {
@@ -40,6 +49,7 @@ interface BuildExplainBreakdownInput {
   shortTermVolatility: ShortTermVolatility;
   shortTerm: ShortTermSignals;
   predictions: PredictionOutput;
+  consistency: ConsistencyOutput;
   latestClose: number;
 }
 
@@ -162,7 +172,7 @@ function toDisplayValue(value: number | null, digits = 4): number | string {
 }
 
 export function buildExplainBreakdown(input: BuildExplainBreakdownInput): ExplainBreakdown {
-  const { trend, flow, fundamental, ai, shortTermVolatility, shortTerm, predictions, latestClose } = input;
+  const { trend, flow, fundamental, ai, shortTermVolatility, shortTerm, predictions, consistency, latestClose } = input;
 
   const trendComponents = [
     withContribution(
@@ -346,6 +356,25 @@ export function buildExplainBreakdown(input: BuildExplainBreakdownInput): Explai
       formula: predictions.breakdown.formula,
       reasons: predictions.breakdown.notes,
       riskFlags: [],
+    },
+    consistency: {
+      score: consistency.score,
+      level: consistency.level,
+      consensusDirection: consistency.consensusDirection,
+      consensusValue: consistency.consensusValue,
+      disagreement: consistency.disagreement,
+      sameSignRatio: consistency.sameSignRatio,
+      components: consistency.components.map((row) => ({
+        key: row.key,
+        label: row.label,
+        value: row.value,
+        weight: row.weight,
+        contribution: row.contribution,
+      })),
+      formula: consistency.formula,
+      reasons: consistency.reasons,
+      riskFlags: [],
+      contradictions: consistency.contradictions,
     },
   };
 }
