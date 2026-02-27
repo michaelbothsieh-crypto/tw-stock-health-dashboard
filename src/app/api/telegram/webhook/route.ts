@@ -3,6 +3,7 @@ import { handleTelegramMessage } from "@/lib/telegram/botEngine";
 
 export async function POST(req: Request) {
   try {
+    const origin = new URL(req.url).origin;
     const body = await req.json();
 
     // Validate the typical Telegram Webhook shape
@@ -18,7 +19,7 @@ export async function POST(req: Request) {
 
     // Process asynchronously (Vercel Serverless allows short execution background tasks or awaiting here if it's within 10s)
     // We will await it directly to ensure we reply before lambda freezing.
-    await handleTelegramMessage(chat.id, text.trim());
+    await handleTelegramMessage(chat.id, text.trim(), false, { baseUrl: origin });
 
     return NextResponse.json({ ok: true });
   } catch (error: any) {

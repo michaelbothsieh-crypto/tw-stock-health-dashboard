@@ -78,6 +78,10 @@ type StockCard = {
   sourceLabel: string;
 };
 
+type TelegramHandleOptions = {
+  baseUrl?: string;
+};
+
 type SnapshotLike = {
   news?: {
     topBullishNews?: Array<{ title?: string }>;
@@ -94,6 +98,8 @@ type SnapshotLike = {
     };
   };
 };
+
+let commandsSynced = false;
 
 async function sendMessage(chatId: string | number, text: string): Promise<number | null> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -190,7 +196,8 @@ function parseChangePct(value?: string): number | null {
   return toNumberPercent(value ?? null);
 }
 
-function getSnapshotBaseUrl(): string | null {
+function getSnapshotBaseUrl(overrideBaseUrl?: string): string | null {
+  if (overrideBaseUrl) return overrideBaseUrl.replace(/\/+$/, "");
   const explicit = process.env.BOT_BASE_URL || process.env.APP_BASE_URL;
   if (explicit) return explicit.replace(/\/+$/, "");
 
@@ -198,6 +205,29 @@ function getSnapshotBaseUrl(): string | null {
   if (vercelUrl) return `https://${vercelUrl.replace(/\/+$/, "")}`;
 
   return null;
+}
+
+async function ensureTelegramCommandsSynced() {
+  if (commandsSynced) return;
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  if (token === "TEST_TOKEN") return;
+
+  const base = `https://api.telegram.org/bot${token}`;
+  try {
+    // Clear any stale command menu first, then set only /tw.
+    await fetch(`${base}/deleteMyCommands`, { method: "POST" });
+    await fetch(`${base}/setMyCommands`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        commands: [{ command: "tw", description: "查詢台股個股（例：/tw 2330）" }],
+      }),
+    });
+    commandsSynced = true;
+  } catch (error) {
+    console.error("[TelegramBot] setMyCommands failed", error);
+  }
 }
 
 function resolveCodeFromInputLocal(input: string): string | null {
@@ -393,7 +423,7 @@ function createFallbackCard(symbol: string, nameZh: string, sourceLabel: string)
   };
 }
 
-async function fetchLiveStockCard(query: string): Promise<StockCard | null> {
+async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Promise<StockCard | null> {
   const trimmed = query.trim();
   if (!trimmed) return null;
 
@@ -401,7 +431,7 @@ async function fetchLiveStockCard(query: string): Promise<StockCard | null> {
   const symbol = resolved || trimmed.match(/^(\d{4,})(\.TW|\.TWO)?$/i)?.[1] || null;
   if (!symbol) return null;
 
-  const baseUrl = getSnapshotBaseUrl();
+  const baseUrl = getSnapshotBaseUrl(overrideBaseUrl);
   if (!baseUrl) return null;
 
   try {
@@ -506,7 +536,12 @@ function cardFromReportRow(rowRaw: TelegramStockRow): StockCard {
   return card;
 }
 
-export async function handleTelegramMessage(chatId: number, text: string, isBackgroundPush = false) {
+export async function handleTelegramMessage(
+  chatId: number,
+  text: string,
+  isBackgroundPush = false,
+  options?: TelegramHandleOptions,
+) {
   const privateChatId = process.env.TELEGRAM_CHAT_ID;
 
   if (isBackgroundPush) {
@@ -519,6 +554,8 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
   }
 
   if (!text.startsWith("/")) return;
+
+  await ensureTelegramCommandsSynced();
 
   const [commandRaw, ...argParts] = text.trim().split(/\s+/);
   const command = commandRaw.toLowerCase();
@@ -536,7 +573,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
 
   const progressMessageId = await sendMessage(chatId, "正在搜尋資料中，請稍候...");
 
-  const liveCard = await fetchLiveStockCard(query);
+  const liveCard = await fetchLiveStockCard(query, options?.baseUrl);
   if (liveCard) {
     await replyOrEdit(chatId, progressMessageId, buildStockCardMessage(liveCard));
     return;
