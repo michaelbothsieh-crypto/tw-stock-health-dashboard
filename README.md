@@ -1,94 +1,70 @@
-# 台股波段健康/多空儀表板 (Taiwan Stock Health Dashboard)
+﻿# 台股診斷儀表板 (TW Stock Health Dashboard)
 
-這個專案是一個台股儀表板，用來快速檢查個股的波段多空趨勢與體質。我們從技術面、籌碼面、基本面三個維度切入給出分數，並透過 AI 統整出一份簡短的總結報告。
+這是一個結合 AI 輔助的台股決策工具。它幫你整合了技術面、籌碼動態、基本面、新聞催化、海外連動與崩盤預警等關鍵數據，並透過 Web 介面與 Telegram Bot 提供即時的決策輔助。
 
-## 🌟 Demo
-> 🔗 **[Vercel Demo URL](https://tw-stock-health-dashboard.vercel.app/)**
-
-## 📸 核心功能
-- **Dashboard**: 一眼看出 5 檔自選股的三大面向分數與 AI 解讀。
-- **Watchlist**: 自選股清單直接存在瀏覽器的 LocalStorage 裡，不用登入。
-- **Reports**: 每日自動產生大盤或個股的文字簡報。
-
-## 🏗️ 系統架構
-
-```mermaid
-graph LR
-A["Provider<br/>(FinMind 等)"] --> B["Signals<br/>(技術/籌碼/基本)"]
-B --> C["Explain<br/>(AI 規則/LLM)"]
-C --> D["Next.js API<br/>(/api/stock)"]
-D --> E["UI Dashboard<br/>(前端)"]
-```
-
-### Telegram 機器人整合 (互動指令 `/daily` & `/stock`)
-最新版本現已支援雙向的 Telegram 小幫手：
-1. **GitHub Actions 主動推播**：每日收盤後自動發送極簡總覽至指定群組。
-2. **Vercel Webhook 互動查詢**：群組成員可隨時下指令查詢最新報告，報告內容 100% 來自 Actions 產出的 `reports/YYYY-MM-DD-watchlist.json`，確保數據完全一致。
-
-**【部署教學】**
-- **GitHub Secrets** (供 Actions 推播):
-  - `TELEGRAM_BOT_TOKEN`:向 @BotFather 申請的機器人 Token。
-  - `TELEGRAM_CHAT_ID`:推播目標群組或個人的 Chat ID。
-  - `WATCHLIST_TW` (選填): "2330,8299,2867"
-- **Vercel Env Variables** (供 Webhook 解析):
-  - `TELEGRAM_BOT_TOKEN`: 同上。
-  - `GITHUB_OWNER`: 你的 GitHub 帳號名。
-  - `GITHUB_REPO`: `tw-stock-health-dashboard`。
-  - `GITHUB_PAT` (選填): 右上角設定申請的 Personal Access Token (若 Repo 為 Private 必填)。
-  
-**【註冊 Webhook】**
-在你將 Vercel 發布完成後，開啟終端機執行一次以下指令，將你的 Vercel API 綁定到 Telegram：
-```bash
-curl -F "url=https://<你的 Vercel 網域>/api/telegram/webhook" https://api.telegram.org/bot<你的TELEGRAM_BOT_TOKEN>/setWebhook
-```
-
-## 🛠 自動測試與診斷
-
-專案裡有寫好的幾支腳本可以當作自我檢測，跑一下就能知道 API 有沒有壞掉、快取有沒有命裡，或是算出來的分數正不正常。像是台積電、鴻海、聯發科算出來的分數不應該都長得一樣：
-
-```bash
-npm run selfcheck
-```
-
-如果你只擔心營收等基本面 API 壞掉：
-```bash
-npm run selfcheck:fundamental
-```
-
-腳本跑完會在終端機印出詳細分數跟實際拿到的資料筆數，最後還會自動檢查 `flowScore` 和 `fundamentalScore` 的波動區間有沒有達到實務上能用的標準。如果 API 斷線或資料抓不到會直接噴警告。
-
-## 📊 計分邏輯
-
-### 📈 1. 趨勢分數 (Trend Score) - 0~100 分
-看目前的技術面強弱：
-- **40% 趨勢排列**: 檢查 20MA、60MA、120MA 目前是多頭還是空頭排隊。
-- **20% RSI 動能**: RSI(14) 區間動能，大於 50 偏強，大於 70 留意超買風險。
-- **20% MACD 柱狀**: 趨勢加速指標，紅柱會加分。
-- **20% 波段報酬**: 最近 60 天內這檔股票幫你賺（或賠）了多少。
-
-### 💰 2. 籌碼分數 (Flow Score) - 0~100 分
-追蹤法人的大錢跟散戶動向：
-- **外資買賣 (+/-25)**: 近 5 天與近 20 天外資淨買賣超狀況。
-- **投信買賣 (+/-25)**: 近 5 天與近 20 天投信淨買賣超狀況。
-- **融資餘額 (+/-10)**: 看看散戶有沒有過度熱情，如果近 20 天融資暴增，通常會直接扣分。
-
-### 🏭 3. 基本面分數 (Fundamental Score) - 0~100 分
-找尋有沒有實質的獲利數字在支撐股價：
-- **YoY 平均**: 最近三個月份的單月營收年增率大約多少。
-- **YoY 趨勢**: 營收成長是不是這幾個月持續在放大。
-
-### 📰 4. 催化劑與新聞 (News Catalyst) - -100~100 分
-- 透過 AI 分析近 7 天的新聞事件，標記出利多與利空消息。
-- 判斷目前的市場關注焦點，快速總結成催化劑分數。
-
-### ⚡ 5. 其他獨家指標
-除了三大面向，我們還加上這些模組幫助決策：
-- **波動敏感度 (Volatility)**: 偵測這幾天有沒有假突破或是被急拉急殺的機會。
-- **策略建議 (Strategy)**: 定義好觸發條件和失效條件的具體操作建議，例如波段等待、短線偏多。
-- **機率預測 (Probability)**: 基於過去歷史統計，推算未來 1/3/5 天可能上漲的校準機率與回檔風險。
+## 專案核心
+*   **決策輔助**：工具是用來協助判斷，而非取代你的獨立思考或自動交易。
+*   **數據透明**：提供可解釋的分數與訊號來源，不只是丟出一個結論。
+*   **多端同步**：Web 端負責深度分析，Telegram 則提供即時查詢與每日摘要。
 
 ---
 
+## 功能亮點
 
-## ⚠️ 免責聲明
-> 此為開源專題展示 (Demo Project)，並非投資建議。\n> 上面的分數與訊號都是基於固定規則和歷史回測計算的結果，實際市場瞬息萬變。盈虧自負，下單前請動腦。
+### 1. Web 診斷中心
+*   **單檔快照**：一眼看清趨勢、法人流向、基本面、短線機率與策略信心。
+*   **證據拆解**：所有分數都有據可查，點擊解讀背後的組成邏輯。
+*   **海外連動**：動態對標美股相關板塊與同類產業。
+*   **風險預警**：利用跨資產指標，針對崩盤風險提供早期預警。
+
+### 2. Telegram 助手 (目前支援 `/stock`)
+*   **即時查詢**：輸入 `/stock <代號或名稱>` (如：`/stock 2330`) 即可獲取診斷報告。
+*   **內容包含**：
+    *   收盤價、漲跌、量能變化。
+    *   法人買賣超 (白話解析)。
+    *   策略結論 (方向、信心度)。
+    *   1D/3D/5D 上漲機率預測。
+    *   關鍵價位 (支撐/壓力) 與目標參考。
+    *   新聞重點摘要。
+
+### 3. 排程推播
+*   **每日盤後摘要**：透過 GitHub Actions 每天定時推送一鍵式概覽。
+*   **一眼掃描**：收盤、法人動態、AI 結論與新聞警示一次看完。
+
+---
+
+## 數據解讀說明
+
+*   **趨勢分數 (Trend)**：綜合均線結構與動能，判斷目前方向與延續性。
+*   **籌碼分數 (Flow)**：追蹤法人與融資動向，看大戶資金是否支持目前趨勢。
+*   **基本面分數 (Fundamental)**：以營收成長動能為核心，確保不只看線圖。
+*   **新聞催化 (News)**：解讀近期新聞的影響權重，將事件風險納入考量。
+*   **策略信心 (Confidence)**：衡量當前出手點的「勝率感」，作為風險控管的參考。
+
+---
+
+## 技術架構
+*   **Frontend**: Next.js 15+ / React 19 / TypeScript
+*   **Visualization**: Recharts / Tailwind CSS
+*   **Data**: FinMind / Yahoo Finance
+*   **Automation**: GitHub Actions
+
+## 開發指令
+*   `npm run dev`：啟動本地開發
+*   `npm run build`：專案建置
+*   `npm run report:daily`：手動觸發盤後報告
+
+## 環境設定
+### 核心參數
+*   `TELEGRAM_BOT_TOKEN`：Bot API 金鑰
+*   `TELEGRAM_CHAT_ID`：推播目標頻道 ID
+*   `WATCHLIST_TW`：觀察名單 (支援 CSV `2330,2317` 或 JSON `["2330"]`)
+
+### 進階設定
+*   `BOT_BASE_URL`：API 呼叫基底網址
+*   `REPORT_WRITE_FILES`：是否同步產出報告檔案 (預設為 `false`)
+
+---
+
+## 免責聲明
+本專案所有內容及數據僅供個人研究與決策輔助參考，不構成任何形式的投資操作建議。入市有風險，投資需謹慎。

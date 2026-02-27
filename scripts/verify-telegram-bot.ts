@@ -91,8 +91,11 @@ async function runTests() {
 
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/help");
-  if (!getLastMessage().includes("/stock")) throw new Error("/help failed");
-  console.log("✅ /help");
+  const helpOutput = getLastMessage();
+  if (!helpOutput.includes("目前僅支援 /stock")) {
+    throw new Error(`/help should be disabled. Output: ${helpOutput}`);
+  }
+  console.log("✅ /help disabled");
 
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/daily");
