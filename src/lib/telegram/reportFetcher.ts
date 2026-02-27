@@ -1,10 +1,35 @@
+import fs from "fs";
+import path from "path";
+
+function readLatestLocalReport() {
+  try {
+    const reportsDir = path.join(process.cwd(), "reports");
+    if (!fs.existsSync(reportsDir)) return null;
+
+    const files = fs
+      .readdirSync(reportsDir)
+      .filter((name) => name.endsWith("-watchlist.json"))
+      .sort((a, b) => b.localeCompare(a));
+
+    if (files.length === 0) return null;
+
+    const latestPath = path.join(reportsDir, files[0]);
+    const raw = fs.readFileSync(latestPath, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchLatestReport() {
   const owner = process.env.GITHUB_OWNER;
   const repo = process.env.GITHUB_REPO;
   const branch = process.env.REPORT_BRANCH || "main";
 
   if (!owner || !repo) {
-    throw new Error("Missing GITHUB_OWNER or GITHUB_REPO in ENV");
+    const local = readLatestLocalReport();
+    if (local) return local;
+    throw new Error("Missing GITHUB_OWNER or GITHUB_REPO in ENV, and no local reports found");
   }
 
   // Fetch directory listing
@@ -24,7 +49,13 @@ export async function fetchLatestReport() {
 
   const res = await fetch(apiUrl, { headers, next: { revalidate: 60 } }); // Next.js cache for 60s
   if (!res.ok) {
-    if (res.status === 404) return null; // reports dir doesn't exist yet
+    if (res.status === 404) {
+      const local = readLatestLocalReport();
+      if (local) return local;
+      return null;
+    }
+    const local = readLatestLocalReport();
+    if (local) return local;
     throw new Error(`GitHub API Error: ${res.statusText}`);
   }
 
@@ -32,7 +63,11 @@ export async function fetchLatestReport() {
   
   // Find all json files
   const jsonFiles = files.filter(f => f.name.endsWith("-watchlist.json"));
-  if (jsonFiles.length === 0) return null;
+  if (jsonFiles.length === 0) {
+    const local = readLatestLocalReport();
+    if (local) return local;
+    return null;
+  }
 
   // Sort descending by name (YYYY-MM-DD)
   jsonFiles.sort((a, b) => b.name.localeCompare(a.name));
@@ -41,7 +76,9 @@ export async function fetchLatestReport() {
   // Fetch the raw content
   const rawRes = await fetch(latestFile.download_url, { headers, next: { revalidate: 60 } });
   if (!rawRes.ok) {
-     throw new Error(`Failed to download raw json: ${rawRes.statusText}`);
+    const local = readLatestLocalReport();
+    if (local) return local;
+    throw new Error(`Failed to download raw json: ${rawRes.statusText}`);
   }
 
   const data = await rawRes.json();
