@@ -79,12 +79,41 @@ global.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
     return new Response(JSON.stringify(mockReportData), { status: 200 }) as unknown as Response;
   }
 
+  if (urlStr.includes("/api/stock/6531/snapshot")) {
+    return new Response(
+      JSON.stringify({
+        normalizedTicker: {
+          symbol: "6531",
+          companyNameZh: "愛普*",
+          displayName: "6531 愛普*",
+        },
+        data: {
+          prices: [
+            { date: "2026-02-26", high: 430, low: 420, close: 427, volume: 4100000 },
+            { date: "2026-02-27", high: 438, low: 425, close: 433.5, volume: 4941200 },
+          ],
+        },
+        signals: { flow: { foreign5D: -16768300 } },
+        predictions: { upProb1D: 54.0, upProb3D: 53.7, upProb5D: 53.4 },
+        strategy: { signal: "觀察", confidence: 48.9 },
+        newsMeta: { count: 2 },
+        news: { topBullishNews: [], topBearishNews: [] },
+      }),
+      { status: 200 },
+    ) as unknown as Response;
+  }
+
+  if (urlStr.includes("/api/stock/") && urlStr.includes("/snapshot")) {
+    return new Response(JSON.stringify({ error: "not mocked" }), { status: 404 }) as unknown as Response;
+  }
+
   return originalFetch(url, init);
 }) as typeof global.fetch;
 
 process.env.GITHUB_OWNER = "test";
 process.env.GITHUB_REPO = "test";
 process.env.TELEGRAM_BOT_TOKEN = "TEST_TOKEN";
+process.env.BOT_BASE_URL = "https://mock.local";
 
 async function runTests() {
   console.log("=== Telegram Bot Engine 驗證 ===");
@@ -117,6 +146,14 @@ async function runTests() {
     throw new Error(`/tw by symbol failed. Output: ${stockOutput}`);
   }
   console.log("✅ /tw 2330");
+
+  sentMessages = [];
+  await botEngine.handleTelegramMessage(12345, "/tw 6531");
+  const stockLiveOutput = getLastMessage();
+  if (!stockLiveOutput.includes("6531 愛普*") || !stockLiveOutput.includes("來源：即時 snapshot")) {
+    throw new Error(`/tw live snapshot failed. Output: ${stockLiveOutput}`);
+  }
+  console.log("✅ /tw 6531 live snapshot");
 
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/tw 台積電");
