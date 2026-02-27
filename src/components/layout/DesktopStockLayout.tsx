@@ -65,7 +65,7 @@ export function DesktopStockLayout({
               {snapshot.strategy.explain.contradictions && snapshot.strategy.explain.contradictions.length > 0 && (
                 <div className="group relative w-max cursor-pointer text-[15px] text-amber-400/90 flex items-center gap-2 mt-4 transition-all duration-150 hover:brightness-110">
                   <Info className="h-4 w-4" />
-                  矛盾提示：{snapshot.strategy.explain.contradictions[0].left} vs {snapshot.strategy.explain.contradictions[0].right}
+                  訊號矛盾：{snapshot.strategy.explain.contradictions[0].left} 與 {snapshot.strategy.explain.contradictions[0].right}
                   <div className="absolute top-full left-0 mt-2 w-72 p-4 rounded-xl border border-neutral-700 bg-neutral-900 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 text-neutral-200">
                     {snapshot.strategy.explain.contradictions[0].why}
                   </div>
@@ -174,25 +174,25 @@ export function DesktopStockLayout({
             <div id="analysis" className="w-full min-w-0 scroll-mt-24">
               <div className="mb-6 flex items-center gap-6 border-b border-neutral-800 pb-2">
                 <button
-                  onClick={() => setActiveMainTab("evidence")}
-                  className={`text-[18px] font-semibold pb-2 border-b-2 transition-all duration-150 ${activeMainTab === "evidence" ? "border-neutral-100 text-neutral-100" : "border-transparent text-neutral-500 hover:text-neutral-300"}`}
+                  onClick={() => setActiveMainTab("數據判讀")}
+                  className={`text-[18px] font-semibold pb-2 border-b-2 transition-all duration-150 ${activeMainTab === "數據判讀" ? "border-neutral-100 text-neutral-100" : "border-transparent text-neutral-500 hover:text-neutral-300"}`}
                 >
-                  證據
+                  數據判讀
                 </button>
                 <button
-                  onClick={() => setActiveMainTab("calculation")}
-                  className={`text-[18px] font-semibold pb-2 border-b-2 transition-all duration-150 ${activeMainTab === "calculation" ? "border-neutral-100 text-neutral-100" : "border-transparent text-neutral-500 hover:text-neutral-300"}`}
+                  onClick={() => setActiveMainTab("分析詳解")}
+                  className={`text-[18px] font-semibold pb-2 border-b-2 transition-all duration-150 ${activeMainTab === "分析詳解" ? "border-neutral-100 text-neutral-100" : "border-transparent text-neutral-500 hover:text-neutral-300"}`}
                 >
-                  計算
+                  分析詳解
                 </button>
               </div>
 
-              {activeMainTab === "evidence" ? (
+              {activeMainTab === "數據判讀" ? (
                 <div className="space-y-6">
                   <div className="mb-8 grid grid-cols-3 gap-6">
                     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5 transition-all duration-150 hover:bg-neutral-900/60">
                       <div className="text-[16px] font-medium text-neutral-400 mb-4 flex items-center justify-between">
-                        <span>Step 1：方向判定</span>
+                        <span>階段 1：方向判定</span>
                       </div>
                       <div className="space-y-4 text-[15px]">
                         <div className="flex flex-col gap-1 text-neutral-300">
@@ -212,7 +212,7 @@ export function DesktopStockLayout({
 
                     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5 transition-all duration-150 hover:bg-neutral-900/60">
                       <div className="text-[16px] font-medium text-neutral-400 mb-4 flex items-center justify-between">
-                        <span>Step 2：可出手度</span>
+                        <span>階段 2：可出手度</span>
                       </div>
                       <div className="space-y-4 text-[15px]">
                         <div className="flex flex-col gap-1 text-neutral-300">
@@ -227,7 +227,7 @@ export function DesktopStockLayout({
 
                     <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-5 transition-all duration-150 hover:bg-neutral-900/60">
                       <div className="text-[16px] font-medium text-neutral-400 mb-4 flex items-center justify-between">
-                        <span>Step 3：策略類型</span>
+                        <span>階段 3：策略類型</span>
                       </div>
                       <div className="space-y-4 text-[15px]">
                         <div className="flex flex-col gap-1 text-neutral-300">

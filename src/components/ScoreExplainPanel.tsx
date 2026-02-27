@@ -63,7 +63,7 @@ export function ScoreExplainPanel({ title, section }: ScoreExplainPanelProps) {
           </div>
 
           <div>
-            <div className="mb-1 font-semibold">Components</div>
+            <div className="mb-1 font-semibold text-neutral-300">組成項目</div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[360px] border-collapse">
                 <thead>
@@ -89,17 +89,17 @@ export function ScoreExplainPanel({ title, section }: ScoreExplainPanelProps) {
           </div>
 
           <div>
-            <div className="mb-1 font-semibold">Reasons</div>
-            <ul className="list-disc space-y-1 pl-4">
+            <div className="mb-1 font-semibold text-neutral-300">判定依據</div>
+            <ul className="list-disc space-y-1 pl-4 text-neutral-400">
               {(section.reasons.length > 0 ? section.reasons : ["N/A"]).map((reason, index) => (
                 <li key={`${reason}-${index}`}>{reason || "N/A"}</li>
               ))}
             </ul>
           </div>
 
-          <div>
-            <div className="mb-1 font-semibold">Risk Flags</div>
-            <ul className="list-disc space-y-1 pl-4">
+          <div className="pt-2 border-t border-neutral-800">
+            <div className="mb-1 font-semibold text-rose-400">風險標記</div>
+            <ul className="list-disc space-y-1 pl-4 text-rose-300/80">
               {(section.riskFlags.length > 0 ? section.riskFlags : ["無"]).map((risk, index) => (
                 <li key={`${risk}-${index}`}>{riskFlagLabel(risk)}</li>
               ))}

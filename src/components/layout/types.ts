@@ -81,7 +81,7 @@ export type SnapshotResponse = {
   };
 };
 
-export type MainTab = "evidence" | "calculation";
+export type MainTab = "數據判讀" | "分析詳解";
 
 export interface DashboardLayoutProps {
   snapshot: SnapshotResponse;
