@@ -19,7 +19,10 @@ const mockReportData = {
       strategySignal: "偏多",
       strategyConfidence: 71.5,
       majorNews: [
-        { title: "先進製程需求回溫，外資調高目標價", impact: "BULLISH" },
+        {
+          title: "先進製程需求回溫，外資調高目標價",
+          impact: "BULLISH",
+        },
       ],
     },
     {
@@ -72,7 +75,7 @@ async function runTests() {
 
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/help");
-  if (!sentMessages[0]?.includes("僅支援")) throw new Error("/help failed");
+  if (!sentMessages[0]?.includes("/stock")) throw new Error("/help failed");
   console.log("✅ /help");
 
   sentMessages = [];
@@ -88,8 +91,8 @@ async function runTests() {
   const stockOutput = sentMessages[0] || "";
   if (
     !stockOutput.includes("2330 台積電") ||
-    !stockOutput.includes("收盤:") ||
-    !stockOutput.includes("明日傾向:") ||
+    !stockOutput.includes("收盤價:") ||
+    !stockOutput.includes("短線方向:") ||
     !stockOutput.includes("重大新聞:")
   ) {
     throw new Error(`/stock by symbol failed. Output: ${stockOutput}`);
