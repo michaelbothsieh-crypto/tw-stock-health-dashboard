@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Tile } from "@/components/bento/Tile";
 import { SnapshotResponse } from "@/components/layout/types";
 import { Star, ArrowRight, Activity, Globe, MapPin, Link as LinkIcon } from "lucide-react";
+import { watchlistStore } from "@/lib/stores/watchlistStore";
 
 // Adapt legacy output gracefully
 function useAdaptedLinkage(snapshot: SnapshotResponse) {
@@ -23,12 +24,23 @@ function useAdaptedLinkage(snapshot: SnapshotResponse) {
 export function GlobalLinkageTile({ snapshot, isMobile = false }: { snapshot: SnapshotResponse; isMobile?: boolean }) {
     const linkage = useAdaptedLinkage(snapshot);
     const [activeTab, setActiveTab] = useState<"local" | "overseas">("local");
+    const [watchlistCodes, setWatchlistCodes] = useState<Set<string>>(new Set());
     const router = useRouter();
 
-    const handleAddToWatchlist = (ticker: string, e: React.MouseEvent) => {
+    useEffect(() => {
+        const unsubscribe = watchlistStore.subscribe((items) => {
+            setWatchlistCodes(new Set(items.map(item => item.code)));
+        });
+        return unsubscribe;
+    }, []);
+
+    const handleAddToWatchlist = async (ticker: string, e: React.MouseEvent) => {
         e.stopPropagation();
-        console.log("Added to watchlist:", ticker);
-        // Integrate with actual watchlist store later if needed
+        if (watchlistCodes.has(ticker)) {
+            watchlistStore.remove(ticker);
+        } else {
+            await watchlistStore.add(ticker);
+        }
     };
 
     const missingDataWarning = snapshot.warnings && snapshot.warnings.some(
@@ -177,9 +189,9 @@ export function GlobalLinkageTile({ snapshot, isMobile = false }: { snapshot: Sn
                                                     </div>
                                                     <button 
                                                         onClick={(e) => handleAddToWatchlist(peer.code, e)}
-                                                        className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-neutral-700 transition-all duration-300"
+                                                        className={`p-1 rounded-md transition-all duration-300 ${watchlistCodes.has(peer.code) ? "opacity-100" : "opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-neutral-700"}`}
                                                     >
-                                                        <Star className="h-4 w-4 text-muted-foreground hover:text-yellow-500 transition-colors" />
+                                                        <Star className={`h-4 w-4 transition-colors ${watchlistCodes.has(peer.code) ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground hover:text-yellow-500"}`} />
                                                     </button>
                                                 </div>
                                             </div>
@@ -258,9 +270,9 @@ export function GlobalLinkageTile({ snapshot, isMobile = false }: { snapshot: Sn
                                                     </div>
                                                     <button 
                                                         onClick={(e) => handleAddToWatchlist(peer.symbol, e)}
-                                                        className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-neutral-700 transition-all duration-300"
+                                                        className={`p-1 rounded-md transition-all duration-300 ${watchlistCodes.has(peer.symbol) ? "opacity-100" : "opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-neutral-700"}`}
                                                     >
-                                                        <Star className="h-4 w-4 text-muted-foreground hover:text-yellow-500 transition-colors" />
+                                                        <Star className={`h-4 w-4 transition-colors ${watchlistCodes.has(peer.symbol) ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground hover:text-yellow-500"}`} />
                                                     </button>
                                                 </div>
                                             </div>
