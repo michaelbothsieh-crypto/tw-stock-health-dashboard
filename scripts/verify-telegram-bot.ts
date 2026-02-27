@@ -139,9 +139,9 @@ async function runTests() {
   const stockOutput = getLastMessage();
   if (
     !stockOutput.includes("2330 台積電") ||
-    !stockOutput.includes("收盤：") ||
-    !stockOutput.includes("結論：") ||
-    !stockOutput.includes("新聞：")
+    !stockOutput.includes("【收盤】") ||
+    !stockOutput.includes("【趨勢】") ||
+    !stockOutput.includes("【新聞】")
   ) {
     throw new Error(`/tw by symbol failed. Output: ${stockOutput}`);
   }
