@@ -1,4 +1,5 @@
 import { KeyLevelsResult } from "@/lib/signals/keyLevels";
+import { riskFlagLabel } from "@/lib/riskFlags";
 
 export interface UxSummaryInput {
   direction: "Bullish" | "Neutral" | "Bearish";
@@ -16,7 +17,7 @@ export interface UxSummaryOutput {
 
 export function buildUxSummary(input: UxSummaryInput): UxSummaryOutput {
   const { direction, strategyConfidence, consistencyLevel, topRiskFlag, keyLevels } = input;
-  
+
   let headline = "";
   if (direction === "Bullish" && strategyConfidence >= 65) {
     headline = "偏多結構明確";
@@ -45,7 +46,7 @@ export function buildUxSummary(input: UxSummaryInput): UxSummaryOutput {
   }
 
   const b1 = `一致性：${consistencyLevel.replace("一致性", "")}`;
-  
+
   let b2 = "門檻：--";
   if (keyLevels.breakoutLevel && keyLevels.invalidationLevel) {
     b2 = `轉強:≥${keyLevels.breakoutLevel}｜失效:<${keyLevels.invalidationLevel}`;
@@ -57,8 +58,8 @@ export function buildUxSummary(input: UxSummaryInput): UxSummaryOutput {
 
   let b3 = "最大風險：無明顯風險";
   if (topRiskFlag) {
-    // try to make risk flag shorter if possible
-    let riskStr = topRiskFlag;
+    // Translate the risk flag and shorten if possible
+    let riskStr = riskFlagLabel(topRiskFlag);
     if (riskStr.length > 16) {
       riskStr = riskStr.substring(0, 15) + "…";
     }

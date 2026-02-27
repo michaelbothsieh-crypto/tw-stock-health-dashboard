@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardLayoutProps, ExplainTab } from "./types";
 import { EXPLAIN_TABS, formatScoreAsPercent, scoreToneClass, chipColorClass, chipBarColorClass, directionLabel, strategyLabel, ExplainComponentsTable } from "./utils";
+import { riskFlagLabel } from "@/lib/riskFlags";
 
 export function DesktopStockLayout({
   snapshot,
