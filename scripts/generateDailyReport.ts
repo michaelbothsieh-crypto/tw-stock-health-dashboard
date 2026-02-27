@@ -34,7 +34,7 @@ async function generateReport() {
   console.log(`[DailyReport] Loaded watchlist with ${watchlist.length} symbols:`, watchlist);
 
   const windowDays = Number(process.env.BACKTEST_WINDOW) || 120;
-  
+
   type RowData = {
     symbol: string;
     nameZh: string;
@@ -47,13 +47,13 @@ async function generateReport() {
     h5Text: string;
     detailStr: string;
   };
-  
+
   const results: RowData[] = [];
 
   for (const sym of watchlist) {
     console.log(`[DailyReport] Processing ${sym}...`);
     const nameZh = await getCompanyNameZh(sym);
-    
+
     // Default placeholders
     let price: number | null = null;
     let changePct = "—";
@@ -85,22 +85,22 @@ async function generateReport() {
       let foreignVal = 0;
       let trustVal = 0;
       let dealerVal = 0;
-      
+
       if (prices.length >= 5) {
         const startDate = prices[prices.length - 5].date;
         const endDate = prices[prices.length - 1].date;
         const flowRes = await getInstitutionalInvestors(sym, startDate, endDate);
-        
+
         const todayDate = endDate;
         const flowToday = flowRes.data.filter((t: any) => t.date === todayDate);
-        
+
         const foreign = flowToday.find((t: any) => t.name.includes("外資及陸資"));
         const trust = flowToday.find((t: any) => t.name === "投信");
         const dealer = flowToday.find((t: any) => t.name.includes("自營商"));
-        
-        if (foreign) { foreignVal = (foreign.buy - foreign.sell)/1000; foreignScore = foreignVal > 0 ? 2 : (foreignVal < 0 ? -2 : 0); }
-        if (trust) { trustVal = (trust.buy - trust.sell)/1000; trustScore = trustVal > 0 ? 2 : (trustVal < 0 ? -2 : 0); }
-        if (dealer) { dealerVal = (dealer.buy - dealer.sell)/1000; dealerScore = dealerVal > 0 ? 1 : (dealerVal < 0 ? -1 : 0); }
+
+        if (foreign) { foreignVal = (foreign.buy - foreign.sell) / 1000; foreignScore = foreignVal > 0 ? 2 : (foreignVal < 0 ? -2 : 0); }
+        if (trust) { trustVal = (trust.buy - trust.sell) / 1000; trustScore = trustVal > 0 ? 2 : (trustVal < 0 ? -2 : 0); }
+        if (dealer) { dealerVal = (dealer.buy - dealer.sell) / 1000; dealerScore = dealerVal > 0 ? 1 : (dealerVal < 0 ? -1 : 0); }
 
         const last5Foreign = flowRes.data.filter((t: any) => t.name.includes("外資及陸資"));
         const sum5D = last5Foreign.reduce((acc: number, f: any) => acc + (f.buy - f.sell), 0);
@@ -118,32 +118,32 @@ async function generateReport() {
         const totalScore = foreignScore + trustScore + dealerScore + fNet5DScore + volumeScore;
         const { text: direction, risk } = interpretSignalScore(totalScore);
         const probability = clamp(50 + totalScore * 8, 35, 85);
-        
+
         const totalVolK = Math.round(foreignVal + trustVal + dealerVal);
         flowTotal = (totalVolK > 0 ? "+" : "") + totalVolK.toLocaleString();
-        
+
         if (flowToday.length > 0) {
-           flowReady = true;
-           predText = direction;
-           probText = `${probability}%`;
-           
-           // Calculate Consistency briefly
-           const tr = calculateTrend(prices);
-           const fl = calculateFlow(prices.map(p => p.date), flowRes.data, []);
-           const cn = calculateConsistency({
-              trendScore: tr.trendScore,
-              flowScore: fl.flowScore,
-              fundamentalScore: 50,
-              catalystScore: 0,
-              shortTermOpportunityScore: 50,
-              upProb5D: probability
-           });
-           
-           const bt = await runBacktest(sym, windowDays);
-           h3Text = formatHitRate(bt.h3.hits, bt.h3.total);
-           h5Text = formatHitRate(bt.h5.hits, bt.h5.total);
-           
-           detailStr = `> **[${sym}] ${nameZh || "未知"}** 收盤 ${price} (${changePct})
+          flowReady = true;
+          predText = direction;
+          probText = `${probability}%`;
+
+          // Calculate Consistency briefly
+          const tr = calculateTrend(prices);
+          const fl = calculateFlow(prices.map(p => p.date), flowRes.data, []);
+          const cn = calculateConsistency({
+            trendScore: tr.trendScore,
+            flowScore: fl.flowScore,
+            fundamentalScore: 50,
+            catalystScore: 0,
+            shortTermOpportunityScore: 50,
+            upProb5D: probability
+          });
+
+          const bt = await runBacktest(sym, windowDays);
+          h3Text = formatHitRate(bt.h3.hits, bt.h3.total);
+          h5Text = formatHitRate(bt.h5.hits, bt.h5.total);
+
+          detailStr = `> **[${sym}] ${nameZh || "未知"}** 收盤 ${price} (${changePct})
 > 三大法人：外資 ${(foreignVal).toFixed(0)}k / 投信 ${(trustVal).toFixed(0)}k / 自營 ${dealerVal.toFixed(0)}k
 > 一致性：${cn.level} (${cn.consensusDirection})
 > 預測方向：${direction === "微多" ? "偏多" : direction} (${probText})
@@ -154,9 +154,9 @@ async function generateReport() {
       }
 
       if (!flowReady && price !== null) {
-          predText = "—";
-          probText = "—";
-          detailStr = `> **[${sym}] ${nameZh || "未知"}** 收盤 ${price} (${changePct})
+        predText = "—";
+        probText = "—";
+        detailStr = `> **[${sym}] ${nameZh || "未知"}** 收盤 ${price} (${changePct})
 > 資料不足（法人未完整更新），暫無預測`;
       }
 
@@ -204,54 +204,40 @@ async function generateReport() {
   // Write MD
   const outFile = path.join(reportsDir, `${todayStr}.md`);
   fs.writeFileSync(outFile, md, "utf-8");
-  
+
   // Write JSON
   const outJsonFile = path.join(reportsDir, `${todayStr}-watchlist.json`);
   const jsonPayload = {
-     date: todayStr,
-     watchlist: results
+    date: todayStr,
+    watchlist: results
   };
   fs.writeFileSync(outJsonFile, JSON.stringify(jsonPayload, null, 2), "utf-8");
-  
+
   console.log(`[DailyReport] Report generated successfully at ${outFile} and ${outJsonFile}!`);
-  
+
   // --- Push to Telegram ---
-  const tgToken = process.env.TELEGRAM_BOT_TOKEN;
-  const tgChatId = process.env.TELEGRAM_CHAT_ID;
-  if (tgToken && tgChatId) {
-     console.log(`[DailyReport] Pushing overview to Telegram...`);
-     let tgMsg = `📊 *每日收盤極簡總覽* (${todayStr})\n\n`;
-     for (const r of results) {
-        if (r.predText === "—") {
-           tgMsg += `• ${r.nameZh}(${r.symbol}) ${r.changePct} ⚠️ 資料不足(法人不完整)\n`;
-        } else {
-           const dirText = r.predText === "微多" ? "偏多" : r.predText;
-           tgMsg += `• ${r.nameZh}(${r.symbol}) ${r.changePct}｜法人${r.flowTotal}｜${dirText} ${r.probText}｜3D ${r.h3Text.split(" ")[0]}｜5D ${r.h5Text.split(" ")[0]}\n`;
-        }
-     }
-     
-     try {
-        const fetchUrl = `https://api.telegram.org/bot${tgToken}/sendMessage`;
-        const tgRes = await fetch(fetchUrl, {
-           method: "POST",
-           headers: { "Content-Type": "application/json" },
-           body: JSON.stringify({
-              chat_id: tgChatId,
-              text: tgMsg,
-              parse_mode: "Markdown"
-           })
-        });
-        if (!tgRes.ok) {
-           const errText = await tgRes.text();
-           console.warn(`[DailyReport] Failed to push to Telegram. Status: ${tgRes.status}, Error: ${errText}`);
-        } else {
-           console.log(`[DailyReport] Successfully pushed to Telegram!`);
-        }
-     } catch (e: any) {
-        console.warn(`[DailyReport] Telegram push error:`, e.message);
-     }
+  if (process.env.TELEGRAM_BOT_TOKEN) {
+    const { handleTelegramMessage } = require("../src/lib/telegram/botEngine");
+    console.log(`[DailyReport] Pushing overview to Telegram via unified handleTelegramMessage...`);
+    let tgMsg = `📊 *每日收盤極簡總覽* (${todayStr})\n\n`;
+    for (const r of results) {
+      if (r.predText === "—") {
+        tgMsg += `• ${r.nameZh}(${r.symbol}) ${r.changePct} ⚠️ 資料不足(法人不完整)\n`;
+      } else {
+        const dirText = r.predText === "微多" ? "偏多" : r.predText;
+        tgMsg += `• ${r.nameZh}(${r.symbol}) ${r.changePct}｜法人${r.flowTotal}｜${dirText} ${r.probText}｜3D ${r.h3Text.split(" ")[0]}｜5D ${r.h5Text.split(" ")[0]}\n`;
+      }
+    }
+
+    try {
+      // Use the common engine. In this mode, chatId passed (0) is ignored because isBackgroundPush is true
+      await handleTelegramMessage(0, tgMsg, true);
+      console.log(`[DailyReport] Successfully pushed to Telegram!`);
+    } catch (e: any) {
+      console.warn(`[DailyReport] Telegram push error:`, e.message);
+    }
   } else {
-     console.log(`[DailyReport] No Telegram credentials found, skipping push.`);
+    console.log(`[DailyReport] No Telegram credentials found, skipping push.`);
   }
 }
 
