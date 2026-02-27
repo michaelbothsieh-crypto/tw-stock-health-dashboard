@@ -1,4 +1,4 @@
-import * as botEngine from "../src/lib/telegram/botEngine";
+﻿import * as botEngine from "../src/lib/telegram/botEngine";
 
 let sentMessages: string[] = [];
 const originalFetch = global.fetch;
@@ -43,13 +43,29 @@ const mockReportData = {
   ],
 };
 
+function getLastMessage() {
+  return sentMessages[sentMessages.length - 1] || "";
+}
+
 global.fetch = (async (url: RequestInfo | URL, init?: RequestInit) => {
   const urlStr = url.toString();
 
-  if (urlStr.includes("api.telegram.org")) {
+  if (urlStr.includes("api.telegram.org") && urlStr.includes("/sendMessage")) {
     const body = JSON.parse((init?.body as string) || "{}");
     sentMessages.push(String(body.text || ""));
-    return new Response("ok", { status: 200 }) as unknown as Response;
+    return new Response(JSON.stringify({ ok: true, result: { message_id: sentMessages.length } }), {
+      status: 200,
+    }) as unknown as Response;
+  }
+
+  if (urlStr.includes("api.telegram.org") && urlStr.includes("/editMessageText")) {
+    const body = JSON.parse((init?.body as string) || "{}");
+    if (sentMessages.length > 0) {
+      sentMessages[sentMessages.length - 1] = String(body.text || "");
+    } else {
+      sentMessages.push(String(body.text || ""));
+    }
+    return new Response(JSON.stringify({ ok: true, result: true }), { status: 200 }) as unknown as Response;
   }
 
   if (urlStr.includes("api.github.com/repos/")) {
@@ -75,12 +91,12 @@ async function runTests() {
 
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/help");
-  if (!sentMessages[0]?.includes("/stock")) throw new Error("/help failed");
+  if (!getLastMessage().includes("/stock")) throw new Error("/help failed");
   console.log("✅ /help");
 
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/daily");
-  const dailyOutput = sentMessages[0] || "";
+  const dailyOutput = getLastMessage();
   if (!dailyOutput.includes("目前僅支援 /stock")) {
     throw new Error(`/daily should be disabled. Output: ${dailyOutput}`);
   }
@@ -88,7 +104,7 @@ async function runTests() {
 
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/stock 2330");
-  const stockOutput = sentMessages[0] || "";
+  const stockOutput = getLastMessage();
   if (
     !stockOutput.includes("2330 台積電") ||
     !stockOutput.includes("收盤價:") ||
@@ -101,7 +117,7 @@ async function runTests() {
 
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/stock 台積電");
-  const stockByNameOutput = sentMessages[0] || "";
+  const stockByNameOutput = getLastMessage();
   if (!stockByNameOutput.includes("2330 台積電")) {
     throw new Error(`/stock by name failed. Output: ${stockByNameOutput}`);
   }
@@ -109,7 +125,7 @@ async function runTests() {
 
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/watchlist");
-  const watchlistOutput = sentMessages[0] || "";
+  const watchlistOutput = getLastMessage();
   if (!watchlistOutput.includes("目前僅支援 /stock")) {
     throw new Error(`/watchlist should be disabled. Output: ${watchlistOutput}`);
   }

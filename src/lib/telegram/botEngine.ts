@@ -1,4 +1,4 @@
-import { fetchLatestReport } from "./reportFetcher";
+﻿import { fetchLatestReport } from "./reportFetcher";
 import { twStockNames } from "../../data/twStockNames";
 import { fetchYahooFinanceBars } from "../global/yahooFinance";
 
@@ -37,11 +37,11 @@ type LatestReport = {
   watchlist: TelegramStockRow[];
 };
 
-async function sendMessage(chatId: string | number, text: string) {
+async function sendMessage(chatId: string | number, text: string): Promise<number | null> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     console.error("[TelegramBot] TELEGRAM_BOT_TOKEN is missing");
-    return;
+    return null;
   }
 
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
@@ -59,10 +59,56 @@ async function sendMessage(chatId: string | number, text: string) {
 
     if (!res.ok) {
       console.error("[TelegramBot] Send Error:", await res.text());
+      return null;
     }
+
+    const payload = await res.json().catch(() => null);
+    const messageId = payload?.result?.message_id;
+    return typeof messageId === "number" ? messageId : null;
   } catch (error) {
     console.error("[TelegramBot] Network Error:", error);
+    return null;
   }
+}
+
+async function editMessage(chatId: string | number, messageId: number, text: string): Promise<boolean> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) {
+    console.error("[TelegramBot] TELEGRAM_BOT_TOKEN is missing");
+    return false;
+  }
+
+  const url = `https://api.telegram.org/bot${token}/editMessageText`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+        text,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("[TelegramBot] Edit Error:", await res.text());
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("[TelegramBot] Edit Network Error:", error);
+    return false;
+  }
+}
+
+async function replyOrEdit(chatId: number, progressMessageId: number | null, text: string) {
+  if (progressMessageId !== null) {
+    const ok = await editMessage(chatId, progressMessageId, text);
+    if (ok) return;
+  }
+  await sendMessage(chatId, text);
 }
 
 function escapeHtml(input: string): string {
@@ -381,9 +427,11 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
     return;
   }
 
+  const progressMessageId = await sendMessage(chatId, "正在搜尋資料中，請稍候...");
+
   const liveFirst = await fetchLiveStockRow(query);
   if (liveFirst) {
-    await sendMessage(chatId, `${buildSingleStockMessage(liveFirst)}\n\n<i>資料來源: 即時 snapshot</i>`);
+    await replyOrEdit(chatId, progressMessageId, `${buildSingleStockMessage(liveFirst)}\n\n<i>資料來源: 即時 snapshot</i>`);
     return;
   }
 
@@ -392,15 +440,16 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
     report = (await fetchLatestReport()) as LatestReport | null;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await sendMessage(
+    await replyOrEdit(
       chatId,
+      progressMessageId,
       `目前即時來源暫時不可用，且最新收盤報告尚未同步完成。\n請稍後再試（不是無資料）。\n\n錯誤: ${escapeHtml(message)}`,
     );
     return;
   }
 
   if (!report || !Array.isArray(report.watchlist) || report.watchlist.length === 0) {
-    await sendMessage(chatId, "最新收盤報告尚未同步完成，請稍後再試（不是無資料）。");
+    await replyOrEdit(chatId, progressMessageId, "最新收盤報告尚未同步完成，請稍後再試（不是無資料）。");
     return;
   }
 
@@ -411,9 +460,9 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
   });
 
   if (!stock) {
-    await sendMessage(chatId, `找不到 ${escapeHtml(query)}，請確認股票代號或名稱。`);
+    await replyOrEdit(chatId, progressMessageId, `找不到 ${escapeHtml(query)}，請確認股票代號或名稱。`);
     return;
   }
 
-  await sendMessage(chatId, `${buildSingleStockMessage(stock)}\n\n<i>資料來源: 最新收盤報告快照</i>`);
+  await replyOrEdit(chatId, progressMessageId, `${buildSingleStockMessage(stock)}\n\n<i>資料來源: 最新收盤報告快照</i>`);
 }
