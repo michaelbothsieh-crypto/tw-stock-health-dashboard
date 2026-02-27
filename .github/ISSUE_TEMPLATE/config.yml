@@ -1,0 +1,5 @@
+﻿blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: mailto:michaelbothsieh@gmail.com
+    about: Please report vulnerabilities privately by email.
