@@ -29,7 +29,7 @@ function StockPicker({
 }: {
   open: boolean;
   isDesktop: boolean;
-  watchlist: Array<{code: string; name: string}>;
+  watchlist: Array<{ code: string; name: string }>;
   currentTicker: string;
   onClose: () => void;
   onSelect: (ticker: string) => void;
@@ -47,7 +47,7 @@ function StockPicker({
   const filtered = useMemo(() => {
     const query = keyword.trim().toLowerCase();
     if (!query) return watchlist;
-    
+
     return watchlist.filter((item) => {
       return item.code.toLowerCase().includes(query) || item.name.toLowerCase().includes(query);
     }).sort((a, b) => {
@@ -55,12 +55,12 @@ function StockPicker({
       const bCodeMatch = b.code.toLowerCase() === query;
       if (aCodeMatch && !bCodeMatch) return -1;
       if (!aCodeMatch && bCodeMatch) return 1;
-      
+
       const aCodeStarts = a.code.toLowerCase().startsWith(query);
       const bCodeStarts = b.code.toLowerCase().startsWith(query);
       if (aCodeStarts && !bCodeStarts) return -1;
       if (!aCodeStarts && bCodeStarts) return 1;
-      
+
       return 0;
     });
   }, [keyword, watchlist]);
@@ -87,7 +87,7 @@ function StockPicker({
     const parts = text.split(new RegExp(`(${query})`, 'gi'));
     return (
       <>
-        {parts.map((part, i) => 
+        {parts.map((part, i) =>
           part.toLowerCase() === query.toLowerCase() ? (
             <span key={i} className="text-emerald-400 font-medium">{part}</span>
           ) : (
@@ -136,20 +136,19 @@ function StockPicker({
                 const name = item.name;
                 const isSelected = itemTicker === currentTicker;
                 const isHovered = idx === selectedIndex;
-                
+
                 return (
                   <button
                     key={itemTicker}
                     type="button"
                     onClick={() => onSelect(itemTicker)}
                     onMouseEnter={() => setSelectedIndex(idx)}
-                    className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all duration-150 ${
-                      isSelected
-                        ? "border-emerald-500/40 bg-emerald-500/10"
-                        : isHovered
+                    className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all duration-150 ${isSelected
+                      ? "border-emerald-500/40 bg-emerald-500/10"
+                      : isHovered
                         ? "border-neutral-700 bg-neutral-800/80 brightness-105"
                         : "border-neutral-800 bg-neutral-950/40 hover:border-neutral-700 hover:brightness-105"
-                    }`}
+                      }`}
                   >
                     <div className={`w-[72px] shrink-0 font-mono text-[16px] tabular-nums ${isSelected ? "text-emerald-300" : "text-neutral-300"}`}>
                       {highlightMatch(itemTicker, keyword.trim())}
@@ -186,7 +185,7 @@ export function DashboardBento({ initialTicker = "2330" }: { initialTicker?: str
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
   const [ticker, setTicker] = useState(initialTicker);
   const [showStockPicker, setShowStockPicker] = useState(false);
-  
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -199,7 +198,7 @@ export function DashboardBento({ initialTicker = "2330" }: { initialTicker?: str
   }, []);
   const [showDetail, setShowDetail] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
-  const [activeMainTab, setActiveMainTab] = useState<MainTab>("evidence");
+  const [activeMainTab, setActiveMainTab] = useState<MainTab>("數據判讀");
   const [activeExplainTab, setActiveExplainTab] = useState<ExplainTab>("trend");
 
   useEffect(() => setTicker(initialTicker), [initialTicker]);
@@ -261,7 +260,7 @@ export function DashboardBento({ initialTicker = "2330" }: { initialTicker?: str
   return (
     <div className="min-h-screen overflow-x-hidden bg-neutral-950 text-neutral-100 selection:bg-emerald-500/30">
       <header className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/95 px-4 py-3 backdrop-blur lg:hidden flex justify-between items-center">
-        <div className="text-[15px] text-neutral-400">Dashboard</div>
+        <div className="text-[15px] text-neutral-400">股票診斷</div>
         <Button asChild variant="outline" className="h-11 w-11 rounded-full border-neutral-700 bg-neutral-900 p-0 text-neutral-100 transition-all duration-150 hover:brightness-105">
           <Link href="/watchlist" aria-label="設定">
             <Settings className="h-5 w-5" />
@@ -279,7 +278,7 @@ export function DashboardBento({ initialTicker = "2330" }: { initialTicker?: str
           isDesktop ? <DesktopStockLayout {...layoutProps} /> : <MobileStockLayout {...layoutProps} />
         )}
       </div>
-      
+
       <StockPicker
         open={showStockPicker}
         isDesktop={isDesktop}

@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "台股健康儀表板",
-  description: "AI 智慧台股健康儀表板",
+  title: "台股診斷",
+  description: "AI 智慧台股診斷儀表板",
 };
 
 export default function RootLayout({

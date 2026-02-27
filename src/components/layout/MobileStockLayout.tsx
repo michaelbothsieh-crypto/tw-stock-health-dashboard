@@ -260,7 +260,7 @@ export function MobileStockLayout({
                   <div className="space-y-6 mt-4">
                     <div className="grid grid-cols-1 gap-4">
                       <div className="flex flex-col gap-1 text-neutral-300 text-[15px]">
-                        <div className="text-neutral-500 text-[13px]">Step 1：方向判定</div>
+                        <div className="text-neutral-500 text-[13px]">階段 1：方向判定</div>
                         <div className="flex items-center gap-3">
                           <span>技術 + 籌碼 + 催化劑</span>
                           <ArrowRight className="h-4 w-4 text-neutral-600" />
@@ -268,7 +268,7 @@ export function MobileStockLayout({
                         </div>
                       </div>
                       <div className="flex flex-col gap-1 text-neutral-300 text-[15px]">
-                        <div className="text-neutral-500 text-[13px]">Step 2：可出手度</div>
+                        <div className="text-neutral-500 text-[13px]">階段 2：可出手度</div>
                         <div className="flex items-center gap-3">
                           <span>短期機率 + 一致性 - 回檔風險</span>
                           <ArrowRight className="h-4 w-4 text-neutral-600" />
@@ -276,7 +276,7 @@ export function MobileStockLayout({
                         </div>
                       </div>
                       <div className="flex flex-col gap-1 text-neutral-300 text-[15px]">
-                        <div className="text-neutral-500 text-[13px]">Step 3：策略類型</div>
+                        <div className="text-neutral-500 text-[13px]">階段 3：策略類型</div>
                         <div className="flex items-center gap-3">
                           <span>綜合多空條件與風險檢核</span>
                           <ArrowRight className="h-4 w-4 text-neutral-600" />

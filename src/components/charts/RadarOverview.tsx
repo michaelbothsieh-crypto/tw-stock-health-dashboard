@@ -36,9 +36,9 @@ function RadarTooltip({
   return (
     <div className="rounded-xl border border-neutral-700 bg-neutral-900/95 p-3 text-neutral-100 shadow-xl">
       <div className="text-sm font-medium">{row.label}</div>
-      <div className="mt-1 text-sm text-neutral-300">分數：{row.value.toFixed(1)}</div>
+      <div className="mt-1 text-sm text-neutral-300">分數：{row.value.toFixed(1)}%</div>
       <div className="mt-1 text-sm text-neutral-400">
-        等級：{levelText(row.value)}
+        狀態：{levelText(row.value)}
         {row.note ? ` (${row.note})` : ""}
       </div>
     </div>
