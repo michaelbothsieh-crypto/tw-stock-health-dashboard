@@ -78,6 +78,23 @@ type StockCard = {
   sourceLabel: string;
 };
 
+type SnapshotLike = {
+  news?: {
+    topBullishNews?: Array<{ title?: string }>;
+    topBearishNews?: Array<{ title?: string }>;
+    error?: string | null;
+  };
+  newsMeta?: {
+    count?: number;
+  };
+  globalLinkage?: {
+    drivers?: {
+      sector?: { id?: string; corr60?: number | null };
+      peers?: Array<{ symbol?: string; corr60?: number | null }>;
+    };
+  };
+};
+
 async function sendMessage(chatId: string | number, text: string): Promise<number | null> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
@@ -208,6 +225,68 @@ function buildTrendByProb(upProb1D: number | null): string {
   return "中立";
 }
 
+function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
+  const topNews = [
+    ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
+    ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
+  ];
+
+  const firstNewsTitle = topNews.length > 0 && topNews[0]?.title ? String(topNews[0].title) : "";
+  if (firstNewsTitle.trim()) {
+    return buildNewsLine(firstNewsTitle, 96);
+  }
+
+  const newsCount = typeof snapshot?.newsMeta?.count === "number" ? snapshot.newsMeta.count : 0;
+  if (newsCount > 0) {
+    return `📰 近7日共 ${newsCount} 則新聞（中性）`;
+  }
+
+  if (snapshot?.news?.error) {
+    return "—（新聞來源暫時不可用）";
+  }
+
+  return "—";
+}
+
+function buildOverseasCandidates(snapshot: SnapshotLike): OverseasCandidate[] {
+  const candidates: OverseasCandidate[] = [];
+  const sector = snapshot?.globalLinkage?.drivers?.sector;
+  if (sector?.id) {
+    candidates.push({
+      symbol: String(sector.id),
+      corr60: typeof sector.corr60 === "number" ? sector.corr60 : null,
+    });
+  }
+
+  const peers = Array.isArray(snapshot?.globalLinkage?.drivers?.peers) ? snapshot.globalLinkage.drivers.peers : [];
+  for (const p of peers) {
+    if (p?.symbol) {
+      candidates.push({
+        symbol: String(p.symbol),
+        corr60: typeof p.corr60 === "number" ? p.corr60 : null,
+      });
+    }
+  }
+
+  // Prefer clearer linkage: sort by abs(corr60), keep meaningful peers first.
+  const deduped = new Map<string, OverseasCandidate>();
+  for (const c of candidates) {
+    if (!deduped.has(c.symbol)) deduped.set(c.symbol, c);
+  }
+
+  const sorted = Array.from(deduped.values()).sort((a, b) => {
+    const aScore = Math.abs(a.corr60 ?? 0);
+    const bScore = Math.abs(b.corr60 ?? 0);
+    return bScore - aScore;
+  });
+
+  const strong = sorted.filter((c) => Math.abs(c.corr60 ?? 0) >= 0.15);
+  if (strong.length > 0) {
+    return strong.slice(0, 6);
+  }
+  return sorted.slice(0, 4);
+}
+
 async function fetchOverseasQuotes(candidates: OverseasCandidate[]): Promise<OverseasLine[]> {
   if (!candidates || candidates.length === 0) return [];
 
@@ -258,6 +337,13 @@ function quoteText(line: OverseasLine): string {
   return `${line.symbol} ${price}(${pct})`;
 }
 
+function formatFlowLine(flowNet: number | null): string {
+  const shares = humanizeNumber(flowNet);
+  if (flowNet === null) return "法人：—";
+  const lots = humanizeNumber(flowNet / 1000);
+  return `法人：${shares}股（約 ${lots} 張）`;
+}
+
 function buildStockCardMessage(card: StockCard): string {
   const stanceText = buildStanceText(card.shortDir, card.strategySignal, card.confidence);
   const overseasText = card.overseas.length > 0
@@ -267,7 +353,7 @@ function buildStockCardMessage(card: StockCard): string {
   const lines = [
     `${card.symbol} ${card.nameZh}`,
     `收盤：${formatPrice(card.close, 2)} (${formatSignedPct(card.chgPct, 2)}，${formatPrice(card.chgAbs, 2)})｜量：${humanizeNumber(card.volume)}（vs5D：${formatSignedPct(card.volumeVs5dPct, 1)}）`,
-    `法人：${humanizeNumber(card.flowNet)}（單位：${card.flowUnit || "不明"}）`,
+    formatFlowLine(card.flowNet),
     `結論：${stanceText}（信心 ${formatPct(card.confidence, 1)}）｜1D↑ ${formatPct(card.p1d, 1)}（3D ${formatPct(card.p3d, 1)} / 5D ${formatPct(card.p5d, 1)}）`,
     `關鍵：支撐 ${formatPrice(card.support, 1)}｜壓力 ${formatPrice(card.resistance, 1)}`,
     `劇本：站上壓力→看 ${formatPrice(card.bullTarget, 1)}；跌破支撐→防 ${formatPrice(card.bearTarget, 1)}`,
@@ -289,7 +375,7 @@ function createFallbackCard(symbol: string, nameZh: string, sourceLabel: string)
     volume: null,
     volumeVs5dPct: null,
     flowNet: null,
-    flowUnit: "不明",
+    flowUnit: "股",
     shortDir: "中立",
     strategySignal: "觀察",
     confidence: null,
@@ -363,7 +449,7 @@ async function fetchLiveStockCard(query: string): Promise<StockCard | null> {
     }
 
     card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? snapshot.signals.flow.foreign5D : null;
-    card.flowUnit = "不明"; // TODO: confirm provider unit (shares/lot/value)
+    card.flowUnit = "股";
 
     card.p1d = typeof snapshot?.predictions?.upProb1D === "number" ? snapshot.predictions.upProb1D : null;
     card.p3d = typeof snapshot?.predictions?.upProb3D === "number" ? snapshot.predictions.upProb3D : null;
@@ -373,33 +459,11 @@ async function fetchLiveStockCard(query: string): Promise<StockCard | null> {
     card.strategySignal = String(snapshot?.strategy?.signal || "觀察");
     card.confidence = typeof snapshot?.strategy?.confidence === "number" ? snapshot.strategy.confidence : null;
 
-    const topNews = [
-      ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
-      ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
-    ];
-    const firstNewsTitle = topNews.length > 0 && topNews[0]?.title ? String(topNews[0].title) : "";
-    card.newsLine = buildNewsLine(firstNewsTitle, 96);
-
-    const overseasCandidates: OverseasCandidate[] = [];
-    const sector = snapshot?.globalLinkage?.drivers?.sector;
-    if (sector?.id) {
-      overseasCandidates.push({
-        symbol: String(sector.id),
-        corr60: typeof sector.corr60 === "number" ? sector.corr60 : null,
-      });
-    }
-    const peers = Array.isArray(snapshot?.globalLinkage?.drivers?.peers) ? snapshot.globalLinkage.drivers.peers : [];
-    for (const p of peers) {
-      if (p?.symbol) {
-        overseasCandidates.push({
-          symbol: String(p.symbol),
-          corr60: typeof p.corr60 === "number" ? p.corr60 : null,
-        });
-      }
-    }
+    card.newsLine = extractNewsLineFromSnapshot(snapshot as SnapshotLike);
+    const overseasCandidates = buildOverseasCandidates(snapshot as SnapshotLike);
 
     // Dynamic overseas list from linkage results (not fixed 4 names).
-    card.overseas = await fetchOverseasQuotes(overseasCandidates.slice(0, 8));
+    card.overseas = await fetchOverseasQuotes(overseasCandidates);
     card.syncLevel = buildSyncLevel(card.overseas);
 
     return card;
@@ -429,6 +493,7 @@ function cardFromReportRow(rowRaw: TelegramStockRow): StockCard {
   card.close = typeof row.price === "number" ? row.price : null;
   card.chgPct = parseChangePct(row.changePct);
   card.flowNet = parseSignedNumberLoose(row.flowTotal);
+  card.flowUnit = "股";
   card.shortDir = row.tomorrowTrend || "中立";
   card.strategySignal = row.strategySignal || "觀察";
   card.confidence = row.strategyConfidence;
@@ -459,13 +524,13 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
   const command = commandRaw.toLowerCase();
   const query = argParts.join(" ").trim();
 
-  if (command !== "/stock") {
-    await sendMessage(chatId, "目前僅支援 /stock 指令。");
+  if (command !== "/tw") {
+    await sendMessage(chatId, "目前僅支援 /tw 指令。");
     return;
   }
 
   if (!query) {
-    await sendMessage(chatId, "請輸入股票代號或名稱，例如: /stock 2330");
+    await sendMessage(chatId, "請輸入股票代號或名稱，例如: /tw 2330");
     return;
   }
 

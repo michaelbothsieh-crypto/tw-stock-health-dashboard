@@ -92,7 +92,7 @@ async function runTests() {
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/help");
   const helpOutput = getLastMessage();
-  if (!helpOutput.includes("目前僅支援 /stock")) {
+  if (!helpOutput.includes("目前僅支援 /tw")) {
     throw new Error(`/help should be disabled. Output: ${helpOutput}`);
   }
   console.log("✅ /help disabled");
@@ -100,13 +100,13 @@ async function runTests() {
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/daily");
   const dailyOutput = getLastMessage();
-  if (!dailyOutput.includes("目前僅支援 /stock")) {
+  if (!dailyOutput.includes("目前僅支援 /tw")) {
     throw new Error(`/daily should be disabled. Output: ${dailyOutput}`);
   }
   console.log("✅ /daily disabled");
 
   sentMessages = [];
-  await botEngine.handleTelegramMessage(12345, "/stock 2330");
+  await botEngine.handleTelegramMessage(12345, "/tw 2330");
   const stockOutput = getLastMessage();
   if (
     !stockOutput.includes("2330 台積電") ||
@@ -114,22 +114,22 @@ async function runTests() {
     !stockOutput.includes("結論：") ||
     !stockOutput.includes("新聞：")
   ) {
-    throw new Error(`/stock by symbol failed. Output: ${stockOutput}`);
+    throw new Error(`/tw by symbol failed. Output: ${stockOutput}`);
   }
-  console.log("✅ /stock 2330");
+  console.log("✅ /tw 2330");
 
   sentMessages = [];
-  await botEngine.handleTelegramMessage(12345, "/stock 台積電");
+  await botEngine.handleTelegramMessage(12345, "/tw 台積電");
   const stockByNameOutput = getLastMessage();
   if (!stockByNameOutput.includes("2330 台積電")) {
-    throw new Error(`/stock by name failed. Output: ${stockByNameOutput}`);
+    throw new Error(`/tw by name failed. Output: ${stockByNameOutput}`);
   }
-  console.log("✅ /stock 台積電");
+  console.log("✅ /tw 台積電");
 
   sentMessages = [];
   await botEngine.handleTelegramMessage(12345, "/watchlist");
   const watchlistOutput = getLastMessage();
-  if (!watchlistOutput.includes("目前僅支援 /stock")) {
+  if (!watchlistOutput.includes("目前僅支援 /tw")) {
     throw new Error(`/watchlist should be disabled. Output: ${watchlistOutput}`);
   }
   console.log("✅ /watchlist disabled");
