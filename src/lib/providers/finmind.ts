@@ -150,6 +150,12 @@ export async function getInstitutionalInvestors(ticker: string, start: string, e
   );
 }
 
+export async function getMarginTransactions(ticker: string, days: number = 30) {
+  const endDate = new Date().toISOString().split('T')[0];
+  const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  return fetchFromFinMind("TaiwanStockMarginPurchaseShortSale", ticker, startDate, endDate, MarginShortSchema);
+}
+
 export async function getMarginShort(ticker: string, start: string, end: string) {
   return fetchFromFinMind("TaiwanStockMarginPurchaseShortSale", ticker, start, end, MarginShortSchema);
 }

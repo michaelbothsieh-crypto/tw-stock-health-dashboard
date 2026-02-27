@@ -19,8 +19,9 @@ export function normalizeTicker(input: string): NormalizedTicker {
     let yahoo = '';
 
     // 2. 正則判斷
-    const pureNumberMatch = cleanInput.match(/^(\d{4})$/);
-    const suffixMatch = cleanInput.match(/^(\d{4})\.(TW|TWO)$/);
+    const pureNumberMatch = cleanInput.match(/^(\d{4,6})$/);
+    const suffixMatch = cleanInput.match(/^(\d{4,6})\.(TW|TWO)$/);
+    const usSymbolMatch = cleanInput.match(/^[A-Z]{1,5}$/);
 
     if (pureNumberMatch) {
         symbol = pureNumberMatch[1];
@@ -36,6 +37,10 @@ export function normalizeTicker(input: string): NormalizedTicker {
             market = 'TPEX';
             yahoo = `${symbol}.TWO`;
         }
+    } else if (usSymbolMatch) {
+        symbol = cleanInput;
+        market = 'UNKNOWN'; // US stocks don't map to TW exchanges
+        yahoo = symbol;
     } else {
         throw new Error(`InvalidTickerFormat: 無效的股票代碼格式 '${input}'`);
     }

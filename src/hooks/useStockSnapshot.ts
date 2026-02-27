@@ -3,9 +3,9 @@ import { mapErrorCodeToZh } from "@/i18n/zh-TW";
 
 export function useStockSnapshot(ticker: string) {
   return useQuery({
-    queryKey: ["stockSnapshot", ticker],
+    queryKey: ["stockSnapshot", ticker.toUpperCase()],
     queryFn: async () => {
-      const res = await fetch(`/api/stock/${ticker}/snapshot`);
+      const res = await fetch(`/api/stock/${ticker.toUpperCase()}/snapshot`);
       const body = await res.json().catch(() => null);
       if (!res.ok) {
         const errorCode = body?.errorCode ?? null;

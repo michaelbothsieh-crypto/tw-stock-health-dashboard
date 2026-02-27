@@ -15,7 +15,6 @@ import { normalizeTicker } from "@/lib/ticker";
 import { detectMarket } from "@/lib/market";
 import { fetchRecentBars } from "@/lib/range";
 import { calculateCatalystScore } from "@/lib/news/catalystScore";
-import { getCompanyNameZh } from "@/lib/companyName";
 import { calculateShortTermVolatility } from "@/lib/signals/shortTermVolatility";
 import { calculateShortTermSignals } from "@/lib/signals/shortTerm";
 import { predictProbabilities } from "@/lib/predict/probability";
@@ -35,6 +34,13 @@ import { fetchYahooFinanceBars } from "@/lib/global/yahooFinance";
 import { evaluateCrashWarning } from "@/lib/global/crash/crashEngine";
 import { selectTwPeers } from "@/lib/global/twPeerSelector";
 import { getMarketIndicators } from "@/lib/providers/marketIndicators";
+import { getTvTechnicalIndicators } from "@/lib/providers/tradingViewFetch";
+import { translateTechnicals } from "@/lib/ux/technicalTranslator";
+import { fetchStockSnapshot } from "@/lib/api/stockRouter";
+
+function isTaiwanStock(symbol: string) {
+  return /^\d+$/.test(symbol) || symbol.endsWith(".TW") || symbol.endsWith(".TWO");
+}
 
 export async function GET(
   req: NextRequest,
@@ -59,88 +65,67 @@ export async function GET(
     if (marketInfo.ambiguous) warnings.push("ambiguous_market");
     if (norm.market === "UNKNOWN") warnings.push("market_unknown");
 
-    const companyNameZh = await getCompanyNameZh(norm.symbol);
-    const displayName = companyNameZh ? `${norm.symbol} ${companyNameZh}` : norm.symbol;
-
-    const rangeResult = await fetchRecentBars(norm.symbol, 180);
-    const prices = rangeResult.data;
-
-    if (prices.length === 0) {
-      warnings.push("price_data_missing");
-      return NextResponse.json({ error: "No price data found for ticker" }, { status: 404 });
+    const snapshotData = await fetchStockSnapshot(norm);
+    const displayName = snapshotData.displayName ? `${norm.symbol} ${snapshotData.displayName}` : norm.symbol;
+    const companyNameZh = snapshotData.displayName;
+    
+    if (snapshotData.warnings.length > 0) {
+      warnings.push(...snapshotData.warnings);
     }
-
-    if (rangeResult.barsReturned < 130) {
-      warnings.push(`bars_insufficient_${rangeResult.barsReturned}`);
-    }
-
+    
+    const prices = snapshotData.prices;
+    const investors = snapshotData.flow?.investors || [];
+    const margin = snapshotData.flow?.margin || [];
+    const revenue = snapshotData.fundamentals.revenue || [];
+    const rawNews = snapshotData.news || [];
+    const technicals = snapshotData.technicals;
+    
     const tradingDates = prices.map((p) => p.date);
-    const latestDate = prices[prices.length - 1].date;
-    const latestDateObj = new Date(latestDate);
-
-    const flowStartDate = format(subDays(latestDateObj, 120), "yyyy-MM-dd");
-    const fundamentalStartDate = format(subDays(latestDateObj, 540), "yyyy-MM-dd");
-    const newsStartDate = format(subDays(latestDateObj, 7), "yyyy-MM-dd");
-
-    const [investorsResult, marginResult, revenueResult, newsResult] = await Promise.all([
-      getInstitutionalInvestors(norm.symbol, flowStartDate, latestDate).catch((error) => {
-        if (error instanceof FinmindProviderError) {
-          warnings.push(`investors_error:${error.errorCode}`);
-        }
-        return { data: [], meta: { authUsed: "anon", fallbackUsed: false } };
-      }),
-      getMarginShort(norm.symbol, flowStartDate, latestDate).catch((error) => {
-        if (error instanceof FinmindProviderError) {
-          warnings.push(`margin_error:${error.errorCode}`);
-        }
-        return { data: [], meta: { authUsed: "anon", fallbackUsed: false } };
-      }),
-      getMonthlyRevenue(norm.symbol, fundamentalStartDate, latestDate).catch((error) => {
-        if (error instanceof FinmindProviderError) {
-          warnings.push(`revenue_error:${error.errorCode}`);
-        }
-        return { data: [], meta: { authUsed: "anon", fallbackUsed: false } };
-      }),
-      getTaiwanStockNews(norm.symbol, newsStartDate, latestDate).catch((error) => {
-        if (error instanceof FinmindProviderError) {
-          return {
-            data: [],
-            meta: {
-              authUsed: error.meta.authUsed,
-              fallbackUsed: error.meta.fallbackUsed,
-              statusAnon: error.meta.statusAnon,
-              statusEnv: error.meta.statusEnv,
-              errorCode: error.errorCode,
-              message: error.message,
-            },
+        const latestDate = prices[prices.length - 1].date;
+        const latestDateObj = new Date(latestDate);
+    
+        // Map unified prices to legacy PriceBar format for internal signals
+        const legacyPrices = prices.map(p => ({
+          date: p.date,
+          stock_id: norm.symbol,
+          Trading_Volume: p.volume,
+          open: p.open,
+          max: p.high,
+          min: p.low,
+          close: p.close
+        }));
+    
+        const technicalTactics = technicals ? translateTechnicals(technicals) : null;
+        const newsErrorCode = snapshotData.meta.newsMeta.errorCode ?? null;
+        const newsErrorMessage = snapshotData.meta.newsMeta.message ?? null;
+    
+        const trendSignals = calculateTrend(legacyPrices);
+        const flowSignals = calculateFlow(tradingDates, investors, margin);
+        
+        // Calculate fundamentals
+        let fundamentalSignals = calculateFundamental(revenue);
+        // US Stock fundamental fallback
+        if (!isTaiwanStock(norm.symbol) && snapshotData.fundamentals.eps !== null) {
+          // Basic fallback scoring for US stocks
+          let score = 50;
+          let reasons = [];
+          if ((snapshotData.fundamentals.revenueGrowth ?? 0) > 0.1) { score += 15; reasons.push("營收成長大於10%"); }
+          else if ((snapshotData.fundamentals.revenueGrowth ?? 0) < 0) { score -= 15; reasons.push("營收出現衰退"); }
+          if ((snapshotData.fundamentals.peRatio ?? 50) < 30) { score += 10; reasons.push("本益比在合理範圍"); }
+          if (reasons.length === 0) reasons.push("基本面穩健");
+          
+          fundamentalSignals = {
+            recent3MoYoyAverage: (snapshotData.fundamentals.revenueGrowth ?? 0) * 100,
+            recent6MoYoyAverage: (snapshotData.fundamentals.revenueGrowth ?? 0) * 100,
+            yoyTrend: (snapshotData.fundamentals.revenueGrowth ?? 0) > 0 ? 'up' : 'flat',
+            fundamentalScore: score,
+            reasons,
+            risks: []
           };
         }
-
-        const message = error instanceof Error ? error.message : String(error);
-        return {
-          data: [],
-          meta: {
-            authUsed: "anon" as const,
-            fallbackUsed: false,
-            errorCode: "news_fetch_failed",
-            message,
-          },
-        };
-      }),
-    ]);
-
-    const investors = investorsResult.data;
-    const margin = marginResult.data;
-    const revenue = revenueResult.data;
-    const rawNews = newsResult.data;
-    const newsErrorCode = newsResult.meta.errorCode ?? null;
-    const newsErrorMessage = newsResult.meta.message ?? null;
-
-    const trendSignals = calculateTrend(prices);
-    const flowSignals = calculateFlow(tradingDates, investors, margin);
-    const fundamentalSignals = calculateFundamental(revenue);
-    const shortTermVolatility = calculateShortTermVolatility(prices);
-    const shortTerm = calculateShortTermSignals(prices, trendSignals, shortTermVolatility);
+    
+        const shortTermVolatility = calculateShortTermVolatility(legacyPrices);
+        const shortTerm = calculateShortTermSignals(legacyPrices, trendSignals, shortTermVolatility);
 
     if (flowSignals.risks.includes("flow_data_missing")) {
       warnings.push("flow_data_missing");
@@ -184,10 +169,10 @@ export async function GET(
     const mappedPrices = prices.map(p => ({
       date: p.date,
       open: p.open,
-      high: p.max,
-      low: p.min,
+      high: p.high,
+      low: p.low,
       close: p.close,
-      volume: p.Trading_Volume
+      volume: p.volume
     }));
     const keyLevels = calculateKeyLevels(mappedPrices);
 
@@ -255,7 +240,7 @@ export async function GET(
     const usMapping = mapThemeToUS(themeName, norm.symbol);
     
     // 4. Local Peers (TW)
-    const twPeerLinkage = await selectTwPeers(norm.symbol, clusterMembers, themeName);
+    const twPeerLinkage = await selectTwPeers(norm.symbol, clusterMembers, themeName, allMembers);
     
     // 5. Overseas Drivers
     // Fetch Yahoo data for US candidates
@@ -315,27 +300,17 @@ export async function GET(
         displayName,
       },
       dataWindow: {
-        barsRequested: rangeResult.barsRequested,
-        barsReturned: rangeResult.barsReturned,
-        endDate: rangeResult.endDate,
+        barsRequested: 180,
+        barsReturned: prices.length,
+        endDate: latestDate,
       },
       providerMeta: {
-        authUsed:
-          rangeResult.providerMeta?.authUsed === "env" ||
-            investorsResult.meta.authUsed === "env" ||
-            marginResult.meta.authUsed === "env" ||
-            revenueResult.meta.authUsed === "env"
-            ? "env"
-            : "anon",
-        fallbackUsed:
-          Boolean(rangeResult.providerMeta?.fallbackUsed) ||
-          investorsResult.meta.fallbackUsed ||
-          marginResult.meta.fallbackUsed ||
-          revenueResult.meta.fallbackUsed,
+        authUsed: snapshotData.meta.providerAuthUsed,
+        fallbackUsed: snapshotData.meta.fallbackUsed,
       },
       newsMeta: {
-        authUsed: newsResult.meta.authUsed,
-        fallbackUsed: newsResult.meta.fallbackUsed,
+        authUsed: snapshotData.meta.newsMeta.authUsed,
+        fallbackUsed: snapshotData.meta.newsMeta.fallbackUsed,
         count: rawNews.length,
         bullishCount: catalystResult.bullishCount,
         bearishCount: catalystResult.bearishCount,
@@ -347,12 +322,14 @@ export async function GET(
         prices: prices.slice(-120).map((p) => ({
           date: p.date,
           open: p.open,
-          high: p.max,
-          low: p.min,
+          high: p.high,
+          low: p.low,
           close: p.close,
-          volume: p.Trading_Volume,
+          volume: p.volume,
         })),
       },
+      technicals,
+      technicalTactics,
       signals: {
         trend: trendSignals,
         flow: flowSignals,
@@ -385,15 +362,9 @@ export async function GET(
           requestParams: {
             symbol: norm.symbol,
             market: norm.market,
-            flowStartDate,
-            fundamentalStartDate,
             revenueFetchedCount: revenue.length,
-            newsFallbackUsed: newsResult.meta.fallbackUsed,
-            priceProviderMeta: rangeResult.providerMeta,
-            investorsProviderMeta: investorsResult.meta,
-            marginProviderMeta: marginResult.meta,
-            revenueProviderMeta: revenueResult.meta,
-            newsProviderMeta: newsResult.meta,
+            newsFallbackUsed: snapshotData.meta.newsMeta.fallbackUsed,
+            providerMeta: snapshotData.meta,
           },
           ai: aiExplanation.debug,
         },

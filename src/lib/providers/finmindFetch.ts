@@ -58,7 +58,7 @@ function inferErrorCode(status: number, message: string): string {
   const msg = message.toLowerCase();
 
   if (status === 401 || msg.includes("unauthorized")) return "auth_required";
-  if (status === 403 || msg.includes("forbidden") || msg.includes("permission")) return "permission_denied";
+  if (status === 403 || msg.includes("forbidden") || msg.includes("permission") || msg.includes("level is free")) return "permission_denied";
   if (
     status === 429 ||
     msg.includes("quota") ||

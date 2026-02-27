@@ -41,9 +41,16 @@ export async function detectMarket(symbol: string): Promise<MarketDetectionResul
     }
 
     // 依據市場定義對應的 Yahoo suffix
-    let yahoo = `${symbol}.TW`; // 預設 TWSE
-    if (market === 'TPEX') {
-        yahoo = `${symbol}.TWO`;
+    let yahoo = "";
+    const isUS = /^[A-Z]+$/i.test(symbol);
+
+    if (isUS) {
+        yahoo = symbol.toUpperCase();
+    } else {
+        yahoo = `${symbol}.TW`; // 預設 TWSE
+        if (market === 'TPEX') {
+            yahoo = `${symbol}.TWO`;
+        }
     }
 
     const result: MarketDetectionResult = { market, yahoo, ambiguous };

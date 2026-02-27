@@ -6,17 +6,20 @@ function containsTooMuchEnglish(text: string) {
   return /[A-Za-z]{3,}/.test(text);
 }
 
-export async function resolveStockName(code: string): Promise<string> {
+export async function resolveStockName(inputCode: string): Promise<string> {
+  const code = inputCode.toUpperCase();
+  const isUS = /^[A-Z]+$/.test(code);
   const localCacheKey = `twshd:stockNameCache:v1:${code}`;
   
   if (typeof window !== "undefined") {
     const cached = localStorage.getItem(localCacheKey);
-    if (cached && !containsTooMuchEnglish(cached) && cached !== "未知公司") {
+    // If US stock, we allow English names. If TW stock, we still filter out too much english (Yahoo Taiwan quirks)
+    if (cached && (isUS || !containsTooMuchEnglish(cached)) && cached !== "未知公司") {
       return cached;
     }
   }
   
-  // Step 1: Force local map first
+  // Step 1: Force local map first (only for TW stocks usually)
   if (twStockNames[code] && !containsTooMuchEnglish(twStockNames[code])) {
     return twStockNames[code];
   }
@@ -29,8 +32,8 @@ export async function resolveStockName(code: string): Promise<string> {
       if (data.name) {
         let finalName = data.name;
         
-        // Step 3: English fallback rejection
-        if (containsTooMuchEnglish(finalName)) {
+        // Step 3: English fallback rejection (Skip for US stocks)
+        if (!isUS && containsTooMuchEnglish(finalName)) {
            finalName = twStockNames[code] || code; // use local if exists, else just code
         }
 

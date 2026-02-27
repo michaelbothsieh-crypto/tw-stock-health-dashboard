@@ -6,12 +6,25 @@ export interface CrashFactorResult {
   available: boolean;
 }
 
+export interface MacroIndicator {
+  value?: number;
+  status: string;
+  variant: 'positive' | 'neutral' | 'negative';
+  trend?: string;
+}
+
 export interface CrashWarningOutput {
   score: number | null;
   level: "正常" | "警戒" | "高風險" | "崩盤風險" | "資料不足";
   headline: string;
   summary: string;
   triggersTop: string[];
+  macroIndicators?: {
+    vix: MacroIndicator;
+    soxx: MacroIndicator;
+    liquidity: MacroIndicator;
+    systemRisk: MacroIndicator;
+  };
   factors: {
     volatilityStress: CrashFactorResult;
     sectorBreakdown: CrashFactorResult;
@@ -276,6 +289,12 @@ export function evaluateCrashWarning(marketData: MarketIndicatorResult): CrashWa
           headline: "資料不足",
           summary: "目前無法取得足夠市場資料，暫時無法評估風險",
           triggersTop: ["市場資料取得失敗", "請稍後再試"],
+          macroIndicators: {
+            vix: { value: 0, status: "資料不足", variant: "neutral" },
+            soxx: { trend: "趨勢不明", status: "中性", variant: "neutral" },
+            liquidity: { status: "評估中", variant: "neutral" },
+            systemRisk: { status: "資料不足", variant: "neutral" }
+          },
           factors: {
               volatilityStress: volFact,
               sectorBreakdown: secFact,
@@ -318,6 +337,12 @@ export function evaluateCrashWarning(marketData: MarketIndicatorResult): CrashWa
           headline: "資料不足",
           summary: "計算結果無效 (NaN)，暫時無法評估風險",
           triggersTop: ["資料不足：計算結果無效"],
+          macroIndicators: {
+            vix: { value: 0, status: "資料不足", variant: "neutral" },
+            soxx: { trend: "趨勢不明", status: "中性", variant: "neutral" },
+            liquidity: { status: "評估中", variant: "neutral" },
+            systemRisk: { status: "資料不足", variant: "neutral" }
+          },
           factors: {
               volatilityStress: volFact,
               sectorBreakdown: secFact,
@@ -370,12 +395,35 @@ export function evaluateCrashWarning(marketData: MarketIndicatorResult): CrashWa
     triggersTop.push("部分資料缺失，以可用指標估算");
   }
 
+  // --- Macro Radar Indicators (Pro Max) ---
+  const macroIndicators = {
+    vix: {
+      value: vixStats?.current ?? 0,
+      status: vixStats ? (vixStats.current >= 30 ? "恐慌升溫" : vixStats.current >= 20 ? "波動偏高" : "情緒平穩") : "資料不足",
+      variant: (vixStats ? (vixStats.current >= 30 ? "negative" : vixStats.current >= 20 ? "neutral" : "positive") : "neutral") as 'positive' | 'neutral' | 'negative'
+    },
+    soxx: {
+      trend: soxxRet20 !== null ? (soxxRet20 > 0.02 ? "多頭延續" : soxxRet20 < -0.05 ? "弱勢破位" : "高檔震盪") : "趨勢不明",
+      status: soxxRet20 !== null ? (soxxRet20 > 0 ? "偏多" : "偏空") : "中性",
+      variant: (soxxRet20 !== null ? (soxxRet20 > 0.02 ? "positive" : soxxRet20 < -0.05 ? "negative" : "neutral") : "neutral") as 'positive' | 'neutral' | 'negative'
+    },
+    liquidity: {
+      status: dxyRet20 !== null ? (dxyRet20 >= 0.03 ? "緊縮壓力" : dxyRet20 <= -0.02 ? "資金寬鬆" : "資金中性") : "評估中",
+      variant: (dxyRet20 !== null ? (dxyRet20 >= 0.03 ? "negative" : dxyRet20 <= -0.02 ? "positive" : "neutral") : "neutral") as 'positive' | 'neutral' | 'negative'
+    },
+    systemRisk: {
+      status: level === "正常" ? "風險偏低" : level,
+      variant: (finalScore >= 60 ? "negative" : finalScore >= 30 ? "neutral" : "positive") as 'positive' | 'neutral' | 'negative'
+    }
+  };
+
   return {
     score: finalScore,
     level,
     headline,
     summary,
     triggersTop,
+    macroIndicators,
     factors: {
       volatilityStress: volFact,
       sectorBreakdown: secFact,

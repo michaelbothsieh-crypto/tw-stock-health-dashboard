@@ -151,7 +151,7 @@ function StockPicker({
                       }`}
                   >
                     <div className={`w-[72px] shrink-0 font-mono text-[16px] tabular-nums ${isSelected ? "text-emerald-300" : "text-neutral-300"}`}>
-                      {highlightMatch(itemTicker, keyword.trim())}
+                      {highlightMatch(itemTicker.toUpperCase(), keyword.trim().toUpperCase())}
                     </div>
                     <div className={`flex-1 min-w-0 truncate text-[16px] font-sans ${name ? (isSelected ? "text-emerald-200" : "text-neutral-200") : "text-neutral-600"}`}>
                       {highlightMatch(name, keyword.trim())}
@@ -183,7 +183,7 @@ function StockPicker({
 export function DashboardBento({ initialTicker = "2330" }: { initialTicker?: string }) {
   const router = useRouter();
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
-  const [ticker, setTicker] = useState(initialTicker);
+  const [ticker, setTicker] = useState(initialTicker.toUpperCase());
   const [showStockPicker, setShowStockPicker] = useState(false);
 
   useEffect(() => {
@@ -201,7 +201,7 @@ export function DashboardBento({ initialTicker = "2330" }: { initialTicker?: str
   const [activeMainTab, setActiveMainTab] = useState<MainTab>("數據判讀");
   const [activeExplainTab, setActiveExplainTab] = useState<ExplainTab>("trend");
 
-  useEffect(() => setTicker(initialTicker), [initialTicker]);
+  useEffect(() => setTicker(initialTicker.toUpperCase()), [initialTicker]);
 
   useEffect(() => {
     const unsubscribe = watchlistStore.subscribe((items) => {
@@ -222,9 +222,10 @@ export function DashboardBento({ initialTicker = "2330" }: { initialTicker?: str
   const requestError = query.error instanceof Error ? query.error.message : "讀取快照失敗";
 
   const onTickerChange = (nextTicker: string) => {
-    setTicker(nextTicker);
+    const upperTicker = nextTicker.toUpperCase();
+    setTicker(upperTicker);
     setShowStockPicker(false);
-    router.push(`/stock/${nextTicker}`);
+    router.push(`/stock/${upperTicker}`);
     setTimeout(() => window.scrollTo({ top: 0, behavior: "smooth" }), 100);
   };
 
@@ -246,7 +247,7 @@ export function DashboardBento({ initialTicker = "2330" }: { initialTicker?: str
 
   const layoutProps = {
     snapshot: snapshot as SnapshotResponse,
-    currentStockLabel: `${ticker} ${currentName || ""}`.trim(),
+    currentStockLabel: `${ticker.toUpperCase()} ${currentName || ""}`.trim(),
     showDetail,
     setShowDetail,
     activeMainTab,
