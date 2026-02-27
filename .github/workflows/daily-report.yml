@@ -13,7 +13,7 @@ jobs:
     
     # Optional parameters that you can tweak via Repository Variables/Secrets if needed
     env:
-      WATCHLIST_TW: "2330,8299,2867,2881,0050,2317,2454,2308,3231"
+      WATCHLIST_TW: ${{ vars.WATCHLIST_TW || secrets.WATCHLIST_TW || '2330,8299,2867,2881,0050,2317,2454,2308,3231' }}
       BACKTEST_WINDOW: "120"
       REPORT_TIMEZONE: "Asia/Taipei"
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
