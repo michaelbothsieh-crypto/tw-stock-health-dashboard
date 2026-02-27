@@ -1,5 +1,15 @@
 import { fetchLatestReport } from "./reportFetcher";
 import { twStockNames } from "../../data/twStockNames";
+import { fetchYahooFinanceBars } from "../global/yahooFinance";
+
+type OverseasQuote = {
+  symbol: string;
+  name: string;
+  price: number | null;
+  changePct: string;
+  corr60?: number | null;
+  reason?: string;
+};
 
 type TelegramStockRow = {
   symbol: string;
@@ -19,6 +29,7 @@ type TelegramStockRow = {
   probText?: string;
   h3Text?: string;
   h5Text?: string;
+  overseasQuotes?: OverseasQuote[];
 };
 
 type LatestReport = {
@@ -42,6 +53,7 @@ async function sendMessage(chatId: string | number, text: string) {
         chat_id: chatId,
         text,
         parse_mode: "HTML",
+        disable_web_page_preview: true,
       }),
     });
 
@@ -81,7 +93,7 @@ function normalizeRow(raw: TelegramStockRow): TelegramStockRow {
   const upProb1D = raw.upProb1D ?? toNumberPercent(raw.probText) ?? null;
   const upProb3D = raw.upProb3D ?? toNumberPercent(raw.h3Text) ?? null;
   const upProb5D = raw.upProb5D ?? toNumberPercent(raw.h5Text) ?? null;
-  const tomorrowTrend = raw.tomorrowTrend || raw.predText || "資料不足";
+  const tomorrowTrend = raw.tomorrowTrend || raw.predText || "中立";
 
   return {
     ...raw,
@@ -89,9 +101,10 @@ function normalizeRow(raw: TelegramStockRow): TelegramStockRow {
     upProb1D,
     upProb3D,
     upProb5D,
-    strategySignal: raw.strategySignal || raw.predText || "資料不足",
+    strategySignal: raw.strategySignal || raw.predText || "中立",
     strategyConfidence: raw.strategyConfidence ?? null,
     majorNews: Array.isArray(raw.majorNews) ? raw.majorNews : [],
+    overseasQuotes: Array.isArray(raw.overseasQuotes) ? raw.overseasQuotes : [],
   };
 }
 
@@ -109,17 +122,34 @@ function impactLabel(impact?: string): string {
   return "中性";
 }
 
+function formatCorr(corr?: number | null): string {
+  if (typeof corr !== "number" || !Number.isFinite(corr)) return "-";
+  return `${(corr * 100).toFixed(0)}%`;
+}
+
 function buildSingleStockMessage(item: TelegramStockRow): string {
   const row = normalizeRow(item);
   const lines: string[] = [];
+
   lines.push(`<b>${escapeHtml(row.symbol)} ${escapeHtml(row.nameZh)}</b>`);
-  lines.push(`收盤: ${escapeHtml(formatPrice(row.price))} (${escapeHtml(row.changePct)})`);
-  lines.push(`三大法人合計: ${escapeHtml(row.flowTotal)}`);
-  lines.push(`明日傾向: ${escapeHtml(row.tomorrowTrend)} (1D上漲機率 ${escapeHtml(formatPercent(row.upProb1D))})`);
-  lines.push(`短線參考: 3D ${escapeHtml(formatPercent(row.upProb3D))} / 5D ${escapeHtml(formatPercent(row.upProb5D))}`);
+  lines.push(`收盤價: ${escapeHtml(formatPrice(row.price))} (${escapeHtml(row.changePct)})`);
+  lines.push(`法人淨買賣: ${escapeHtml(row.flowTotal)}`);
+  lines.push(`短線方向: ${escapeHtml(row.tomorrowTrend)} (1D 上漲機率 ${escapeHtml(formatPercent(row.upProb1D))})`);
+  lines.push(`機率參考: 3D ${escapeHtml(formatPercent(row.upProb3D))} / 5D ${escapeHtml(formatPercent(row.upProb5D))}`);
   lines.push(
     `策略訊號: ${escapeHtml(row.strategySignal)}${row.strategyConfidence === null ? "" : ` (信心 ${escapeHtml(row.strategyConfidence.toFixed(1))}%)`}`,
   );
+
+  if (row.overseasQuotes && row.overseasQuotes.length > 0) {
+    lines.push("<b>海外對標收盤:</b>");
+    row.overseasQuotes.slice(0, 4).forEach((q, idx) => {
+      const reasonPart = q.reason ? `｜${q.reason}` : "";
+      const corrPart = typeof q.corr60 === "number" ? `｜相關 ${formatCorr(q.corr60)}` : "";
+      lines.push(
+        `${idx + 1}. ${escapeHtml(q.symbol)} ${escapeHtml(formatPrice(q.price))} (${escapeHtml(q.changePct)})${escapeHtml(corrPart)}${escapeHtml(reasonPart)}`,
+      );
+    });
+  }
 
   if (row.majorNews.length > 0) {
     lines.push("<b>重大新聞:</b>");
@@ -143,10 +173,10 @@ function buildSingleStockMessage(item: TelegramStockRow): string {
 
 function buildHelpMessage(): string {
   return [
-    "<b>台股收盤機器人</b>",
+    "<b>台股機器人</b>",
     "",
-    "目前僅支援：",
-    "/stock <代號或名稱> - 單一股票詳細摘要 (例: /stock 2330)",
+    "目前僅支援一個指令:",
+    "/stock <代號或名稱> - 取得單一股票即時摘要 (例: /stock 2330)",
   ].join("\n");
 }
 
@@ -170,10 +200,43 @@ function resolveCodeFromInputLocal(input: string): string | null {
   for (const [code, name] of Object.entries(twStockNames)) {
     if (name === query) return code;
   }
+
   for (const [code, name] of Object.entries(twStockNames)) {
     if (name.includes(query) || query.includes(name)) return code;
   }
+
   return null;
+}
+
+function buildTrendByProb(upProb1D: number | null): string {
+  if (upProb1D === null) return "中立";
+  if (upProb1D >= 58) return "偏多";
+  if (upProb1D <= 42) return "偏空";
+  return "中立";
+}
+
+async function fetchUsQuote(symbol: string, name: string, corr60?: number, reason?: string): Promise<OverseasQuote> {
+  try {
+    const bars = await fetchYahooFinanceBars(symbol, 7);
+    if (!bars || bars.length < 2) {
+      return { symbol, name, price: null, changePct: "N/A", corr60: corr60 ?? null, reason };
+    }
+
+    const latest = bars[bars.length - 1].close;
+    const prev = bars[bars.length - 2].close;
+    const changePct = prev > 0 ? `${((latest - prev) / prev) * 100 >= 0 ? "+" : ""}${(((latest - prev) / prev) * 100).toFixed(2)}%` : "N/A";
+
+    return {
+      symbol,
+      name,
+      price: Number.isFinite(latest) ? latest : null,
+      changePct,
+      corr60: corr60 ?? null,
+      reason,
+    };
+  } catch {
+    return { symbol, name, price: null, changePct: "N/A", corr60: corr60 ?? null, reason };
+  }
 }
 
 async function fetchLiveStockRow(query: string): Promise<TelegramStockRow | null> {
@@ -181,7 +244,7 @@ async function fetchLiveStockRow(query: string): Promise<TelegramStockRow | null
   if (!trimmed) return null;
 
   const resolved = resolveCodeFromInputLocal(trimmed);
-  const symbol = resolved || (trimmed.match(/^(\d{4,})(\.TW|\.TWO)?$/i)?.[1] ?? null);
+  const symbol = resolved || trimmed.match(/^(\d{4,})(\.TW|\.TWO)?$/i)?.[1] || null;
   if (!symbol) return null;
 
   const baseUrl = getSnapshotBaseUrl();
@@ -211,7 +274,6 @@ async function fetchLiveStockRow(query: string): Promise<TelegramStockRow | null
     const upProb1D = typeof snapshot?.predictions?.upProb1D === "number" ? snapshot.predictions.upProb1D : null;
     const upProb3D = typeof snapshot?.predictions?.upProb3D === "number" ? snapshot.predictions.upProb3D : null;
     const upProb5D = typeof snapshot?.predictions?.upProb5D === "number" ? snapshot.predictions.upProb5D : null;
-    const tomorrowTrend = upProb1D === null ? "中立" : upProb1D >= 58 ? "偏多" : upProb1D <= 42 ? "偏空" : "中立";
 
     const topBullish = Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : [];
     const topBearish = Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : [];
@@ -225,20 +287,55 @@ async function fetchLiveStockRow(query: string): Promise<TelegramStockRow | null
       }))
       .filter((n: { title: string }) => n.title.length > 0);
 
+    const sector = snapshot?.globalLinkage?.drivers?.sector;
+    const peers = Array.isArray(snapshot?.globalLinkage?.drivers?.peers)
+      ? snapshot.globalLinkage.drivers.peers
+      : [];
+
+    const candidates: Array<{ symbol: string; name: string; corr60?: number; reason?: string }> = [];
+    if (sector?.id) {
+      candidates.push({
+        symbol: String(sector.id),
+        name: String(sector.nameZh || sector.id),
+        corr60: typeof sector.corr60 === "number" ? sector.corr60 : undefined,
+        reason: "海外板塊",
+      });
+    }
+
+    for (const p of peers.slice(0, 3)) {
+      if (!p?.symbol) continue;
+      candidates.push({
+        symbol: String(p.symbol),
+        name: String(p.nameEn || p.symbol),
+        corr60: typeof p.corr60 === "number" ? p.corr60 : undefined,
+        reason: typeof p.reason === "string" ? p.reason : undefined,
+      });
+    }
+
+    const unique = new Map<string, { symbol: string; name: string; corr60?: number; reason?: string }>();
+    for (const c of candidates) {
+      if (!unique.has(c.symbol)) unique.set(c.symbol, c);
+    }
+
+    const overseasQuotes = await Promise.all(
+      Array.from(unique.values()).map((c) => fetchUsQuote(c.symbol, c.name, c.corr60, c.reason)),
+    );
+
     return {
       symbol: String(snapshot?.normalizedTicker?.symbol || symbol),
       nameZh: String(snapshot?.normalizedTicker?.companyNameZh || snapshot?.normalizedTicker?.displayName || symbol),
       price: latest,
       changePct,
       flowTotal,
-      tomorrowTrend,
+      tomorrowTrend: buildTrendByProb(upProb1D),
       upProb1D,
       upProb3D,
       upProb5D,
-      strategySignal: String(snapshot?.strategy?.signal || tomorrowTrend),
+      strategySignal: String(snapshot?.strategy?.signal || buildTrendByProb(upProb1D)),
       strategyConfidence: typeof snapshot?.strategy?.confidence === "number" ? snapshot.strategy.confidence : null,
       majorNews,
-      majorNewsSummary: majorNews.length > 0 ? "即時抓取" : "無重大新聞",
+      majorNewsSummary: majorNews.length > 0 ? "有重大新聞" : "無重大新聞",
+      overseasQuotes,
     };
   } catch {
     return null;
@@ -284,25 +381,26 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
     return;
   }
 
-  // Always prefer live snapshot for /stock.
   const liveFirst = await fetchLiveStockRow(query);
   if (liveFirst) {
-    await sendMessage(chatId, `${buildSingleStockMessage(liveFirst)}\n\n<i>（即時抓取）</i>`);
+    await sendMessage(chatId, `${buildSingleStockMessage(liveFirst)}\n\n<i>資料來源: 即時 snapshot</i>`);
     return;
   }
 
-  // Fallback to latest report snapshot only when live fetch fails.
   let report: LatestReport | null = null;
   try {
     report = (await fetchLatestReport()) as LatestReport | null;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await sendMessage(chatId, `目前即時抓取失敗，且讀取日報失敗：${escapeHtml(message)}`);
+    await sendMessage(
+      chatId,
+      `目前即時來源暫時不可用，且最新收盤報告尚未同步完成。\n請稍後再試（不是無資料）。\n\n錯誤: ${escapeHtml(message)}`,
+    );
     return;
   }
 
   if (!report || !Array.isArray(report.watchlist) || report.watchlist.length === 0) {
-    await sendMessage(chatId, "目前即時抓取失敗，且尚未產出最新收盤報告，請稍後再試。");
+    await sendMessage(chatId, "最新收盤報告尚未同步完成，請稍後再試（不是無資料）。");
     return;
   }
 
@@ -313,9 +411,9 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
   });
 
   if (!stock) {
-    await sendMessage(chatId, `找不到 ${escapeHtml(query)}，請確認代號或名稱。`);
+    await sendMessage(chatId, `找不到 ${escapeHtml(query)}，請確認股票代號或名稱。`);
     return;
   }
 
-  await sendMessage(chatId, `${buildSingleStockMessage(stock)}\n\n<i>（日報快照）</i>`);
+  await sendMessage(chatId, `${buildSingleStockMessage(stock)}\n\n<i>資料來源: 最新收盤報告快照</i>`);
 }
