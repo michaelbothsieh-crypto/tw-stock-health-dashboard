@@ -1,4 +1,6 @@
-﻿export type FinmindAuthUsed = "anon" | "env";
+import { getCache, setCache } from "./redisCache";
+
+export type FinmindAuthUsed = "anon" | "env";
 
 export interface FinmindFetchMeta {
   authUsed: FinmindAuthUsed;
@@ -118,10 +120,42 @@ export async function finmindFetch(args: FinmindFetchArgs): Promise<FinmindFetch
   const anonSearch = buildQueryString(args.params, "anon");
   const anonCacheKey = `v2:finmind:${args.cacheKeyBase}:auth=anon`;
 
+  // 1. Generate unique Redis key
+  // Sort params to ensure consistent key generation regardless of key order
+  const sortedParams = Object.keys(args.params)
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = args.params[key];
+      return acc;
+    }, {} as Record<string, any>);
+    
+  const redisKey = `finmind:${args.cacheKeyBase}:${JSON.stringify(sortedParams)}`;
+
+  try {
+    // 2. Check Redis Cache
+    const cachedBody = await getCache<any>(redisKey);
+    if (cachedBody) {
+      console.log(`[Cache Hit] ${redisKey}`);
+      return {
+        ok: true,
+        body: cachedBody,
+        meta: {
+          authUsed: "anon", // Not actually hitting the API
+          fallbackUsed: false,
+          message: "From Redis Cache"
+        },
+      };
+    }
+  } catch (error) {
+    // Ignore cache error, proceed to fetch
+  }
+
   try {
     const anon = await doRequest(args.url, anonSearch, args.revalidateSeconds, anonCacheKey);
 
     if (anon.ok) {
+      // 3. Set Cache on success
+      await setCache(redisKey, anon.body, 43200); // 12 hours
       return {
         ok: true,
         body: anon.body,
@@ -137,7 +171,7 @@ export async function finmindFetch(args: FinmindFetchArgs): Promise<FinmindFetch
     if (!authRelated || !token) {
       return {
         ok: false,
-        body: anon.body,
+        body: anon.body || [], // Fallback to empty array
         meta: {
           authUsed: "anon",
           fallbackUsed: false,
@@ -153,6 +187,8 @@ export async function finmindFetch(args: FinmindFetchArgs): Promise<FinmindFetch
     const env = await doRequest(args.url, envSearch, args.revalidateSeconds, envCacheKey);
 
     if (env.ok) {
+      // 3. Set Cache on success
+      await setCache(redisKey, env.body, 43200); // 12 hours
       return {
         ok: true,
         body: env.body,
@@ -167,7 +203,7 @@ export async function finmindFetch(args: FinmindFetchArgs): Promise<FinmindFetch
 
     return {
       ok: false,
-      body: env.body,
+      body: env.body || [], // Fallback to empty array
       meta: {
         authUsed: "env",
         fallbackUsed: true,
@@ -181,7 +217,7 @@ export async function finmindFetch(args: FinmindFetchArgs): Promise<FinmindFetch
     const message = error instanceof Error ? error.message : "Network error";
     return {
       ok: false,
-      body: null,
+      body: [], // Fallback to empty array
       meta: {
         authUsed: token ? "env" : "anon",
         fallbackUsed: false,
