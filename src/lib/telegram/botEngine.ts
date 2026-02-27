@@ -361,34 +361,71 @@ function buildSyncLevel(overseas: OverseasLine[]): string {
   return syncLevel(meanAbs);
 }
 
-function quoteText(line: OverseasLine): string {
-  const price = formatPrice(line.price, 2);
-  const pct = formatSignedPct(line.chgPct, 2);
-  return `${line.symbol} ${price}(${pct})`;
+function formatSignedHumanNumber(value: number | null): string {
+  if (value === null) return "—";
+  const absHuman = humanizeNumber(Math.abs(value));
+  const sign = value >= 0 ? "+" : "-";
+  return `${sign}${absHuman}`;
 }
 
-function formatFlowLine(flowNet: number | null): string {
-  const shares = humanizeNumber(flowNet);
-  if (flowNet === null) return "法人：—";
-  const lots = humanizeNumber(flowNet / 1000);
-  return `法人：${shares}股（約 ${lots} 張）`;
+function buildVolumeState(volume: number | null, volumeVs5dPct: number | null): string {
+  const volumeText = humanizeNumber(volume);
+  if (volumeVs5dPct === null) return `${volumeText}（平量）`;
+  if (volumeVs5dPct >= 80) return `${volumeText}（爆量）`;
+  if (volumeVs5dPct >= 15) return `${volumeText}（放量）`;
+  if (volumeVs5dPct <= -20) return `${volumeText}（縮量）`;
+  return `${volumeText}（平量）`;
+}
+
+function buildOverseasSummary(overseas: OverseasLine[]): string {
+  const preferred = ["SOXX", "NVDA", "AVGO", "TSM"];
+  const bySymbol = new Map<string, OverseasLine>();
+  for (const item of overseas) {
+    bySymbol.set(item.symbol, item);
+  }
+
+  const hasPreferred = preferred.some((s) => bySymbol.has(s));
+  if (hasPreferred) {
+    return preferred
+      .map((symbol) => {
+        const item = bySymbol.get(symbol);
+        if (!item) return `${symbol} N/A`;
+        return `${symbol} ${formatPrice(item.price, 2)}(${formatSignedPct(item.chgPct, 2)})`;
+      })
+      .join("｜");
+  }
+
+  if (overseas.length === 0) return "N/A";
+  return overseas
+    .slice(0, 4)
+    .map((item) => `${item.symbol} ${formatPrice(item.price, 2)}(${formatSignedPct(item.chgPct, 2)})`)
+    .join("｜");
 }
 
 function buildStockCardMessage(card: StockCard): string {
   const stanceText = buildStanceText(card.shortDir, card.strategySignal, card.confidence);
-  const overseasText = card.overseas.length > 0
-    ? card.overseas.map((x) => quoteText(x)).join("、")
-    : "—";
+  const overseasText = buildOverseasSummary(card.overseas);
+  const volumeState = buildVolumeState(card.volume, card.volumeVs5dPct);
+  const flowHuman = formatSignedHumanNumber(card.flowNet);
+  const flowUnit = card.flowUnit || "N/A";
+  const support = formatPrice(card.support, 2);
+  const resistance = formatPrice(card.resistance, 2);
+  const bullTarget = formatPrice(card.bullTarget, 2);
+  const bearTarget = formatPrice(card.bearTarget, 2);
 
   const lines = [
     `${card.symbol} ${card.nameZh}`,
-    `收盤：${formatPrice(card.close, 2)} (${formatSignedPct(card.chgPct, 2)}，${formatPrice(card.chgAbs, 2)})｜量：${humanizeNumber(card.volume)}（vs5D：${formatSignedPct(card.volumeVs5dPct, 1)}）`,
-    formatFlowLine(card.flowNet),
-    `結論：${stanceText}（信心 ${formatPct(card.confidence, 1)}）｜1D↑ ${formatPct(card.p1d, 1)}（3D ${formatPct(card.p3d, 1)} / 5D ${formatPct(card.p5d, 1)}）`,
-    `關鍵：支撐 ${formatPrice(card.support, 1)}｜壓力 ${formatPrice(card.resistance, 1)}`,
-    `劇本：站上壓力→看 ${formatPrice(card.bullTarget, 1)}；跌破支撐→防 ${formatPrice(card.bearTarget, 1)}`,
-    `海外：${overseasText}（同步度：${card.syncLevel}）`,
-    `新聞：${card.newsLine || "—"}`,
+    `【收盤】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）  【量】 ${volumeState}（vs5D ${formatSignedPct(card.volumeVs5dPct, 1)}）`,
+    `【法人】 ${flowHuman}（單位：${flowUnit}）`,
+    `【趨勢】 ${stanceText}（信心 ${formatPct(card.confidence, 1)}）｜1D↑ ${formatPct(card.p1d, 1)}（3D ${formatPct(card.p3d, 1)} / 5D ${formatPct(card.p5d, 1)}）`,
+    "",
+    `【關鍵價】 支撐 ${support} ｜ 壓力 ${resistance}`,
+    "【明日劇本】",
+    `• 站上 ${resistance} → 看 ${bullTarget}（續強）`,
+    `• 跌破 ${support} → 防 ${bearTarget}（轉弱）`,
+    "",
+    `【海外】 ${overseasText}（同步度：${card.syncLevel || "—"}）`,
+    `【新聞】 ${card.newsLine || "—"}`,
     `來源：${card.sourceLabel}`,
   ];
 

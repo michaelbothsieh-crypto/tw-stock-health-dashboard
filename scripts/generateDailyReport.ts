@@ -27,7 +27,6 @@ import { calculateConsistency } from "../src/lib/consistency";
 import {
   buildNewsFlag,
   buildStanceText,
-  formatPct,
   formatPrice,
   humanizeNumber,
   parseSignedNumberLoose,
@@ -289,14 +288,19 @@ function buildTelegramSummary(dateText: string, rows: WatchRow[]): string {
     const closeText = formatPrice(row.price, 2);
     const chgText = row.changePct || "—";
     const flowValue = parseSignedNumberLoose(row.flowTotal);
-    const flowHuman = humanizeNumber(flowValue);
-    const stance = buildStanceText(row.tomorrowTrend, row.strategySignal, row.strategyConfidence);
-    const confText = formatPct(row.strategyConfidence, 1);
+    const flowHuman = flowValue === null
+      ? "N/A"
+      : `${flowValue >= 0 ? "+" : "-"}${humanizeNumber(Math.abs(flowValue))}`;
+    const unit = "股";
+    const shortDir = row.tomorrowTrend === "偏多" || row.tomorrowTrend === "偏空" || row.tomorrowTrend === "中立"
+      ? row.tomorrowTrend
+      : "中立";
+    const p1dText = row.upProb1D === null ? "—" : `${row.upProb1D.toFixed(1)}%`;
     const firstNews = row.majorNews.length > 0 ? row.majorNews[0].title : "";
     const newsFlag = buildNewsFlag(firstNews);
 
     lines.push(
-      `${row.symbol} ${row.nameZh} 收盤${closeText}(${chgText})｜法人${flowHuman}｜結論${stance}(${confText})｜新聞${newsFlag}`,
+      `${row.symbol} ${row.nameZh}｜${closeText}(${chgText})｜法人 ${flowHuman}${unit}｜趨勢 ${shortDir}｜1D↑${p1dText}｜${newsFlag}`,
     );
   }
 
