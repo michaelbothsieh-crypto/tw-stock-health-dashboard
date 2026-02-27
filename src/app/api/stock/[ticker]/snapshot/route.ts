@@ -284,7 +284,7 @@ export async function GET(
     let relativeStrength = calculateRelativeStrength(mappedPricesTw, selectedDrivers.sector, globalDataMap);
 
     if (!globalFetchSuccess || !selectedDrivers.sector || selectedDrivers.peers.length === 0) {
-      warnings.push("?桀?瘚瑕?鞈??急??⊥???嚗????隞亙?刻??摯蝞???＊蝷箸??);
+      warnings.push("目前海外資料暫時無法取得，連動指標以可用資料估算或暫停顯示");
       if (!selectedDrivers.sector) {
          selectedDrivers = { sector: null, peers: [] };
       }

@@ -11,7 +11,7 @@ const mockReportData = {
       nameZh: "台積電",
       price: 1020.5,
       changePct: "+1.20%",
-      flowTotal: "+12,345 張",
+      flowTotal: "+12,345",
       tomorrowTrend: "偏多",
       upProb1D: 61.2,
       upProb3D: 58.4,
@@ -30,12 +30,12 @@ const mockReportData = {
       nameZh: "群聯",
       price: 525.0,
       changePct: "-1.80%",
-      flowTotal: "-1,200 張",
+      flowTotal: "-1,200",
       tomorrowTrend: "中立",
       upProb1D: 49.3,
       upProb3D: 52.1,
       upProb5D: 50.4,
-      strategySignal: "中立",
+      strategySignal: "觀察",
       strategyConfidence: 56.2,
       majorNews: [],
       majorNewsSummary: "無重大新聞",
@@ -107,9 +107,9 @@ async function runTests() {
   const stockOutput = getLastMessage();
   if (
     !stockOutput.includes("2330 台積電") ||
-    !stockOutput.includes("收盤價:") ||
-    !stockOutput.includes("短線方向:") ||
-    !stockOutput.includes("重大新聞:")
+    !stockOutput.includes("收盤：") ||
+    !stockOutput.includes("結論：") ||
+    !stockOutput.includes("新聞：")
   ) {
     throw new Error(`/stock by symbol failed. Output: ${stockOutput}`);
   }
