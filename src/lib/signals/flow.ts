@@ -11,7 +11,11 @@ export interface FlowSignals {
     risks: string[];
 }
 
-export function calculateFlow(tradingDates: string[], investors: InstitutionalInvestor[], marginShort: MarginShort[]): FlowSignals {
+export function calculateFlow(
+    tradingDates: string[], 
+    investors: InstitutionalInvestor[], 
+    marginShort: MarginShort[]
+): FlowSignals {
     const defaultReturn: FlowSignals = {
         foreign5D: 0, foreign20D: 0, trust5D: 0, trust20D: 0, marginChange20D: null,
         flowScore: null, reasons: ["資料量不足，無法評估籌碼面。"], risks: []
@@ -22,7 +26,6 @@ export function calculateFlow(tradingDates: string[], investors: InstitutionalIn
     // Sort data ascending
     const sortedInvestors = [...investors].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const sortedMargin = [...marginShort].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
 
     const risks: string[] = [];
 
@@ -137,7 +140,7 @@ export function calculateFlow(tradingDates: string[], investors: InstitutionalIn
     if (marginChange20D !== null) {
         if (marginChange20D <= -0.05) {
             mScore = 75;
-            allReasons.push({ priority: 3, text: `近 20 日融資餘額減少 ${(Math.abs(marginChange20D) * 100).toFixed(1)}%，籌碼沉澱風險降。` });
+            allReasons.push({ priority: 3, text: `近 20 日融資餘額減少 ${(Math.abs(marginChange20D) * 100).toFixed(1)}%，籌碼沉澱風險降，散戶退場。` });
         } else if (marginChange20D <= 0.05) {
             mScore = 60 - ((marginChange20D - (-0.05)) / 0.1) * 10;
         } else if (marginChange20D < 0.15) {
@@ -170,7 +173,8 @@ export function calculateFlow(tradingDates: string[], investors: InstitutionalIn
     const finalReasons = Array.from(new Set(allReasons.sort((a, b) => a.priority - b.priority).map(r => r.text))).slice(0, 3);
 
     return {
-        foreign5D, foreign20D, trust5D, trust20D, marginChange20D: marginChange20D !== null ? marginChange20D * 100 : null, // 為了相容 interface, 傳出百分比
+        foreign5D, foreign20D, trust5D, trust20D, 
+        marginChange20D: marginChange20D !== null ? marginChange20D * 100 : null, // 為了相容 interface, 傳出百分比
         flowScore,
         reasons: finalReasons.length > 0 ? finalReasons : ["資料短缺"],
         risks

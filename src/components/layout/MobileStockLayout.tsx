@@ -1,9 +1,11 @@
-import { ChevronDown, Info, ArrowRight } from "lucide-react";
+import { ChevronDown, Info, ArrowRight, AlertCircle, Shield, Target, Activity, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { Tile } from "@/components/bento/Tile";
 import { StockChart } from "@/components/StockChart";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GlobalLinkageTile } from "@/components/tiles/GlobalLinkageTile";
+import { TechnicalTile } from "@/components/tiles/TechnicalTile";
+import { MacroRadarTile } from "@/components/tiles/MacroRadarTile";
 import { DashboardLayoutProps, ExplainTab } from "./types";
 import { EXPLAIN_TABS, formatScoreAsPercent, chipColorClass, chipBarColorClass, directionLabel, strategyLabel, ExplainComponentsTable } from "./utils";
 
@@ -21,48 +23,80 @@ export function MobileStockLayout({
   return (
     <div className="flex flex-col gap-4">
       {/* Hero Section */}
-      <Tile className="min-h-[200px] bg-gradient-to-br from-neutral-900/90 via-neutral-900/80 to-neutral-800/80 p-5 rounded-2xl border border-neutral-800/60 shadow-lg">
-        <div className="flex flex-col gap-6">
+      <Tile className="min-h-[200px] bg-card p-5 rounded-2xl border shadow-sm">
+        <div className="flex flex-col gap-5">
           <Button
             type="button"
             variant="outline"
             onClick={() => setShowStockPicker(true)}
-            className="h-11 rounded-xl border-neutral-700 bg-neutral-950/50 px-4 text-[16px] text-neutral-100 hover:bg-neutral-800 w-full justify-between focus-visible:ring-2 focus-visible:ring-emerald-500/50 outline-none transition-all duration-150"
+            className="h-10 rounded-xl border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/50 px-3 text-sm text-neutral-900 dark:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 w-full justify-between focus-visible:ring-2 focus-visible:ring-emerald-500/50 outline-none transition-all duration-300"
           >
             <span className="truncate">{currentStockLabel}</span>
-            <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-neutral-400" />
+            <ChevronDown className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" />
           </Button>
 
-          <div className="flex items-center justify-between">
-            <div className={`rounded-xl border px-3 py-1 text-[24px] leading-tight font-medium ${snapshot.aiSummary.stance === "Bullish" ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300" :
-              snapshot.aiSummary.stance === "Bearish" ? "border-rose-500/50 bg-rose-500/15 text-rose-300" :
-                "border-neutral-500/50 bg-neutral-500/15 text-neutral-300"
-              }`}>
-              {directionLabel(snapshot.aiSummary.stance)}
+          <div className="flex items-start justify-between">
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100 leading-none">{currentStockLabel.split(' ')[0]}</h1>
+                <div className={`rounded-xl border px-2 py-0.5 text-sm font-medium ${snapshot.aiSummary.stance === "Bullish" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" :
+                  snapshot.aiSummary.stance === "Bearish" ? "border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400" :
+                    "border-neutral-500/30 bg-neutral-500/10 text-neutral-600 dark:text-neutral-400"
+                  }`}>
+                  {directionLabel(snapshot.aiSummary.stance)}結構
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1.5">
+                {snapshot.signals.flow.marginChange20D !== null && (
+                  <div className={`flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium ${
+                    snapshot.signals.flow.marginChange20D <= 0
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                  }`}>
+                    {snapshot.signals.flow.marginChange20D <= 0 ? <TrendingDown className="h-3.5 w-3.5" /> : <TrendingUp className="h-3.5 w-3.5" />}
+                    {snapshot.signals.flow.marginChange20D <= 0 ? "融資減少" : "融資大增"}
+                  </div>
+                )}
+                {snapshot.consistency.score < 55 && (
+                  <div className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium bg-amber-500/10 text-amber-600 dark:text-amber-500">
+                    <Activity className="h-3.5 w-3.5" />
+                    一致性低
+                  </div>
+                )}
+              </div>
+              
+              {snapshot.crashWarning && snapshot.crashWarning.score !== null && snapshot.crashWarning.score >= 60 && (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 text-xs font-medium text-rose-600 dark:text-rose-400 mt-1">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                  <span>{snapshot.crashWarning.score >= 80 ? "系統性風險極高，建議現金觀望" : "市場風險升高，建議控管部位"}</span>
+                </div>
+              )}
             </div>
 
             {(() => {
               const conf = snapshot.strategy.confidence;
-              let confColor = "text-rose-500";
-              let badgeColor = "bg-rose-500/15 text-rose-400 border-rose-500/30";
+              let confColor = "text-rose-600 dark:text-rose-500";
+              let badgeColor = "bg-rose-500/10 text-rose-600 dark:text-rose-500";
               let badgeText = "保守";
 
               if (conf >= 70) {
-                confColor = "text-emerald-500";
-                badgeColor = "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
+                confColor = "text-emerald-600 dark:text-emerald-500";
+                badgeColor = "bg-emerald-500/10 text-emerald-600 dark:text-emerald-500";
                 badgeText = "可出手";
               } else if (conf >= 50) {
-                confColor = "text-amber-500";
-                badgeColor = "bg-amber-500/15 text-amber-400 border-amber-500/30";
+                confColor = "text-amber-600 dark:text-amber-500";
+                badgeColor = "bg-amber-500/10 text-amber-600 dark:text-amber-500";
                 badgeText = "觀察";
               }
 
               return (
-                <div className="flex flex-col items-end gap-1.5">
-                  <div className={`${confColor} text-[44px] leading-none font-bold tracking-tight tabular-nums`}>
-                    {conf.toFixed(1)}<span className="text-[28px] opacity-70">%</span>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <div className="text-xs text-muted-foreground mb-0.5">策略信心</div>
+                  <div className={`${confColor} text-3xl font-black tracking-tight tabular-nums leading-none`}>
+                    {conf.toFixed(1)}<span className="text-xl opacity-70">%</span>
                   </div>
-                  <div className={`px-2 py-0.5 rounded border text-[13px] font-medium ${badgeColor}`}>
+                  <div className={`px-2 py-0.5 rounded-md text-xs font-medium mt-1 ${badgeColor}`}>
                     {badgeText}
                   </div>
                 </div>
@@ -70,42 +104,36 @@ export function MobileStockLayout({
             })()}
           </div>
 
-          <div className="text-[15px] text-neutral-300 whitespace-normal break-words mt-1">
-            {(() => {
-              const dir = snapshot.aiSummary.stance;
-              const conf = snapshot.strategy.confidence;
-              const cons = snapshot.consistency.score;
-              if (dir === "Neutral") return "等待訊號一致性回升";
-              if (conf < 50) {
-                let msg = "可出手度偏低：";
-                if (cons < 55) msg += "一致性低 + ";
-                msg += "回檔風險偏高";
-                return msg;
-              }
-              if (cons < 55) return "請留意洗盤風險";
-              return "各項訊號具一致性";
-            })()}
+          <div className="grid grid-cols-3 gap-3 bg-slate-50 dark:bg-neutral-900/50 p-3.5 rounded-xl mt-2 border border-slate-100 dark:border-neutral-800/50 shadow-sm">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Target className="h-3 w-3 text-emerald-500" />
+                轉強門檻
+              </div>
+              <div className="text-[15px] font-bold text-neutral-900 dark:text-neutral-200 tabular-nums">≥ {snapshot.keyLevels.breakoutLevel?.toFixed(2) ?? '--'}</div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <Shield className="h-3 w-3 text-blue-500" />
+                支撐參考
+              </div>
+              <div className="text-[15px] font-bold text-neutral-900 dark:text-neutral-200 tabular-nums">{snapshot.keyLevels.supportLevel?.toFixed(2) ?? '--'}</div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <AlertCircle className="h-3 w-3 text-rose-500" />
+                失效門檻
+              </div>
+              <div className="text-[15px] font-bold text-neutral-900 dark:text-neutral-200 tabular-nums">&lt; {snapshot.keyLevels.invalidationLevel?.toFixed(2) ?? '--'}</div>
+            </div>
           </div>
 
-
-          {snapshot.crashWarning && snapshot.crashWarning.score !== null && snapshot.crashWarning.score >= 60 && (
-            <div className="mt-2 p-3 rounded-xl border border-rose-500/50 bg-rose-500/10 text-[15px] font-medium text-rose-300">
-              {snapshot.crashWarning.score >= 80 ? "🧨 崩盤風險：建議以防守為主或採對沖" : "⚠ 市場風險升高：建議降低部位、嚴設停損"}
+          {(snapshot.strategy.explain.contradictions.length > 0 || snapshot.consistency.score < 55) && (
+            <div className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-500 bg-amber-50 dark:bg-amber-500/10 p-2.5 rounded-lg mt-1 border border-amber-200 dark:border-amber-500/20">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>訊號分歧留意洗盤，控管風險</span>
             </div>
           )}
-
-          <div className="rounded-2xl border border-neutral-800 bg-neutral-950/60 p-4 text-left shadow-inner">
-            <div className="text-[15px] text-neutral-300 space-y-3">
-              <div className="flex justify-between items-center gap-4">
-                <span className="text-neutral-400">轉強門檻</span>
-                <span className="tabular-nums text-emerald-400 font-medium text-[16px]">≥ {snapshot.keyLevels.breakoutLevel?.toFixed(2) ?? '--'}</span>
-              </div>
-              <div className="flex justify-between items-center gap-4">
-                <span className="text-neutral-400">失效門檻</span>
-                <span className="tabular-nums text-rose-400 font-medium text-[16px]">&lt; {snapshot.keyLevels.invalidationLevel?.toFixed(2) ?? '--'}</span>
-              </div>
-            </div>
-          </div>
         </div>
       </Tile>
 
@@ -124,86 +152,10 @@ export function MobileStockLayout({
 
       <GlobalLinkageTile snapshot={snapshot} isMobile />
 
-      {/* Crash Early Warning Engine (Mobile) */}
-      {snapshot.crashWarning && (
-        <Tile className="rounded-2xl p-5 border-rose-900/30">
-          <div className="flex items-center justify-between mb-4">
-            <span className="text-[16px] font-medium text-neutral-300">🧨 崩盤早期預警</span>
-            <span className={`px-2.5 py-1 rounded-lg text-[13px] font-semibold ${snapshot.crashWarning.level === "資料不足" ? "bg-neutral-800 text-neutral-400 border border-neutral-700" :
-              snapshot.crashWarning.score !== null && snapshot.crashWarning.score >= 80 ? "bg-rose-500/20 text-rose-400 border border-rose-500/30" :
-                snapshot.crashWarning.score !== null && snapshot.crashWarning.score >= 60 ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" :
-                  snapshot.crashWarning.score !== null && snapshot.crashWarning.score >= 30 ? "bg-yellow-500/20 text-yellow-400 border border-yellow-500/30" :
-                    "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-              }`}>
-              {snapshot.crashWarning.level}
-            </span>
-          </div>
+      <TechnicalTile tactics={snapshot.technicalTactics} />
 
-          <div className="mb-4">
-            <div className="text-[18px] font-bold text-neutral-100">{snapshot.crashWarning.headline}</div>
-            <div className="text-[15px] text-neutral-400 mt-1">{snapshot.crashWarning.summary}</div>
-          </div>
+      <MacroRadarTile snapshot={snapshot} />
 
-          <div className="space-y-2 mb-2">
-            {snapshot.crashWarning.triggersTop.map((r, i) => (
-              <div key={i} className="text-[15px] text-neutral-300 flex items-start gap-2">
-                <span className="text-neutral-600 mt-0.5">•</span>
-                <span>{r}</span>
-              </div>
-            ))}
-          </div>
-
-          <details className="group mt-5">
-            <summary className="text-[14px] text-neutral-500 cursor-pointer outline-none flex items-center justify-center bg-neutral-900/40 hover:bg-neutral-800/60 rounded-xl py-2 transition-all">
-              <span>查看原因與細節</span>
-            </summary>
-            <div className="space-y-4 mt-4 pt-4 border-t border-neutral-800/50">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-[14px] text-neutral-400">總體風險指數</span>
-                <span className={`text-[20px] font-bold tabular-nums ${snapshot.crashWarning.score === null ? "text-neutral-500" :
-                  snapshot.crashWarning.score >= 60 ? "text-rose-400" :
-                    snapshot.crashWarning.score >= 30 ? "text-amber-400" :
-                      "text-emerald-400"
-                  }`}>
-                  {snapshot.crashWarning.score !== null ? snapshot.crashWarning.score.toFixed(1) + "%" : "—"}
-                </span>
-              </div>
-
-              {[
-                { label: "波動壓力 (30%)", factor: snapshot.crashWarning.factors.volatilityStress },
-                { label: "板塊破位 (30%)", factor: snapshot.crashWarning.factors.sectorBreakdown },
-                { label: "跨資產壓力 (20%)", factor: snapshot.crashWarning.factors.crossAssetStress },
-                { label: "流動性代理 (20%)", factor: snapshot.crashWarning.factors.liquidityStress },
-              ].map(f => (
-                <div key={f.label} className="border-b border-neutral-800/50 pb-3 last:border-0 last:pb-0">
-                  <div className="flex justify-between items-center text-neutral-200 mb-2">
-                    <span className="text-[14px] font-medium">{f.label}</span>
-                    <span className="text-[14px] tabular-nums font-semibold">{f.factor.available && f.factor.score !== null ? `${f.factor.score.toFixed(1)} 分` : "—"}</span>
-                  </div>
-                  <div className="text-[13px] text-neutral-400 space-y-1.5">
-                    {f.factor.available ? (
-                      f.factor.triggers.length > 0 ? f.factor.triggers.map((t, idx) => <div key={idx}>- {t}</div>) : <div>- 正常平穩</div>
-                    ) : (
-                      <div className="text-amber-500/80">- {f.factor.triggers[0] || "資料不足"}</div>
-                    )}
-                  </div>
-                </div>
-              ))}
-              <div className="pt-3 border-t border-neutral-800/50 mt-2 text-[12px] text-neutral-600 text-left space-y-1.5">
-                <div>流動性壓力目前以代理指標估算</div>
-                {snapshot.crashWarning.meta && (
-                  <div className="grid grid-cols-[auto_1fr] gap-x-2 text-neutral-500 mt-1">
-                    <span>引擎版本：</span><span>{snapshot.crashWarning.meta.engineVersion}</span>
-                    <span>資料充足：</span><span>最少 {snapshot.crashWarning.meta.usedPointsMin} 天</span>
-                    <span>可用標的：</span><span className="break-words">{snapshot.crashWarning.meta.usedSymbols.join(", ")}</span>
-                  </div>
-                )}
-                <div className="pt-1 text-neutral-600">最後更新：{new Date(snapshot.crashWarning.lastUpdated).toLocaleString("zh-TW", { hour12: false })}</div>
-              </div>
-            </div>
-          </details>
-        </Tile>
-      )}
       {/* Evidence Section (Card list instead of chips) */}
       <Tile className="rounded-2xl p-5 overflow-hidden">
         <div className="mb-4 text-[16px] font-medium text-neutral-400 flex items-center justify-between">

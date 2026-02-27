@@ -5,7 +5,7 @@ import { twStockNames } from "@/data/twStockNames";
 
 export const EXPLAIN_TABS: Array<{ key: ExplainTab; label: string; description: string }> = [
   { key: "trend", label: "技術面強弱", description: "價格趨勢與技術訊號構成。" },
-  { key: "flow", label: "法人動向", description: "法人與融資籌碼對分數的影響。" },
+  { key: "flow", label: "法人動向", description: "法人(外資/投信)動能與融資籌碼(散戶)對分數的影響。融資減少(散戶退場)有助於籌碼安定，加分；反之扣分。" },
   { key: "fundamental", label: "基本體質", description: "營收與成長趨勢的分數來源。" },
   { key: "volatility", label: "波動狀態", description: "短期波動與風險敏感度。" },
   { key: "news", label: "新聞", description: "近期新聞催化方向與強度。" },

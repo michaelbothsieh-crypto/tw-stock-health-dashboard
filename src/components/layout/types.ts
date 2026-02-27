@@ -33,9 +33,11 @@ export type ConsistencyDetail = ExplainSection & {
 export type SnapshotResponse = {
   crashWarning?: CrashWarningOutput;
   warnings?: string[];
+  technicals?: import('@/lib/providers/tradingViewFetch').TvTechnicalData | null;
+  technicalTactics?: import('@/lib/ux/technicalTranslator').TranslatedTechnicals | null;
   signals: {
     trend: { trendScore: number | null };
-    flow: { flowScore: number | null };
+    flow: { flowScore: number | null; marginChange20D: number | null };
     fundamental: { fundamentalScore: number | null };
   };
   shortTerm: {

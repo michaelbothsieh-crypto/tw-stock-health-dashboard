@@ -1,6 +1,8 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { twStockNames } from "@/data/twStockNames";
+import YahooFinance from "yahoo-finance2";
+
+const yahooFinance = new YahooFinance();
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
@@ -10,27 +12,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing code" }, { status: 400 });
   }
 
+  const upperCode = code.toUpperCase();
+
   // Fallback map
-  if (twStockNames[code]) {
-    return NextResponse.json({ name: twStockNames[code] });
+  if (twStockNames[upperCode]) {
+    return NextResponse.json({ name: twStockNames[upperCode] });
   }
   
   try {
-    // Try Yahoo as a reliable name source
-    const symbol = `${code}.TW`; // simplified, could be TWO
-    const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`);
-    if (res.ok) {
-       const data = await res.json();
-       const meta = data?.chart?.result?.[0]?.meta;
-       if (meta && meta.shortName) {
-          // Clean up "台積電" from something like "Taiwan Semiconductor..." 
-          // Actually Yahoo TW often returns english for name if not local,
-          // Let's rely on FinMind if possible, but FinMind /TaiwanStockInfo is an option
-          return NextResponse.json({ name: meta.shortName });
-       }
+    const isUS = /^[A-Z]+$/.test(upperCode);
+    let symbol = upperCode;
+    
+    if (!isUS) {
+      // For TW stocks, default to .TW
+      symbol = `${upperCode}.TW`;
+    }
+
+    let quote = await yahooFinance.quote(symbol).catch(() => null);
+    
+    // If not found and it's a potential TW stock, try .TWO
+    if (!quote && !isUS) {
+      quote = await yahooFinance.quote(`${upperCode}.TWO`).catch(() => null);
+    }
+
+    if (quote) {
+      const name = quote.longName || quote.shortName || "未知公司";
+      return NextResponse.json({ name });
     }
   } catch (e) {
-    console.error(e);
+    console.error(`[Name API] Error for ${upperCode}:`, e);
   }
   
   // Last resort

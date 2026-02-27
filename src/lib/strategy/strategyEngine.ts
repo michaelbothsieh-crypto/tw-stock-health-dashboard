@@ -7,14 +7,27 @@ function clamp(value: number, min: number, max: number): number {
 function strategyConfidence(input: StrategyInput): number {
   const riskFlagsPenalty = Math.min(12, input.riskFlags.length * 3);
   const consistencyScore = input.consistencyScore ?? 50;
+  
+  // 動態權重概念：正常情況下，技術與籌碼佔比較重，基本面次之
+  const trendW = 0.4;
+  const flowW = 0.3;
+  const fundW = 0.2;
+  const catW = 0.1;
+
+  const baseScore = 
+    ((input.trendScore ?? 50) * trendW) + 
+    ((input.flowScore ?? 50) * flowW) + 
+    ((input.fundamentalScore ?? 50) * fundW) + 
+    ((input.catalystScore + 50) * catW);
+
   const score =
-    50 +
-    (input.upProb5D - 50) * 0.6 +
-    (input.shortTermOpportunityScore - 50) * 0.4 -
-    (input.pullbackRiskScore - 50) * 0.4 +
-    Math.min(15, Math.abs(input.catalystScore) * 0.2) +
-    (consistencyScore - 50) * 0.25 -
+    baseScore +
+    (input.upProb5D - 50) * 0.4 +
+    (input.shortTermOpportunityScore - 50) * 0.2 -
+    (input.pullbackRiskScore - 50) * 0.3 +
+    (consistencyScore - 50) * 0.15 -
     riskFlagsPenalty;
+    
   return Number(clamp(score, 0, 100).toFixed(1));
 }
 
@@ -40,7 +53,7 @@ function downgradeSignalByConsistency(signal: StrategySignal): StrategySignal {
 function buildExplain(input: StrategyInput, confidence: number, originalSignal: StrategySignal): StrategyOutput["explain"] {
   let direction: "偏多" | "中性" | "偏空" = "中性";
   if (originalSignal === "偏多") direction = "偏多";
-  else if (originalSignal === "偏空" || originalSignal === "避開") direction = "偏空";
+  else if (originalSignal === "偏空" || originalSignal === "避開" || originalSignal === "CASH") direction = "偏空";
   else {
     const ts = input.trendScore ?? 50;
     if (ts > 55) direction = "偏多";
@@ -86,20 +99,53 @@ function buildExplain(input: StrategyInput, confidence: number, originalSignal: 
 }
 
 function finalizeStrategy(output: Omit<StrategyOutput, "explain">, input: StrategyInput): StrategyOutput {
-  const explain = buildExplain(input, output.confidence, output.signal);
+  let finalOutput = { ...output };
+  const explain = buildExplain(input, finalOutput.confidence, finalOutput.signal);
+  
+  // Veto Rules (Overrides)
+  // 防禦規則 A: 崩盤風險極高
+  if (input.crashRiskScore !== undefined && input.crashRiskScore !== null && input.crashRiskScore >= 80) {
+    finalOutput.signal = "CASH";
+    finalOutput.vetoReason = '系統性崩盤風險極高';
+    finalOutput.confidence = clamp(finalOutput.confidence - 30, 0, 100);
+  }
+  // 防禦規則 B: 籌碼極度崩壞
+  else if ((input.flowScore ?? 50) <= 20 && finalOutput.signal === "偏多") {
+    finalOutput.signal = "HOLD";
+    finalOutput.vetoReason = '籌碼極度崩壞，大戶倒貨中，不宜買進';
+    finalOutput.confidence = clamp(finalOutput.confidence - 20, 0, 100);
+  }
+  // 防禦規則 C: 跌破年線且趨勢極弱
+  else if ((input.trendScore ?? 50) <= 20) {
+     // 簡化判斷，若 Trend 分數極低視為均線破壞
+     finalOutput.signal = "避開";
+     finalOutput.vetoReason = '趨勢徹底破壞，強制避開';
+     finalOutput.confidence = clamp(finalOutput.confidence - 20, 0, 100);
+  } else if ((input.consistencyScore ?? 50) < 45) {
+     finalOutput.signal = downgradeSignalByConsistency(finalOutput.signal);
+  }
+
+  if (finalOutput.vetoReason) {
+     const planHint = `強制覆寫：${finalOutput.vetoReason}`;
+     const actionCards = finalOutput.actionCards.map((card) => ({
+        ...card,
+        plan: [planHint, ...card.plan],
+      }));
+      return { ...finalOutput, actionCards, explain };
+  }
+
   if ((input.consistencyScore ?? 50) >= 45) {
-    return { ...output, explain };
+    return { ...finalOutput, explain };
   }
 
   const planHint = "目前訊號分歧，建議等待一致性回升再加大操作";
-  const actionCards = output.actionCards.map((card) => ({
+  const actionCards = finalOutput.actionCards.map((card) => ({
     ...card,
     plan: card.plan.includes(planHint) ? card.plan : [...card.plan, planHint],
   }));
 
   return {
-    ...output,
-    signal: downgradeSignalByConsistency(output.signal),
+    ...finalOutput,
     actionCards,
     explain,
   };

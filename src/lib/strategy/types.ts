@@ -1,5 +1,5 @@
 export type StrategyMode = "波段" | "短線";
-export type StrategySignal = "觀察" | "偏多" | "偏空" | "等待" | "避開";
+export type StrategySignal = "觀察" | "偏多" | "偏空" | "等待" | "避開" | "CASH" | "HOLD";
 
 export interface StrategyActionCard {
   title: string;
@@ -26,12 +26,14 @@ export interface StrategyInput {
   bigMoveProb3D: number;
   consistencyScore?: number;
   riskFlags: string[];
+  crashRiskScore?: number | null; // 崩盤風險預警分數
 }
 
 export interface StrategyOutput {
   mode: StrategyMode;
   signal: StrategySignal;
   confidence: number;
+  vetoReason?: string;
   explain: {
     direction: "偏多" | "中性" | "偏空";
     certainty: number;

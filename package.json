@@ -38,6 +38,7 @@
     "recharts": "^3.7.0",
     "tailwind-merge": "^3.5.0",
     "usehooks-ts": "^3.1.1",
+    "yahoo-finance2": "^3.13.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
