@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 import { format, subDays } from "date-fns";
 import {
   FinmindProviderError,
@@ -252,7 +252,7 @@ export async function GET(
     
     // 3. Resolve dominant theme (Sector name)
     const themeName = stockProfile.sectorZh;
-    const usMapping = mapThemeToUS(themeName);
+    const usMapping = mapThemeToUS(themeName, norm.symbol);
     
     // 4. Local Peers (TW)
     const twPeerLinkage = await selectTwPeers(norm.symbol, clusterMembers, themeName);
@@ -284,7 +284,7 @@ export async function GET(
     let relativeStrength = calculateRelativeStrength(mappedPricesTw, selectedDrivers.sector, globalDataMap);
 
     if (!globalFetchSuccess || !selectedDrivers.sector || selectedDrivers.peers.length === 0) {
-      warnings.push("目前海外資料暫時無法取得，連動指標以可用資料估算/或暫停顯示數值");
+      warnings.push("?桀?瘚瑕?鞈??急??⊥???嚗????隞亙?刻??摯蝞???＊蝷箸??);
       if (!selectedDrivers.sector) {
          selectedDrivers = { sector: null, peers: [] };
       }
@@ -405,3 +405,4 @@ export async function GET(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+
