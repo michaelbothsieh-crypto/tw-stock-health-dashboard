@@ -1,4 +1,4 @@
-import fs from "fs";
+﻿import fs from "fs";
 import path from "path";
 import { format, subDays } from "date-fns";
 import { getWatchlist } from "../src/lib/config/watchlistParser";
@@ -24,6 +24,14 @@ import { predictProbabilities } from "../src/lib/predict/probability";
 import { getCalibrationModel } from "../src/lib/predict/calibration";
 import { generateStrategy } from "../src/lib/strategy/strategyEngine";
 import { calculateConsistency } from "../src/lib/consistency";
+import {
+  buildNewsFlag,
+  buildStanceText,
+  formatPct,
+  formatPrice,
+  humanizeNumber,
+  parseSignedNumberLoose,
+} from "../src/lib/telegram/formatters";
 
 type ReportNews = {
   title: string;
@@ -64,9 +72,9 @@ function formatChangePct(current: number, prev: number): string {
   return `${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%`;
 }
 
-function formatSignedK(value: number): string {
+function formatSignedNumber(value: number): string {
   if (!Number.isFinite(value)) return "N/A";
-  return `${value > 0 ? "+" : ""}${Math.round(value).toLocaleString()} 張`;
+  return `${value >= 0 ? "+" : ""}${Math.round(value).toLocaleString("zh-TW")}`;
 }
 
 function decideTomorrowTrend(upProb1D: number): string {
@@ -103,12 +111,6 @@ function pickMajorNews(newsItems: TaiwanStockNews[], latestDate: string): Report
   }));
 }
 
-function formatNewsTag(impact: "BULLISH" | "BEARISH" | "NEUTRAL"): string {
-  if (impact === "BULLISH") return "偏多";
-  if (impact === "BEARISH") return "偏空";
-  return "中性";
-}
-
 async function buildRow(symbol: string): Promise<WatchRow> {
   const nameZh = (await getCompanyNameZh(symbol)) || symbol;
 
@@ -118,15 +120,15 @@ async function buildRow(symbol: string): Promise<WatchRow> {
     price: null,
     changePct: "N/A",
     flowTotal: "N/A",
-    tomorrowTrend: "資料不足",
+    tomorrowTrend: "中立",
     upProb1D: null,
     upProb3D: null,
     upProb5D: null,
-    strategySignal: "資料不足",
+    strategySignal: "觀察",
     strategyConfidence: null,
     majorNews: [],
     majorNewsSummary: "無重大新聞",
-    predText: "資料不足",
+    predText: "中立",
     probText: "N/A",
     h3Text: "N/A",
     h5Text: "N/A",
@@ -166,6 +168,7 @@ async function buildRow(symbol: string): Promise<WatchRow> {
     const shortVol = calculateShortTermVolatility(prices);
     const shortTerm = calculateShortTermSignals(prices, trend, shortVol);
     const calibration = await getCalibrationModel(["2330", "2317", "2454", "3231"]);
+
     const predictions = predictProbabilities({
       trendScore: trend.trendScore,
       flowScore: flow.flowScore,
@@ -216,26 +219,21 @@ async function buildRow(symbol: string): Promise<WatchRow> {
     const upProb3D = clamp(predictions.upProb3D, 0, 100);
     const upProb5D = clamp(predictions.upProb5D, 0, 100);
     const tomorrowTrend = decideTomorrowTrend(upProb1D);
-    const instNetShares = extractInstitutionNetToday(latestDate, investors);
-    const flowTotal = formatSignedK(instNetShares);
+
+    const instNetToday = extractInstitutionNetToday(latestDate, investors);
+    const flowTotal = formatSignedNumber(instNetToday);
+
     const majorNews = pickMajorNews(news, latestDate);
-    const majorNewsSummary =
-      majorNews.length > 0
-        ? majorNews.map((n) => `${formatNewsTag(n.impact)}:${n.title}`).join(" | ")
-        : "無重大新聞";
+    const majorNewsSummary = majorNews.length > 0 ? majorNews.map((n) => n.title).join(" | ") : "無重大新聞";
 
     const detailStr = [
       `### ${nameZh} (${symbol})`,
-      `- 收盤：${latest.close.toFixed(2)}（${formatChangePct(latest.close, prev.close)}）`,
-      `- 三大法人合計：${flowTotal}`,
-      `- 明日傾向：${tomorrowTrend}（1D上漲機率 ${upProb1D.toFixed(1)}%）`,
-      `- 3D/5D 機率：${upProb3D.toFixed(1)}% / ${upProb5D.toFixed(1)}%`,
-      `- 策略訊號：${strategy.signal}（信心 ${strategy.confidence.toFixed(1)}%）`,
-      majorNews.length > 0
-        ? `- 重大新聞：\n${majorNews
-            .map((n, idx) => `  ${idx + 1}. [${formatNewsTag(n.impact)}] ${n.title}`)
-            .join("\n")}`
-        : "- 重大新聞：無",
+      `- 收盤：${latest.close.toFixed(2)} (${formatChangePct(latest.close, prev.close)})`,
+      `- 法人淨買賣：${flowTotal}`,
+      `- 短線方向：${tomorrowTrend} (1D 上漲機率 ${upProb1D.toFixed(1)}%)`,
+      `- 3D/5D：${upProb3D.toFixed(1)}% / ${upProb5D.toFixed(1)}%`,
+      `- 策略訊號：${strategy.signal} (信心 ${strategy.confidence.toFixed(1)}%)`,
+      `- 新聞：${majorNews.length > 0 ? majorNews[0].title : "無"}`,
     ].join("\n");
 
     return {
@@ -267,11 +265,11 @@ async function buildRow(symbol: string): Promise<WatchRow> {
 
 function buildMarkdown(dateText: string, rows: WatchRow[]): string {
   let md = `# 每日收盤總覽 (${dateText})\n\n`;
-  md += "| 股票 | 收盤 | 漲跌幅 | 法人合計 | 明日傾向 | 1D | 3D | 5D | 重大新聞 |\n";
+  md += "| 股票 | 收盤 | 漲跌幅 | 法人淨買賣 | 結論 | 1D | 3D | 5D | 新聞 |\n";
   md += "|---|---:|---:|---:|---|---:|---:|---:|---|\n";
 
   for (const row of rows) {
-    md += `| ${row.nameZh}(${row.symbol}) | ${row.price === null ? "N/A" : row.price.toFixed(2)} | ${row.changePct} | ${row.flowTotal} | ${row.tomorrowTrend} | ${row.upProb1D === null ? "N/A" : `${row.upProb1D.toFixed(1)}%`} | ${row.upProb3D === null ? "N/A" : `${row.upProb3D.toFixed(1)}%`} | ${row.upProb5D === null ? "N/A" : `${row.upProb5D.toFixed(1)}%`} | ${row.majorNews.length > 0 ? row.majorNews[0].title : "無"} |\n`;
+    md += `| ${row.nameZh}(${row.symbol}) | ${row.price === null ? "N/A" : row.price.toFixed(2)} | ${row.changePct} | ${row.flowTotal} | ${buildStanceText(row.tomorrowTrend, row.strategySignal, row.strategyConfidence)} | ${row.upProb1D === null ? "N/A" : `${row.upProb1D.toFixed(1)}%`} | ${row.upProb3D === null ? "N/A" : `${row.upProb3D.toFixed(1)}%`} | ${row.upProb5D === null ? "N/A" : `${row.upProb5D.toFixed(1)}%`} | ${row.majorNews.length > 0 ? row.majorNews[0].title : "無"} |\n`;
   }
 
   md += "\n---\n\n";
@@ -288,12 +286,17 @@ function buildTelegramSummary(dateText: string, rows: WatchRow[]): string {
   lines.push("");
 
   for (const row of rows) {
-    const closeText = row.price === null ? "N/A" : row.price.toFixed(2);
-    const probText = row.upProb1D === null ? "N/A" : `${row.upProb1D.toFixed(0)}%`;
-    const newsText = row.majorNews.length > 0 ? row.majorNews[0].title : "無重大新聞";
+    const closeText = formatPrice(row.price, 2);
+    const chgText = row.changePct || "—";
+    const flowValue = parseSignedNumberLoose(row.flowTotal);
+    const flowHuman = humanizeNumber(flowValue);
+    const stance = buildStanceText(row.tomorrowTrend, row.strategySignal, row.strategyConfidence);
+    const confText = formatPct(row.strategyConfidence, 1);
+    const firstNews = row.majorNews.length > 0 ? row.majorNews[0].title : "";
+    const newsFlag = buildNewsFlag(firstNews);
 
     lines.push(
-      `• ${row.nameZh}(${row.symbol}) 收 ${closeText} ${row.changePct}｜${row.tomorrowTrend} ${probText}｜新聞: ${newsText}`,
+      `${row.symbol} ${row.nameZh} 收盤${closeText}(${chgText})｜法人${flowHuman}｜結論${stance}(${confText})｜新聞${newsFlag}`,
     );
   }
 
@@ -317,6 +320,7 @@ async function generateReport() {
   const timezone = process.env.REPORT_TIMEZONE || "Asia/Taipei";
   const dateText = new Date().toLocaleString("en-CA", { timeZone: timezone }).split(",")[0];
   const shouldWriteFiles = (process.env.REPORT_WRITE_FILES || "false").toLowerCase() !== "false";
+
   if (shouldWriteFiles) {
     const markdown = buildMarkdown(dateText, rows);
     const reportsDir = path.join(process.cwd(), "reports");

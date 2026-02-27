@@ -1,15 +1,19 @@
 ﻿import { fetchLatestReport } from "./reportFetcher";
 import { twStockNames } from "../../data/twStockNames";
 import { fetchYahooFinanceBars } from "../global/yahooFinance";
-
-type OverseasQuote = {
-  symbol: string;
-  name: string;
-  price: number | null;
-  changePct: string;
-  corr60?: number | null;
-  reason?: string;
-};
+import { fetchRecentBars } from "../range";
+import {
+  buildNewsLine,
+  buildStanceText,
+  calcSupportResistance,
+  calcVolumeVs5d,
+  formatPct,
+  formatPrice,
+  formatSignedPct,
+  humanizeNumber,
+  parseSignedNumberLoose,
+  syncLevel,
+} from "./formatters";
 
 type TelegramStockRow = {
   symbol: string;
@@ -29,12 +33,49 @@ type TelegramStockRow = {
   probText?: string;
   h3Text?: string;
   h5Text?: string;
-  overseasQuotes?: OverseasQuote[];
 };
 
 type LatestReport = {
   date: string;
   watchlist: TelegramStockRow[];
+};
+
+type OverseasLine = {
+  symbol: string;
+  price: number | null;
+  chgPct: number | null;
+  corr60: number | null;
+};
+
+type OverseasCandidate = {
+  symbol: string;
+  corr60: number | null;
+};
+
+type StockCard = {
+  symbol: string;
+  nameZh: string;
+  close: number | null;
+  chgPct: number | null;
+  chgAbs: number | null;
+  volume: number | null;
+  volumeVs5dPct: number | null;
+  flowNet: number | null;
+  flowUnit: string;
+  shortDir: string;
+  strategySignal: string;
+  confidence: number | null;
+  p1d: number | null;
+  p3d: number | null;
+  p5d: number | null;
+  support: number | null;
+  resistance: number | null;
+  bullTarget: number | null;
+  bearTarget: number | null;
+  overseas: OverseasLine[];
+  syncLevel: string;
+  newsLine: string;
+  sourceLabel: string;
 };
 
 async function sendMessage(chatId: string | number, text: string): Promise<number | null> {
@@ -119,13 +160,6 @@ function escapeHtml(input: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function safeUrl(url?: string): string | null {
-  if (!url) return null;
-  const trimmed = url.trim();
-  if (!/^https?:\/\//i.test(trimmed)) return null;
-  return trimmed;
-}
-
 function toNumberPercent(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -135,95 +169,8 @@ function toNumberPercent(value: unknown): number | null {
   return null;
 }
 
-function normalizeRow(raw: TelegramStockRow): TelegramStockRow {
-  const upProb1D = raw.upProb1D ?? toNumberPercent(raw.probText) ?? null;
-  const upProb3D = raw.upProb3D ?? toNumberPercent(raw.h3Text) ?? null;
-  const upProb5D = raw.upProb5D ?? toNumberPercent(raw.h5Text) ?? null;
-  const tomorrowTrend = raw.tomorrowTrend || raw.predText || "中立";
-
-  return {
-    ...raw,
-    tomorrowTrend,
-    upProb1D,
-    upProb3D,
-    upProb5D,
-    strategySignal: raw.strategySignal || raw.predText || "中立",
-    strategyConfidence: raw.strategyConfidence ?? null,
-    majorNews: Array.isArray(raw.majorNews) ? raw.majorNews : [],
-    overseasQuotes: Array.isArray(raw.overseasQuotes) ? raw.overseasQuotes : [],
-  };
-}
-
-function formatPercent(value: number | null): string {
-  return value === null ? "N/A" : `${value.toFixed(1)}%`;
-}
-
-function formatPrice(value: number | null): string {
-  return value === null ? "N/A" : value.toFixed(2);
-}
-
-function impactLabel(impact?: string): string {
-  if (impact === "BULLISH") return "偏多";
-  if (impact === "BEARISH") return "偏空";
-  return "中性";
-}
-
-function formatCorr(corr?: number | null): string {
-  if (typeof corr !== "number" || !Number.isFinite(corr)) return "-";
-  return `${(corr * 100).toFixed(0)}%`;
-}
-
-function buildSingleStockMessage(item: TelegramStockRow): string {
-  const row = normalizeRow(item);
-  const lines: string[] = [];
-
-  lines.push(`<b>${escapeHtml(row.symbol)} ${escapeHtml(row.nameZh)}</b>`);
-  lines.push(`收盤價: ${escapeHtml(formatPrice(row.price))} (${escapeHtml(row.changePct)})`);
-  lines.push(`法人淨買賣: ${escapeHtml(row.flowTotal)}`);
-  lines.push(`短線方向: ${escapeHtml(row.tomorrowTrend)} (1D 上漲機率 ${escapeHtml(formatPercent(row.upProb1D))})`);
-  lines.push(`機率參考: 3D ${escapeHtml(formatPercent(row.upProb3D))} / 5D ${escapeHtml(formatPercent(row.upProb5D))}`);
-  lines.push(
-    `策略訊號: ${escapeHtml(row.strategySignal)}${row.strategyConfidence === null ? "" : ` (信心 ${escapeHtml(row.strategyConfidence.toFixed(1))}%)`}`,
-  );
-
-  if (row.overseasQuotes && row.overseasQuotes.length > 0) {
-    lines.push("<b>海外對標收盤:</b>");
-    row.overseasQuotes.slice(0, 4).forEach((q, idx) => {
-      const reasonPart = q.reason ? `｜${q.reason}` : "";
-      const corrPart = typeof q.corr60 === "number" ? `｜相關 ${formatCorr(q.corr60)}` : "";
-      lines.push(
-        `${idx + 1}. ${escapeHtml(q.symbol)} ${escapeHtml(formatPrice(q.price))} (${escapeHtml(q.changePct)})${escapeHtml(corrPart)}${escapeHtml(reasonPart)}`,
-      );
-    });
-  }
-
-  if (row.majorNews.length > 0) {
-    lines.push("<b>重大新聞:</b>");
-    row.majorNews.slice(0, 3).forEach((news, idx) => {
-      const url = safeUrl(news.link);
-      const label = `[${impactLabel(news.impact)}]`;
-      if (url) {
-        lines.push(`${idx + 1}. ${escapeHtml(label)} <a href="${escapeHtml(url)}">${escapeHtml(news.title)}</a>`);
-      } else {
-        lines.push(`${idx + 1}. ${escapeHtml(label)} ${escapeHtml(news.title)}`);
-      }
-    });
-  } else if (row.majorNewsSummary) {
-    lines.push(`重大新聞: ${escapeHtml(row.majorNewsSummary)}`);
-  } else {
-    lines.push("重大新聞: 無");
-  }
-
-  return lines.join("\n");
-}
-
-function buildHelpMessage(): string {
-  return [
-    "<b>台股機器人</b>",
-    "",
-    "目前僅支援一個指令:",
-    "/stock <代號或名稱> - 取得單一股票即時摘要 (例: /stock 2330)",
-  ].join("\n");
+function parseChangePct(value?: string): number | null {
+  return toNumberPercent(value ?? null);
 }
 
 function getSnapshotBaseUrl(): string | null {
@@ -261,31 +208,106 @@ function buildTrendByProb(upProb1D: number | null): string {
   return "中立";
 }
 
-async function fetchUsQuote(symbol: string, name: string, corr60?: number, reason?: string): Promise<OverseasQuote> {
-  try {
-    const bars = await fetchYahooFinanceBars(symbol, 7);
-    if (!bars || bars.length < 2) {
-      return { symbol, name, price: null, changePct: "N/A", corr60: corr60 ?? null, reason };
-    }
+async function fetchOverseasQuotes(candidates: OverseasCandidate[]): Promise<OverseasLine[]> {
+  if (!candidates || candidates.length === 0) return [];
 
-    const latest = bars[bars.length - 1].close;
-    const prev = bars[bars.length - 2].close;
-    const changePct = prev > 0 ? `${((latest - prev) / prev) * 100 >= 0 ? "+" : ""}${(((latest - prev) / prev) * 100).toFixed(2)}%` : "N/A";
-
-    return {
-      symbol,
-      name,
-      price: Number.isFinite(latest) ? latest : null,
-      changePct,
-      corr60: corr60 ?? null,
-      reason,
-    };
-  } catch {
-    return { symbol, name, price: null, changePct: "N/A", corr60: corr60 ?? null, reason };
+  const uniqueSymbols = Array.from(new Set(candidates.map((c) => c.symbol).filter(Boolean)));
+  const corrMap = new Map<string, number | null>();
+  for (const c of candidates) {
+    if (!corrMap.has(c.symbol)) corrMap.set(c.symbol, c.corr60);
   }
+
+  const result = await Promise.all(
+    uniqueSymbols.map(async (symbol) => {
+      try {
+        const bars = await fetchYahooFinanceBars(symbol, 7);
+        if (!bars || bars.length < 2) {
+          return { symbol, price: null, chgPct: null, corr60: corrMap.get(symbol) ?? null };
+        }
+        const latest = bars[bars.length - 1].close;
+        const prev = bars[bars.length - 2].close;
+        const chgPct = prev > 0 ? ((latest - prev) / prev) * 100 : null;
+        return {
+          symbol,
+          price: Number.isFinite(latest) ? latest : null,
+          chgPct: Number.isFinite(chgPct ?? NaN) ? chgPct : null,
+          corr60: corrMap.get(symbol) ?? null,
+        };
+      } catch (error) {
+        console.error(`[TelegramBot] overseas quote failed: ${symbol}`, error);
+        return { symbol, price: null, chgPct: null, corr60: corrMap.get(symbol) ?? null };
+      }
+    }),
+  );
+
+  return result;
 }
 
-async function fetchLiveStockRow(query: string): Promise<TelegramStockRow | null> {
+function buildSyncLevel(overseas: OverseasLine[]): string {
+  const corr = overseas
+    .map((x) => x.corr60)
+    .filter((x): x is number => typeof x === "number" && Number.isFinite(x));
+  if (corr.length === 0) return "—";
+  const meanAbs = corr.reduce((a, b) => a + Math.abs(b), 0) / corr.length;
+  return syncLevel(meanAbs);
+}
+
+function quoteText(line: OverseasLine): string {
+  const price = formatPrice(line.price, 2);
+  const pct = formatSignedPct(line.chgPct, 2);
+  return `${line.symbol} ${price}(${pct})`;
+}
+
+function buildStockCardMessage(card: StockCard): string {
+  const stanceText = buildStanceText(card.shortDir, card.strategySignal, card.confidence);
+  const overseasText = card.overseas.length > 0
+    ? card.overseas.map((x) => quoteText(x)).join("、")
+    : "—";
+
+  const lines = [
+    `${card.symbol} ${card.nameZh}`,
+    `收盤：${formatPrice(card.close, 2)} (${formatSignedPct(card.chgPct, 2)}，${formatPrice(card.chgAbs, 2)})｜量：${humanizeNumber(card.volume)}（vs5D：${formatSignedPct(card.volumeVs5dPct, 1)}）`,
+    `法人：${humanizeNumber(card.flowNet)}（單位：${card.flowUnit || "不明"}）`,
+    `結論：${stanceText}（信心 ${formatPct(card.confidence, 1)}）｜1D↑ ${formatPct(card.p1d, 1)}（3D ${formatPct(card.p3d, 1)} / 5D ${formatPct(card.p5d, 1)}）`,
+    `關鍵：支撐 ${formatPrice(card.support, 1)}｜壓力 ${formatPrice(card.resistance, 1)}`,
+    `劇本：站上壓力→看 ${formatPrice(card.bullTarget, 1)}；跌破支撐→防 ${formatPrice(card.bearTarget, 1)}`,
+    `海外：${overseasText}（同步度：${card.syncLevel}）`,
+    `新聞：${card.newsLine || "—"}`,
+    `來源：${card.sourceLabel}`,
+  ];
+
+  return lines.map((line) => escapeHtml(line)).join("\n");
+}
+
+function createFallbackCard(symbol: string, nameZh: string, sourceLabel: string): StockCard {
+  return {
+    symbol,
+    nameZh,
+    close: null,
+    chgPct: null,
+    chgAbs: null,
+    volume: null,
+    volumeVs5dPct: null,
+    flowNet: null,
+    flowUnit: "不明",
+    shortDir: "中立",
+    strategySignal: "觀察",
+    confidence: null,
+    p1d: null,
+    p3d: null,
+    p5d: null,
+    support: null,
+    resistance: null,
+    bullTarget: null,
+    bearTarget: null,
+    overseas: [],
+    syncLevel: "—",
+    newsLine: "—",
+    sourceLabel,
+  };
+}
+
+async function fetchLiveStockCard(query: string): Promise<StockCard | null> {
   const trimmed = query.trim();
   if (!trimmed) return null;
 
@@ -301,99 +323,133 @@ async function fetchLiveStockRow(query: string): Promise<TelegramStockRow | null
     if (!res.ok) return null;
 
     const snapshot = await res.json();
-    const prices: Array<{ close: number }> = snapshot?.data?.prices || [];
-    if (prices.length < 2) return null;
-
-    const latest = prices[prices.length - 1].close;
-    const prev = prices[prices.length - 2].close;
-    const changePct =
-      prev > 0
-        ? `${((latest - prev) / prev) * 100 >= 0 ? "+" : ""}${(((latest - prev) / prev) * 100).toFixed(2)}%`
-        : "N/A";
-
-    const flowTotalRaw = snapshot?.signals?.flow?.foreign5D ?? null;
-    const flowTotal =
-      typeof flowTotalRaw === "number" && Number.isFinite(flowTotalRaw)
-        ? `${flowTotalRaw >= 0 ? "+" : ""}${Math.round(flowTotalRaw).toLocaleString()}`
-        : "N/A";
-
-    const upProb1D = typeof snapshot?.predictions?.upProb1D === "number" ? snapshot.predictions.upProb1D : null;
-    const upProb3D = typeof snapshot?.predictions?.upProb3D === "number" ? snapshot.predictions.upProb3D : null;
-    const upProb5D = typeof snapshot?.predictions?.upProb5D === "number" ? snapshot.predictions.upProb5D : null;
-
-    const topBullish = Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : [];
-    const topBearish = Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : [];
-    const majorNews = [...topBullish, ...topBearish]
-      .slice(0, 3)
-      .map((n: any) => ({
-        title: String(n?.title || ""),
-        impact: String(n?.impact || "NEUTRAL"),
-        link: n?.link ? String(n.link) : undefined,
-        date: n?.date ? String(n.date) : undefined,
-      }))
-      .filter((n: { title: string }) => n.title.length > 0);
-
-    const sector = snapshot?.globalLinkage?.drivers?.sector;
-    const peers = Array.isArray(snapshot?.globalLinkage?.drivers?.peers)
-      ? snapshot.globalLinkage.drivers.peers
+    let bars: Array<{ high?: number; low?: number; close?: number; volume?: number }> = Array.isArray(snapshot?.data?.prices)
+      ? snapshot.data.prices
       : [];
 
-    const candidates: Array<{ symbol: string; name: string; corr60?: number; reason?: string }> = [];
-    if (sector?.id) {
-      candidates.push({
-        symbol: String(sector.id),
-        name: String(sector.nameZh || sector.id),
-        corr60: typeof sector.corr60 === "number" ? sector.corr60 : undefined,
-        reason: "海外板塊",
-      });
+    if (bars.length < 2) {
+      try {
+        const recent = await fetchRecentBars(symbol, 60);
+        bars = recent.data.map((b) => ({ high: b.max, low: b.min, close: b.close, volume: b.Trading_Volume }));
+      } catch (error) {
+        console.error(`[TelegramBot] bars fallback failed: ${symbol}`, error);
+      }
     }
 
-    for (const p of peers.slice(0, 3)) {
-      if (!p?.symbol) continue;
-      candidates.push({
-        symbol: String(p.symbol),
-        name: String(p.nameEn || p.symbol),
-        corr60: typeof p.corr60 === "number" ? p.corr60 : undefined,
-        reason: typeof p.reason === "string" ? p.reason : undefined,
-      });
-    }
-
-    const unique = new Map<string, { symbol: string; name: string; corr60?: number; reason?: string }>();
-    for (const c of candidates) {
-      if (!unique.has(c.symbol)) unique.set(c.symbol, c);
-    }
-
-    const overseasQuotes = await Promise.all(
-      Array.from(unique.values()).map((c) => fetchUsQuote(c.symbol, c.name, c.corr60, c.reason)),
+    const card = createFallbackCard(
+      String(snapshot?.normalizedTicker?.symbol || symbol),
+      String(snapshot?.normalizedTicker?.companyNameZh || snapshot?.normalizedTicker?.displayName || symbol),
+      "即時 snapshot",
     );
 
-    return {
-      symbol: String(snapshot?.normalizedTicker?.symbol || symbol),
-      nameZh: String(snapshot?.normalizedTicker?.companyNameZh || snapshot?.normalizedTicker?.displayName || symbol),
-      price: latest,
-      changePct,
-      flowTotal,
-      tomorrowTrend: buildTrendByProb(upProb1D),
-      upProb1D,
-      upProb3D,
-      upProb5D,
-      strategySignal: String(snapshot?.strategy?.signal || buildTrendByProb(upProb1D)),
-      strategyConfidence: typeof snapshot?.strategy?.confidence === "number" ? snapshot.strategy.confidence : null,
-      majorNews,
-      majorNewsSummary: majorNews.length > 0 ? "有重大新聞" : "無重大新聞",
-      overseasQuotes,
-    };
-  } catch {
+    if (bars.length >= 2) {
+      const latest = Number(bars[bars.length - 1].close ?? NaN);
+      const prev = Number(bars[bars.length - 2].close ?? NaN);
+      if (Number.isFinite(latest)) card.close = latest;
+      if (Number.isFinite(latest) && Number.isFinite(prev)) {
+        card.chgAbs = latest - prev;
+        card.chgPct = prev !== 0 ? ((latest - prev) / prev) * 100 : null;
+      }
+
+      const volInfo = calcVolumeVs5d(bars);
+      card.volume = volInfo.volume;
+      card.volumeVs5dPct = volInfo.volumeVs5dPct;
+
+      const key = calcSupportResistance(bars);
+      card.support = key.support;
+      card.resistance = key.resistance;
+      card.bullTarget = key.bullTarget;
+      card.bearTarget = key.bearTarget;
+    }
+
+    card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? snapshot.signals.flow.foreign5D : null;
+    card.flowUnit = "不明"; // TODO: confirm provider unit (shares/lot/value)
+
+    card.p1d = typeof snapshot?.predictions?.upProb1D === "number" ? snapshot.predictions.upProb1D : null;
+    card.p3d = typeof snapshot?.predictions?.upProb3D === "number" ? snapshot.predictions.upProb3D : null;
+    card.p5d = typeof snapshot?.predictions?.upProb5D === "number" ? snapshot.predictions.upProb5D : null;
+
+    card.shortDir = buildTrendByProb(card.p1d);
+    card.strategySignal = String(snapshot?.strategy?.signal || "觀察");
+    card.confidence = typeof snapshot?.strategy?.confidence === "number" ? snapshot.strategy.confidence : null;
+
+    const topNews = [
+      ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
+      ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
+    ];
+    const firstNewsTitle = topNews.length > 0 && topNews[0]?.title ? String(topNews[0].title) : "";
+    card.newsLine = buildNewsLine(firstNewsTitle, 96);
+
+    const overseasCandidates: OverseasCandidate[] = [];
+    const sector = snapshot?.globalLinkage?.drivers?.sector;
+    if (sector?.id) {
+      overseasCandidates.push({
+        symbol: String(sector.id),
+        corr60: typeof sector.corr60 === "number" ? sector.corr60 : null,
+      });
+    }
+    const peers = Array.isArray(snapshot?.globalLinkage?.drivers?.peers) ? snapshot.globalLinkage.drivers.peers : [];
+    for (const p of peers) {
+      if (p?.symbol) {
+        overseasCandidates.push({
+          symbol: String(p.symbol),
+          corr60: typeof p.corr60 === "number" ? p.corr60 : null,
+        });
+      }
+    }
+
+    // Dynamic overseas list from linkage results (not fixed 4 names).
+    card.overseas = await fetchOverseasQuotes(overseasCandidates.slice(0, 8));
+    card.syncLevel = buildSyncLevel(card.overseas);
+
+    return card;
+  } catch (error) {
+    console.error(`[TelegramBot] live snapshot failed: ${symbol}`, error);
     return null;
   }
 }
 
-/**
- * Handles incoming Telegram messages.
- * @param chatId The ID of the chat where the message originated.
- * @param text The message text.
- * @param isBackgroundPush If true, this is a scheduled report; should only go to TELEGRAM_CHAT_ID.
- */
+function normalizeReportRow(raw: TelegramStockRow): TelegramStockRow {
+  return {
+    ...raw,
+    symbol: String(raw.symbol || ""),
+    nameZh: String(raw.nameZh || raw.symbol || ""),
+    strategySignal: raw.strategySignal || raw.predText || "觀察",
+    strategyConfidence: typeof raw.strategyConfidence === "number" ? raw.strategyConfidence : null,
+    upProb1D: raw.upProb1D ?? toNumberPercent(raw.probText),
+    upProb3D: raw.upProb3D ?? toNumberPercent(raw.h3Text),
+    upProb5D: raw.upProb5D ?? toNumberPercent(raw.h5Text),
+    majorNews: Array.isArray(raw.majorNews) ? raw.majorNews : [],
+  };
+}
+
+function cardFromReportRow(rowRaw: TelegramStockRow): StockCard {
+  const row = normalizeReportRow(rowRaw);
+  const card = createFallbackCard(row.symbol, row.nameZh, "收盤報告");
+  card.close = typeof row.price === "number" ? row.price : null;
+  card.chgPct = parseChangePct(row.changePct);
+  card.flowNet = parseSignedNumberLoose(row.flowTotal);
+  card.shortDir = row.tomorrowTrend || "中立";
+  card.strategySignal = row.strategySignal || "觀察";
+  card.confidence = row.strategyConfidence;
+  card.p1d = row.upProb1D;
+  card.p3d = row.upProb3D;
+  card.p5d = row.upProb5D;
+
+  const firstNews = row.majorNews?.[0]?.title || row.majorNewsSummary || "";
+  card.newsLine = buildNewsLine(firstNews, 96);
+  return card;
+}
+
+function buildHelpMessage(): string {
+  return [
+    "<b>台股機器人</b>",
+    "",
+    "目前僅支援一個指令:",
+    "/stock <代號或名稱> - 取得單一股票交易摘要 (例: /stock 2330)",
+  ].join("\n");
+}
+
 export async function handleTelegramMessage(chatId: number, text: string, isBackgroundPush = false) {
   const privateChatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -429,9 +485,9 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
 
   const progressMessageId = await sendMessage(chatId, "正在搜尋資料中，請稍候...");
 
-  const liveFirst = await fetchLiveStockRow(query);
-  if (liveFirst) {
-    await replyOrEdit(chatId, progressMessageId, `${buildSingleStockMessage(liveFirst)}\n\n<i>資料來源: 即時 snapshot</i>`);
+  const liveCard = await fetchLiveStockCard(query);
+  if (liveCard) {
+    await replyOrEdit(chatId, progressMessageId, buildStockCardMessage(liveCard));
     return;
   }
 
@@ -464,5 +520,5 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
     return;
   }
 
-  await replyOrEdit(chatId, progressMessageId, `${buildSingleStockMessage(stock)}\n\n<i>資料來源: 最新收盤報告快照</i>`);
+  await replyOrEdit(chatId, progressMessageId, buildStockCardMessage(cardFromReportRow(stock)));
 }
