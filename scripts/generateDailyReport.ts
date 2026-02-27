@@ -316,30 +316,34 @@ async function generateReport() {
 
   const timezone = process.env.REPORT_TIMEZONE || "Asia/Taipei";
   const dateText = new Date().toLocaleString("en-CA", { timeZone: timezone }).split(",")[0];
-  const markdown = buildMarkdown(dateText, rows);
+  const shouldWriteFiles = (process.env.REPORT_WRITE_FILES || "false").toLowerCase() !== "false";
+  if (shouldWriteFiles) {
+    const markdown = buildMarkdown(dateText, rows);
+    const reportsDir = path.join(process.cwd(), "reports");
+    if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
 
-  const reportsDir = path.join(process.cwd(), "reports");
-  if (!fs.existsSync(reportsDir)) fs.mkdirSync(reportsDir, { recursive: true });
+    const mdPath = path.join(reportsDir, `${dateText}.md`);
+    const jsonPath = path.join(reportsDir, `${dateText}-watchlist.json`);
 
-  const mdPath = path.join(reportsDir, `${dateText}.md`);
-  const jsonPath = path.join(reportsDir, `${dateText}-watchlist.json`);
+    fs.writeFileSync(mdPath, markdown, "utf-8");
+    fs.writeFileSync(
+      jsonPath,
+      JSON.stringify(
+        {
+          date: dateText,
+          watchlist: rows,
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
 
-  fs.writeFileSync(mdPath, markdown, "utf-8");
-  fs.writeFileSync(
-    jsonPath,
-    JSON.stringify(
-      {
-        date: dateText,
-        watchlist: rows,
-      },
-      null,
-      2,
-    ),
-    "utf-8",
-  );
-
-  console.log(`[DailyReport] Generated: ${mdPath}`);
-  console.log(`[DailyReport] Generated: ${jsonPath}`);
+    console.log(`[DailyReport] Generated: ${mdPath}`);
+    console.log(`[DailyReport] Generated: ${jsonPath}`);
+  } else {
+    console.log("[DailyReport] REPORT_WRITE_FILES=false, skipping reports/* output");
+  }
 
   if (process.env.TELEGRAM_BOT_TOKEN) {
     const { handleTelegramMessage } = await import("../src/lib/telegram/botEngine");
