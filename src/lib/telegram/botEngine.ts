@@ -19,7 +19,6 @@ type TelegramStockRow = {
   probText?: string;
   h3Text?: string;
   h5Text?: string;
-  detailStr?: string;
 };
 
 type LatestReport = {
@@ -79,13 +78,9 @@ function toNumberPercent(value: unknown): number | null {
 }
 
 function normalizeRow(raw: TelegramStockRow): TelegramStockRow {
-  const upProb1D =
-    raw.upProb1D ?? toNumberPercent(raw.probText) ?? null;
-  const upProb3D =
-    raw.upProb3D ?? toNumberPercent(raw.h3Text) ?? null;
-  const upProb5D =
-    raw.upProb5D ?? toNumberPercent(raw.h5Text) ?? null;
-
+  const upProb1D = raw.upProb1D ?? toNumberPercent(raw.probText) ?? null;
+  const upProb3D = raw.upProb3D ?? toNumberPercent(raw.h3Text) ?? null;
+  const upProb5D = raw.upProb5D ?? toNumberPercent(raw.h5Text) ?? null;
   const tomorrowTrend = raw.tomorrowTrend || raw.predText || "資料不足";
 
   return {
@@ -112,26 +107,6 @@ function impactLabel(impact?: string): string {
   if (impact === "BULLISH") return "偏多";
   if (impact === "BEARISH") return "偏空";
   return "中性";
-}
-
-function buildDailyMessage(report: LatestReport): string {
-  const lines: string[] = [];
-  lines.push(`📊 <b>每日收盤總覽 (${escapeHtml(report.date)})</b>`);
-  lines.push("");
-
-  for (const item of report.watchlist.map(normalizeRow)) {
-    const firstNews = item.majorNews[0];
-    const url = safeUrl(firstNews?.link);
-    const oneNews = firstNews?.title || "無重大新聞";
-    const newsText = url
-      ? `<a href="${escapeHtml(url)}">${escapeHtml(oneNews)}</a>`
-      : escapeHtml(oneNews);
-    lines.push(
-      `• ${escapeHtml(item.nameZh)}(${escapeHtml(item.symbol)}) 收 ${escapeHtml(formatPrice(item.price))} ${escapeHtml(item.changePct)}｜明日${escapeHtml(item.tomorrowTrend)} ${escapeHtml(formatPercent(item.upProb1D))}｜新聞: ${newsText}`,
-    );
-  }
-
-  return lines.join("\n");
 }
 
 function buildSingleStockMessage(item: TelegramStockRow): string {
@@ -173,15 +148,6 @@ function buildHelpMessage(): string {
     "目前僅支援：",
     "/stock <代號或名稱> - 單一股票詳細摘要 (例: /stock 2330)",
   ].join("\n");
-}
-
-function buildWatchlistMessage(report: LatestReport | null): string {
-  if (!report || !Array.isArray(report.watchlist) || report.watchlist.length === 0) {
-    return "目前沒有可用的 watchlist 報告資料。";
-  }
-
-  const symbols = report.watchlist.map((x) => `${escapeHtml(x.symbol)} ${escapeHtml(x.nameZh)}`);
-  return `目前報告 watchlist (${escapeHtml(report.date)}):\n${symbols.join("\n")}`;
 }
 
 function getSnapshotBaseUrl(): string | null {
@@ -231,7 +197,10 @@ async function fetchLiveStockRow(query: string): Promise<TelegramStockRow | null
 
     const latest = prices[prices.length - 1].close;
     const prev = prices[prices.length - 2].close;
-    const changePct = prev > 0 ? `${(((latest - prev) / prev) * 100 >= 0 ? "+" : "")}${((((latest - prev) / prev) * 100)).toFixed(2)}%` : "N/A";
+    const changePct =
+      prev > 0
+        ? `${((latest - prev) / prev) * 100 >= 0 ? "+" : ""}${(((latest - prev) / prev) * 100).toFixed(2)}%`
+        : "N/A";
 
     const flowTotalRaw = snapshot?.signals?.flow?.foreign5D ?? null;
     const flowTotal =
@@ -242,8 +211,7 @@ async function fetchLiveStockRow(query: string): Promise<TelegramStockRow | null
     const upProb1D = typeof snapshot?.predictions?.upProb1D === "number" ? snapshot.predictions.upProb1D : null;
     const upProb3D = typeof snapshot?.predictions?.upProb3D === "number" ? snapshot.predictions.upProb3D : null;
     const upProb5D = typeof snapshot?.predictions?.upProb5D === "number" ? snapshot.predictions.upProb5D : null;
-    const tomorrowTrend =
-      upProb1D === null ? "中立" : upProb1D >= 58 ? "偏多" : upProb1D <= 42 ? "偏空" : "中立";
+    const tomorrowTrend = upProb1D === null ? "中立" : upProb1D >= 58 ? "偏多" : upProb1D <= 42 ? "偏空" : "中立";
 
     const topBullish = Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : [];
     const topBearish = Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : [];
@@ -268,8 +236,7 @@ async function fetchLiveStockRow(query: string): Promise<TelegramStockRow | null
       upProb3D,
       upProb5D,
       strategySignal: String(snapshot?.strategy?.signal || tomorrowTrend),
-      strategyConfidence:
-        typeof snapshot?.strategy?.confidence === "number" ? snapshot.strategy.confidence : null,
+      strategyConfidence: typeof snapshot?.strategy?.confidence === "number" ? snapshot.strategy.confidence : null,
       majorNews,
       majorNewsSummary: majorNews.length > 0 ? "即時抓取" : "無重大新聞",
     };
@@ -312,44 +279,43 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
     return;
   }
 
-  let report: LatestReport | null = null;
-  try {
-    report = (await fetchLatestReport()) as LatestReport | null;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    await sendMessage(chatId, `讀取最新報告失敗: ${message}`);
-    return;
-  }
-
   if (!query) {
     await sendMessage(chatId, "請輸入股票代號或名稱，例如: /stock 2330");
     return;
   }
 
-  if (!report || !Array.isArray(report.watchlist) || report.watchlist.length === 0) {
-    const live = await fetchLiveStockRow(query);
-    if (live) {
-      await sendMessage(chatId, `${buildSingleStockMessage(live)}\n\n<i>（即時抓取，非日報快照）</i>`);
-      return;
-    }
-    await sendMessage(chatId, "目前尚未產出最新收盤報告，且即時抓取失敗，請稍後再試。");
+  // Always prefer live snapshot for /stock.
+  const liveFirst = await fetchLiveStockRow(query);
+  if (liveFirst) {
+    await sendMessage(chatId, `${buildSingleStockMessage(liveFirst)}\n\n<i>（即時抓取）</i>`);
     return;
   }
 
-  const stock =
-    report.watchlist.find((item) => {
-      const symbolMatch = item.symbol === query;
-      const nameMatch = item.nameZh?.includes(query);
-      return symbolMatch || Boolean(nameMatch);
-    }) || (await fetchLiveStockRow(query));
+  // Fallback to latest report snapshot only when live fetch fails.
+  let report: LatestReport | null = null;
+  try {
+    report = (await fetchLatestReport()) as LatestReport | null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await sendMessage(chatId, `目前即時抓取失敗，且讀取日報失敗：${escapeHtml(message)}`);
+    return;
+  }
+
+  if (!report || !Array.isArray(report.watchlist) || report.watchlist.length === 0) {
+    await sendMessage(chatId, "目前即時抓取失敗，且尚未產出最新收盤報告，請稍後再試。");
+    return;
+  }
+
+  const stock = report.watchlist.find((item) => {
+    const symbolMatch = item.symbol === query;
+    const nameMatch = item.nameZh?.includes(query);
+    return symbolMatch || Boolean(nameMatch);
+  });
 
   if (!stock) {
-    await sendMessage(chatId, `找不到 ${query}，請確認代號或名稱。`);
+    await sendMessage(chatId, `找不到 ${escapeHtml(query)}，請確認代號或名稱。`);
     return;
   }
 
-  await sendMessage(
-    chatId,
-    buildSingleStockMessage(stock) + (report.watchlist.includes(stock as TelegramStockRow) ? "" : "\n\n<i>（即時抓取，非watchlist日報）</i>"),
-  );
+  await sendMessage(chatId, `${buildSingleStockMessage(stock)}\n\n<i>（日報快照）</i>`);
 }
