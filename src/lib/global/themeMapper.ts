@@ -8,6 +8,7 @@ const SYMBOL_US_MAPPING_OVERRIDE: Record<string, USThemeMapping> = {
   "2344": { sector: { id: "SOXX", nameZh: "費半指標ETF" }, hints: ["MU", "WDC", "SIMO"] },
   "2408": { sector: { id: "SOXX", nameZh: "費半指標ETF" }, hints: ["MU", "WDC", "SIMO"] },
   "8299": { sector: { id: "SOXX", nameZh: "費半指標ETF" }, hints: ["SIMO", "MU", "WDC"] },
+  "6531": { sector: { id: "SOXX", nameZh: "費半指標ETF" }, hints: ["MU", "SIMO", "WDC"] },
 };
 
 function normalizeSymbol(raw?: string | null): string {
