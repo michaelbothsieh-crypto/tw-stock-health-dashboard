@@ -441,15 +441,6 @@ function cardFromReportRow(rowRaw: TelegramStockRow): StockCard {
   return card;
 }
 
-function buildHelpMessage(): string {
-  return [
-    "<b>台股機器人</b>",
-    "",
-    "目前僅支援一個指令:",
-    "/stock <代號或名稱> - 取得單一股票交易摘要 (例: /stock 2330)",
-  ].join("\n");
-}
-
 export async function handleTelegramMessage(chatId: number, text: string, isBackgroundPush = false) {
   const privateChatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -467,11 +458,6 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
   const [commandRaw, ...argParts] = text.trim().split(/\s+/);
   const command = commandRaw.toLowerCase();
   const query = argParts.join(" ").trim();
-
-  if (command === "/help" || command === "/start") {
-    await sendMessage(chatId, buildHelpMessage());
-    return;
-  }
 
   if (command !== "/stock") {
     await sendMessage(chatId, "目前僅支援 /stock 指令。");
