@@ -31,7 +31,7 @@
 *   主控台頂部常駐 `VIX (恐慌指數)`、`DXY (美元流動性)`、`SOXX (費半趨勢)` 數據膠囊，支援互動式科普 Tooltip。
 
 ### 5. ✈️ VIP 專屬 Telegram 智能推播
-*   內建 Cron Job 端點，定時掃描 `VIP_WATCHLIST` 標的。
+*   內建 Cron Job 端點，定時掃描 `WATCHLIST_TW` 標的。
 *   當偵測到「大股東大筆拋售」或「籌碼面極度凌亂」時，AI 分析師會自動撰寫毒舌且具急迫感的警報文案，並推播至 Telegram。
 
 ---
@@ -64,8 +64,8 @@ UPSTASH_REDIS_REST_TOKEN="your_upstash_token"
 TELEGRAM_BOT_TOKEN="your_bot_token"
 TELEGRAM_CHAT_ID="your_chat_id"
 
-# 5. VIP 專屬掃描清單 (Cron Job 監聽對象，以逗號分隔)
-VIP_WATCHLIST="2330,2317,2344,2615"
+# 5. 專屬掃描清單 (Cron Job 監聽對象，以逗號分隔)
+WATCHLIST_TW="2330,2317,2344,2615"
 ```
 
 ---
