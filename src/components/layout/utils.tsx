@@ -1,4 +1,3 @@
-
 import { ExplainTab, ExplainSection, MainTab } from "./types";
 import { stockNameMap } from "@/i18n/zh-TW";
 import { twStockNames } from "@/data/twStockNames";
@@ -14,6 +13,28 @@ export const EXPLAIN_TABS: Array<{ key: ExplainTab; label: string; description: 
   { key: "consistency", label: "訊號同向程度", description: "多因子是否同向，是否存在矛盾。" },
 ];
 
+/**
+ * 台股在地化色彩系統 (TWSE Color System)
+ * 規則：> 0 紅色 (Red), < 0 綠色 (Green), = 0 灰色 (Slate)
+ */
+export function getTwseColor(value: number | null, type: 'text' | 'bg' | 'border' = 'text'): string {
+  if (value === null || value === 0) {
+    if (type === 'text') return "text-slate-500";
+    if (type === 'bg') return "bg-slate-500/10";
+    return "border-slate-500/20";
+  }
+
+  const isPositive = value > 0;
+  
+  if (type === 'text') {
+    return isPositive ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400";
+  }
+  if (type === 'bg') {
+    return isPositive ? "bg-red-500/10" : "bg-green-500/10";
+  }
+  return isPositive ? "border-red-500/30" : "border-green-500/30";
+}
+
 export function formatScoreAsPercent(value: number | null): string {
   if (value === null || Number.isNaN(value)) return "--";
   return `${value.toFixed(1)}%`;
@@ -21,22 +42,25 @@ export function formatScoreAsPercent(value: number | null): string {
 
 export function scoreToneClass(value: number | null): string {
   if (value === null || Number.isNaN(value)) return "text-neutral-400";
-  if (value >= 70) return "text-emerald-400";
-  if (value < 40) return "text-rose-400";
+  // 切換為台股邏輯：高分為紅，低分為綠
+  if (value >= 70) return "text-red-500";
+  if (value < 40) return "text-green-500";
   return "text-amber-400";
 }
 
 export function chipColorClass(score: number | null): string {
   if (score === null || Number.isNaN(score)) return "bg-neutral-600 border-neutral-700 text-neutral-400";
-  if (score >= 70) return "bg-emerald-500/10 border-emerald-500/30 text-emerald-400";
-  if (score < 40) return "bg-rose-500/10 border-rose-500/30 text-rose-400";
+  // 切換為台股邏輯
+  if (score >= 70) return "bg-red-500/10 border-red-500/30 text-red-400";
+  if (score < 40) return "bg-green-500/10 border-green-500/30 text-green-400";
   return "bg-amber-500/10 border-amber-500/30 text-amber-400";
 }
 
 export function chipBarColorClass(score: number | null): string {
   if (score === null || Number.isNaN(score)) return "bg-neutral-600";
-  if (score >= 70) return "bg-emerald-500";
-  if (score < 40) return "bg-rose-500";
+  // 切換為台股邏輯
+  if (score >= 70) return "bg-red-500";
+  if (score < 40) return "bg-green-500";
   return "bg-amber-500";
 }
 

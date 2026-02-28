@@ -37,6 +37,7 @@ import { getMarketIndicators } from "@/lib/providers/marketIndicators";
 import { getTvTechnicalIndicators } from "@/lib/providers/tradingViewFetch";
 import { translateTechnicals } from "@/lib/ux/technicalTranslator";
 import { fetchStockSnapshot } from "@/lib/api/stockRouter";
+import { getTacticalPlaybook } from "@/lib/ai/playbookAgent";
 
 function isTaiwanStock(symbol: string) {
   return /^\d+$/.test(symbol) || symbol.endsWith(".TW") || symbol.endsWith(".TWO");
@@ -288,6 +289,13 @@ export async function GET(
     const marketData = await getMarketIndicators({ symbols: crashSymbols, rangeDays: 65 });
     const crashWarning = evaluateCrashWarning(marketData);
 
+    const playbook = await getTacticalPlaybook({
+      ticker: norm.symbol,
+      macroRisk: crashWarning.score ?? 0,
+      technicalTrend: technicalTactics?.signals[0]?.status || "趨勢不明",
+      flowScore: flowSignals.flowScore ?? 50,
+    });
+
     // Adjust strategy confidence based on crash score
     if (crashWarning.score !== null) {
       strategy.confidence = Math.max(0, strategy.confidence * (1 - crashWarning.score / 150));
@@ -330,6 +338,7 @@ export async function GET(
       },
       technicals,
       technicalTactics,
+      playbook,
       signals: {
         trend: trendSignals,
         flow: flowSignals,
