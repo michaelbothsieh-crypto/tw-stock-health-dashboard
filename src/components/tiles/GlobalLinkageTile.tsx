@@ -94,7 +94,7 @@ export function GlobalLinkageTile({ snapshot, isMobile = false }: { snapshot: Sn
     const isIndustrySame = profile.sectorZh === profile.subIndustryZh;
 
     return (
-        <Tile className="rounded-2xl p-6 border shadow-sm bg-card hover:shadow-md transition-all duration-300">
+        <Tile className="rounded-2xl p-4 md:p-6 border shadow-sm bg-card hover:shadow-md transition-all duration-300">
             <div className="mb-5 flex flex-col gap-4">
                 <div className="flex items-center gap-2">
                     <Activity className="h-5 w-5 text-slate-700 dark:text-neutral-300" />
@@ -189,9 +189,9 @@ export function GlobalLinkageTile({ snapshot, isMobile = false }: { snapshot: Sn
                                                     </div>
                                                     <button 
                                                         onClick={(e) => handleAddToWatchlist(peer.code, e)}
-                                                        className={`p-1 rounded-md transition-all duration-300 ${watchlistCodes.has(peer.code) ? "opacity-100" : "opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-neutral-700"}`}
+                                                        className={`p-2 rounded-md transition-all duration-300 ${watchlistCodes.has(peer.code) ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100 md:hover:bg-slate-200 dark:md:hover:bg-neutral-700"}`}
                                                     >
-                                                        <Star className={`h-4 w-4 transition-colors ${watchlistCodes.has(peer.code) ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground hover:text-yellow-500"}`} />
+                                                        <Star className={`h-4 w-4 transition-colors ${watchlistCodes.has(peer.code) ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground md:hover:text-yellow-500"}`} />
                                                     </button>
                                                 </div>
                                             </div>
@@ -270,9 +270,9 @@ export function GlobalLinkageTile({ snapshot, isMobile = false }: { snapshot: Sn
                                                     </div>
                                                     <button 
                                                         onClick={(e) => handleAddToWatchlist(peer.symbol, e)}
-                                                        className={`p-1 rounded-md transition-all duration-300 ${watchlistCodes.has(peer.symbol) ? "opacity-100" : "opacity-0 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-neutral-700"}`}
+                                                        className={`p-2 rounded-md transition-all duration-300 ${watchlistCodes.has(peer.symbol) ? "opacity-100" : "opacity-100 md:opacity-0 md:group-hover:opacity-100 md:hover:bg-slate-200 dark:md:hover:bg-neutral-700"}`}
                                                     >
-                                                        <Star className={`h-4 w-4 transition-colors ${watchlistCodes.has(peer.symbol) ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground hover:text-yellow-500"}`} />
+                                                        <Star className={`h-4 w-4 transition-colors ${watchlistCodes.has(peer.symbol) ? "text-yellow-500 fill-yellow-500" : "text-muted-foreground md:hover:text-yellow-500"}`} />
                                                     </button>
                                                 </div>
                                             </div>
