@@ -4,7 +4,7 @@ const url = process.env.UPSTASH_REDIS_REST_URL;
 const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
 // Only initialize if env vars are present
-const redis = url && token ? new Redis({ url, token }) : null;
+export const redis = url && token ? new Redis({ url, token }) : null;
 
 export async function getCache<T>(key: string): Promise<T | null> {
   if (!redis) return null;

@@ -1,6 +1,6 @@
 import { SnapshotResponse } from "@/components/layout/types";
 
-export type VerdictColor = "emerald" | "rose" | "amber" | "slate";
+export type VerdictColor = "red" | "green" | "amber" | "slate";
 
 export interface ActionPlaybook {
     /** 最終綜合評級 */
@@ -34,19 +34,19 @@ export function generatePlaybook(snapshot: SnapshotResponse): ActionPlaybook {
 
     if (crashScore >= 75) {
         verdict = "系統性風險規避";
-        verdictColor = "rose";
+        verdictColor = "green"; // TWSE: Down/Bearish/Caution
     } else if (direction === "偏多" && confidence >= 68 && consistencyLevel === "高一致性") {
         verdict = "強勢偏多";
-        verdictColor = "emerald";
+        verdictColor = "red"; // TWSE: Up/Bullish
     } else if (direction === "偏多" && confidence >= 50) {
         verdict = "偏多觀察中";
-        verdictColor = "emerald";
+        verdictColor = "red";
     } else if (direction === "偏空" && confidence >= 50) {
         verdict = "破線觀望";
-        verdictColor = "rose";
+        verdictColor = "green";
     } else if (direction === "偏空") {
         verdict = "偏空保守";
-        verdictColor = "rose";
+        verdictColor = "green";
     } else if (consistencyLevel === "低一致性") {
         verdict = "訊號分歧";
         verdictColor = "amber";
@@ -63,22 +63,24 @@ export function generatePlaybook(snapshot: SnapshotResponse): ActionPlaybook {
         actionSteps.push("1. 現金為王，全面降低持股比例至 20% 以下");
         actionSteps.push("2. 等待崩盤風險指標回落至 50 以下後再重新評估");
         actionSteps.push("3. 若已持有部位，逢反彈至壓力區立即減碼");
-    } else if (verdict === "強勢偏多") {
+    } else if (verdict === "強勢偏多" || verdict === "偏多觀察中") {
         const support = keyLevels.supportLevel?.toFixed(1) ?? "--";
         const breakout = keyLevels.breakoutLevel?.toFixed(1) ?? "--";
-        actionSteps.push(`1. 確認股價站穩月線支撐（${support} 元附近）後可分批佈局`);
+        const isStrong = verdict === "強勢偏多";
+        
+        if (isStrong) {
+            actionSteps.push(`1. 確認股價站穩月線支撐（${support} 元附近）後可分批佈局`);
+        } else {
+            actionSteps.push("1. 暫不主動加碼，等待一致性回升至中一致性以上");
+        }
+
         if (marginChange !== null && marginChange > 5) {
             actionSteps.push("2. 留意融資大幅增加，控管槓桿，以現股優先");
         } else {
-            actionSteps.push(`2. 等待突破轉強門檻（${breakout} 元）放量確認`);
+            actionSteps.push(`2. ${isStrong ? "等待" : "若"}突破轉強門檻（${breakout} 元）放量確認${isStrong ? "" : "後再介入"}`);
         }
         const stopLoss = keyLevels.invalidationLevel?.toFixed(1) ?? "--";
-        actionSteps.push(`3. 嚴守失效門檻 ${stopLoss} 元為停損基準，跌破立刻減碼`);
-    } else if (verdict === "偏多觀察中") {
-        const invalidation = keyLevels.invalidationLevel?.toFixed(1) ?? "--";
-        actionSteps.push("1. 暫不主動加碼，等待一致性回升至中一致性以上");
-        actionSteps.push(`2. 若外資連續兩日轉買，可小倉試單（部位不超過 30%）`);
-        actionSteps.push(`3. 止損設於 ${invalidation} 元，跌破不戀戰`);
+        actionSteps.push(`3. 嚴守失效門檻 ${stopLoss} 元為停損基準，跌破不戀戰`);
     } else if (verdict === "破線觀望" || verdict === "偏空保守") {
         actionSteps.push("1. 空手者繼續觀望，不進行任何多方佈局");
         actionSteps.push("2. 持有多單者逢反彈至月線壓力附近分批减碼");

@@ -35,6 +35,7 @@ export type SnapshotResponse = {
   warnings?: string[];
   technicals?: import('@/lib/providers/tradingViewFetch').TvTechnicalData | null;
   technicalTactics?: import('@/lib/ux/technicalTranslator').TranslatedTechnicals | null;
+  playbook?: import('@/lib/ai/playbookAgent').ActionPlaybook;
   signals: {
     trend: { trendScore: number | null };
     flow: { flowScore: number | null; marginChange20D: number | null };
