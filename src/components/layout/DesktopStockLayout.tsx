@@ -42,7 +42,7 @@ export function DesktopStockLayout({
 
 
           {/* Chart Section */}
-          <Tile className="overflow-hidden rounded-2xl p-6 min-h-[240px]">
+          <Tile className="overflow-hidden rounded-2xl min-h-[240px]">
             <div className="mb-4 flex items-center gap-2">
               <div className="text-[18px] font-semibold text-neutral-100">近期走勢與均線</div>
             </div>
@@ -275,7 +275,7 @@ export function DesktopStockLayout({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-3 md:gap-4">
               {[
                 { label: "外資", corr: snapshot.institutionCorrelation?.foreignCorr },
                 { label: "投信", corr: snapshot.institutionCorrelation?.investTrustCorr },

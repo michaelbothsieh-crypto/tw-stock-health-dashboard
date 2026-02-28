@@ -48,18 +48,18 @@ export function MacroRadarTile({ snapshot }: { snapshot: SnapshotResponse }) {
         </div>
 
         {/* Body: Bento Grid 2x2 */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-3 md:gap-4 mt-2 md:mt-4">
           {/* VIX */}
-          <div className="rounded-xl border border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-950/20 p-4 transition-all duration-300 hover:bg-slate-50 dark:hover:bg-neutral-800/40">
+          <div className="rounded-xl border border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-950/20 p-3 md:p-4 transition-all duration-300 hover:bg-slate-50 dark:hover:bg-neutral-800/40">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground dark:text-neutral-500">
-                <Activity className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-muted-foreground dark:text-neutral-500">
+                <Activity className="h-3 md:h-3.5 w-3 md:w-3.5" />
                 市場情緒 VIX
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button type="button" className="p-1 -m-1 outline-none">
-                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help hover:text-slate-900 dark:hover:text-neutral-300 transition-colors" />
+                    <Info className="h-3 md:h-3.5 w-3 md:w-3.5 text-muted-foreground cursor-help hover:text-slate-900 dark:hover:text-neutral-300 transition-colors" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="z-[100]">
@@ -67,25 +67,25 @@ export function MacroRadarTile({ snapshot }: { snapshot: SnapshotResponse }) {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <div className="text-xl font-bold text-slate-900 dark:text-neutral-100 mb-1 tabular-nums">
+            <div className="text-lg md:text-xl font-bold text-slate-900 dark:text-neutral-100 mb-1 tabular-nums">
               {vix.value?.toFixed(1)}
             </div>
-            <div className={`text-[11px] font-medium ${getVariantText(vix.variant)}`}>
+            <div className={`text-[10px] md:text-[11px] font-medium ${getVariantText(vix.variant)}`}>
               {vix.status}
             </div>
           </div>
 
           {/* SOXX */}
-          <div className="rounded-xl border border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-950/20 p-4 transition-all duration-300 hover:bg-slate-50 dark:hover:bg-neutral-800/40">
+          <div className="rounded-xl border border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-950/20 p-3 md:p-4 transition-all duration-300 hover:bg-slate-50 dark:hover:bg-neutral-800/40">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground dark:text-neutral-500">
-                <Cpu className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-muted-foreground dark:text-neutral-500">
+                <Cpu className="h-3 md:h-3.5 w-3 md:w-3.5" />
                 費半大局 SOXX
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button type="button" className="p-1 -m-1 outline-none">
-                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help hover:text-slate-900 dark:hover:text-neutral-300 transition-colors" />
+                    <Info className="h-3 md:h-3.5 w-3 md:w-3.5 text-muted-foreground cursor-help hover:text-slate-900 dark:hover:text-neutral-300 transition-colors" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="z-[100]">
@@ -93,25 +93,25 @@ export function MacroRadarTile({ snapshot }: { snapshot: SnapshotResponse }) {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <div className={`text-sm font-semibold mb-1 ${getVariantText(soxx.variant)}`}>
+            <div className={`text-xs md:text-sm font-semibold mb-1 ${getVariantText(soxx.variant)}`}>
               {soxx.trend}
             </div>
-            <div className="text-[11px] font-medium text-muted-foreground dark:text-neutral-500">
+            <div className="text-[10px] md:text-[11px] font-medium text-muted-foreground dark:text-neutral-500">
               {soxx.status}模式
             </div>
           </div>
 
           {/* Liquidity */}
-          <div className="rounded-xl border border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-950/20 p-4 transition-all duration-300 hover:bg-slate-50 dark:hover:bg-neutral-800/40">
+          <div className="rounded-xl border border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-950/20 p-3 md:p-4 transition-all duration-300 hover:bg-slate-50 dark:hover:bg-neutral-800/40">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground dark:text-neutral-500">
-                <DollarSign className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-muted-foreground dark:text-neutral-500">
+                <DollarSign className="h-3 md:h-3.5 w-3 md:w-3.5" />
                 資金流動性
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button type="button" className="p-1 -m-1 outline-none">
-                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help hover:text-slate-900 dark:hover:text-neutral-300 transition-colors" />
+                    <Info className="h-3 md:h-3.5 w-3 md:w-3.5 text-muted-foreground cursor-help hover:text-slate-900 dark:hover:text-neutral-300 transition-colors" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="z-[100]">
@@ -119,22 +119,22 @@ export function MacroRadarTile({ snapshot }: { snapshot: SnapshotResponse }) {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <div className={`text-sm font-semibold ${getVariantText(liquidity.variant)}`}>
+            <div className={`text-xs md:text-sm font-semibold ${getVariantText(liquidity.variant)}`}>
               {liquidity.status}
             </div>
           </div>
 
           {/* System Risk */}
-          <div className="rounded-xl border border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-950/20 p-4 transition-all duration-300 hover:bg-slate-50 dark:hover:bg-neutral-800/40">
+          <div className="rounded-xl border border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-950/20 p-3 md:p-4 transition-all duration-300 hover:bg-slate-50 dark:hover:bg-neutral-800/40">
             <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground dark:text-neutral-500">
-                <ShieldAlert className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-1.5 text-[10px] md:text-xs text-muted-foreground dark:text-neutral-500">
+                <ShieldAlert className="h-3 md:h-3.5 w-3 md:w-3.5" />
                 預警模型
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button type="button" className="p-1 -m-1 outline-none">
-                    <Info className="h-3.5 w-3.5 text-muted-foreground cursor-help hover:text-slate-900 dark:hover:text-neutral-300 transition-colors" />
+                    <Info className="h-3 md:h-3.5 w-3 md:w-3.5 text-muted-foreground cursor-help hover:text-slate-900 dark:hover:text-neutral-300 transition-colors" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="z-[100]">
@@ -142,7 +142,7 @@ export function MacroRadarTile({ snapshot }: { snapshot: SnapshotResponse }) {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <div className={`text-sm font-semibold ${getVariantText(systemRisk.variant)}`}>
+            <div className={`text-xs md:text-sm font-semibold ${getVariantText(systemRisk.variant)}`}>
               {snapshot.crashWarning.level}
             </div>
           </div>

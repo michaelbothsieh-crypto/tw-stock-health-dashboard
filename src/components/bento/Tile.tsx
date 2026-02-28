@@ -19,7 +19,7 @@ export const Tile = forwardRef<HTMLElement, TileProps>(function Tile({ className
     <section
       ref={ref}
       className={cn(
-        "rounded-3xl border border-neutral-800 bg-neutral-900/70 p-6 shadow-md transition-all hover:scale-[1.02] hover:border-neutral-600",
+        "rounded-3xl border border-neutral-800 bg-neutral-900/70 p-4 md:p-6 shadow-md transition-all hover:scale-[1.02] hover:border-neutral-600",
         className,
       )}
     >

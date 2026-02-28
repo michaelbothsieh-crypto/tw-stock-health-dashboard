@@ -31,7 +31,7 @@ export function MobileStockLayout({
       />
 
       {/* Chart Section */}
-      <Tile className="overflow-hidden rounded-2xl p-4 min-h-[240px]">
+      <Tile className="overflow-hidden rounded-2xl min-h-[240px]">
         <div className="mb-4 flex items-center gap-2">
           <div className="text-[18px] font-semibold text-neutral-100">近期走勢與均線</div>
         </div>

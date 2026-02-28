@@ -291,6 +291,10 @@ export async function GET(
 
     const playbook = await getTacticalPlaybook({
       ticker: norm.symbol,
+      stockName: companyNameZh || norm.symbol,
+      price: latestClose,
+      support: keyLevels.supportLevel || (technicalTactics?.levels.support ?? 0),
+      resistance: keyLevels.breakoutLevel || (technicalTactics?.levels.resistance ?? 0),
       macroRisk: crashWarning.score ?? 0,
       technicalTrend: technicalTactics?.signals[0]?.status || "趨勢不明",
       flowScore: flowSignals.flowScore ?? 50,
