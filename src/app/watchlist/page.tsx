@@ -1,98 +1,57 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useWatchlist } from "@/hooks/useWatchlist";
+import { LayoutDashboard, Star, Search, Plus } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Trash2 } from "lucide-react";
-import { watchlistStore, WatchlistItem } from "@/lib/stores/watchlistStore";
-import { resolveCodeFromInput } from "@/lib/stocks/inputResolver";
+import { HealthCard } from "@/components/watchlist/HealthCard";
 
 export default function WatchlistPage() {
-    const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
-    const [newTicker, setNewTicker] = useState("");
-    const [error, setError] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
+  const { watchlist, removeStock } = useWatchlist();
 
-    useEffect(() => {
-        const unsubscribe = watchlistStore.subscribe((items) => {
-            setWatchlist(items);
-        });
-        return unsubscribe;
-    }, []);
-
-    const handleAdd = async () => {
-        setError("");
-        const input = newTicker.trim();
-        if (!input) return;
-
-        setIsLoading(true);
-        const resolvedCode = await resolveCodeFromInput(input);
-        
-        if (!resolvedCode) {
-            setError(`找不到符合的股票：${input}`);
-            setIsLoading(false);
-            return;
-        }
-
-        if (watchlist.some((item) => item.code === resolvedCode)) {
-            setError(`該代號 (${resolvedCode}) 已在自選清單中`);
-            setIsLoading(false);
-            return;
-        }
-
-        await watchlistStore.add(resolvedCode);
-        setNewTicker("");
-        setIsLoading(false);
-    };
-
-    const handleRemove = (code: string) => {
-        watchlistStore.remove(code);
-    };
-
-    return (
-        <div className="p-4 sm:p-8 max-w-2xl mx-auto">
-            <h1 className="text-3xl font-bold tracking-tight mb-6 text-neutral-100">管理自選股</h1>
-
-            <Card className="mb-6 bg-neutral-900/60 border-neutral-800">
-                <CardHeader>
-                    <CardTitle className="text-neutral-100">新增股票</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex gap-4">
-                        <div className="flex-1">
-                            <Input
-                                placeholder="輸入代號或股名 (例如：2330 或 台積電)"
-                                value={newTicker}
-                                onChange={(e) => setNewTicker(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && !isLoading && handleAdd()}
-                                className="bg-neutral-950 border-neutral-700 text-neutral-100 focus-visible:ring-emerald-500/30"
-                            />
-                        </div>
-                        <Button onClick={handleAdd} disabled={isLoading} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-                            {isLoading ? "新增中..." : "新增"}
-                        </Button>
-                    </div>
-                    {error && <p className="text-[13px] text-rose-500 mt-3">{error}</p>}
-                </CardContent>
-            </Card>
-
-            <div className="flex flex-col gap-3">
-                {watchlist.length === 0 && (
-                    <p className="text-neutral-500 text-[15px] text-center py-8">您的自選清單目前為空。</p>
-                )}
-                {watchlist.map(item => (
-                    <div key={item.code} className="flex justify-between items-center p-4 border border-neutral-800 rounded-xl bg-neutral-900/40 transition-colors hover:bg-neutral-900/60">
-                        <div className="flex items-center gap-4">
-                            <div className="font-mono text-[18px] text-emerald-400 tabular-nums w-[72px]">{item.code}</div>
-                            <div className="font-sans text-[16px] text-neutral-200">{item.name}</div>
-                        </div>
-                        <Button variant="ghost" size="icon" onClick={() => handleRemove(item.code)} className="text-neutral-500 hover:text-rose-500 hover:bg-rose-500/10 transition-colors rounded-lg h-9 w-9">
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </div>
-                ))}
-            </div>
+  return (
+    <div className="mx-auto w-full max-w-[1400px] px-4 pb-12 pt-6 lg:px-8 lg:pt-12">
+      <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="flex items-center gap-3">
+          <div className="rounded-xl bg-emerald-500/10 p-2.5 text-emerald-500">
+            <LayoutDashboard className="h-6 w-6" />
+          </div>
+          <h1 className="text-2xl font-black tracking-tighter text-neutral-100 sm:text-3xl">
+            AI 健康戰情室
+          </h1>
         </div>
-    );
+        <div className="flex gap-3">
+           <Button asChild variant="outline" className="rounded-xl border-neutral-800 bg-neutral-900 text-neutral-300">
+             <Link href="/">
+               <Search className="mr-2 h-4 w-4" />
+               前往個股診斷
+             </Link>
+           </Button>
+        </div>
+      </div>
+
+      {watchlist.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-neutral-800 bg-neutral-900/20 py-32 text-center">
+          <Star className="h-12 w-12 text-neutral-800 mx-auto mb-4" />
+          <p className="text-neutral-400 mb-2 text-xl font-bold">您的戰情室目前為空</p>
+          <p className="text-neutral-600 text-sm mb-8 max-w-xs mx-auto">
+            請前往個股診斷頁面點擊「⭐ 星星」按鈕加入觀察清單，系統將自動在此產生健康評分卡。
+          </p>
+          <Button asChild className="bg-emerald-600 hover:bg-emerald-700 rounded-xl px-8 h-12">
+            <Link href="/">立即開始診斷</Link>
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 lg:gap-6 gap-4">
+          {watchlist.map((ticker) => (
+            <HealthCard 
+              key={ticker} 
+              ticker={ticker} 
+              onRemove={(t) => removeStock(t)} 
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }

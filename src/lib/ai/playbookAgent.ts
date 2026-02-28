@@ -29,6 +29,7 @@ export interface ActionPlaybook {
   actionSteps: string[];
   watchTargets: string[];
   insiderComment?: string;
+  shortSummary?: string; // 新增：供戰情室使用的極短總結
 }
 
 // Tier 3: Rule-based Fallback
@@ -40,13 +41,17 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
   const fResistance = Number(ctx.resistance).toFixed(2);
 
   let insiderComment = "";
+  let shortSummary = "數據整理中";
+
   if (ctx.insiderTransfers && ctx.insiderTransfers.length > 0) {
     const totalLots = ctx.insiderTransfers.reduce((sum, item) => sum + item.lots, 0);
     const selling = ctx.insiderTransfers.filter(t => t.type === "市場拋售");
     if (selling.length > 0) {
       insiderComment = `偵測到大股東大筆拋售共 ${totalLots.toLocaleString()} 張，壓力量大需謹慎。`;
+      shortSummary = "大股東申報賣出，警戒";
     } else {
       insiderComment = "內部人持股結構調整中，目前對市場影響中性。";
+      shortSummary = "內部人持股調整中";
     }
   }
 
@@ -60,7 +65,8 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
         `嚴格守住 ${fSupport} 支撐，若跌破則全面撤退`
       ],
       watchTargets: ["內部人轉讓是否持續", "量能是否異常放大"],
-      insiderComment
+      insiderComment,
+      shortSummary: shortSummary || "內部人大筆賣出"
     };
   }
 
@@ -74,6 +80,7 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
         "保留現金等待市場情緒回穩"
       ],
       watchTargets: ["留意 VIX 恐慌指數是否回落", "觀察美元指數 DXY 走勢"],
+      shortSummary: "市場系統風險極高"
     };
   }
 
@@ -87,31 +94,21 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
         "建議空手者觀望，持有者嚴守支撐"
       ],
       watchTargets: ["三大法人買賣超動向", "融資餘額是否止增"],
+      shortSummary: "法人賣散戶接，籌碼亂"
     };
   }
 
-  if (ctx.flowScore <= 30) {
-    return {
-      verdict: "籌碼渙散",
-      verdictColor: "amber",
-      actionSteps: [
-        `${ctx.stockName} 主力持續出貨，不宜於 ${fPrice} 接刀`,
-        `觀察能否守穩關鍵支撐 ${fSupport}`,
-        "縮小部位控管風險"
-      ],
-      watchTargets: ["三大法人買賣超動向", "融資餘額增減"],
-    };
-  }
-
+  const isBull = (ctx.flowScore >= 60 && ctx.technicalTrend.includes("多"));
   return {
-    verdict: "震盪整理",
-    verdictColor: "slate",
+    verdict: isBull ? "多頭趨勢" : "震盪整理",
+    verdictColor: isBull ? "red" : "slate",
     actionSteps: [
       `目前現價 ${fPrice} 於 ${fSupport} 至 ${fResistance} 區間震盪`,
       "維持現有部位，不主動加碼",
       `若後續跌破支撐 ${fSupport} 則需嚴格執行減碼`
     ],
     watchTargets: ["觀察月線支撐力道", "量能是否有效放大"],
+    shortSummary: isBull ? "技術籌碼雙多，續抱" : "區間整理，靜待方向"
   };
 }
 
@@ -169,7 +166,7 @@ async function callGroq(prompt: string, modelName: string): Promise<ActionPlaybo
 
 export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionPlaybook> {
   const hourKey = Math.floor(Date.now() / 3600000);
-  const cacheKey = `playbook:${ctx.ticker}:${hourKey}`;
+  const cacheKey = `playbook:v3:${ctx.ticker}:${hourKey}`;
 
   // Check Global Cache
   if (redis) {
@@ -218,18 +215,25 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
          - 綜合技術面：若股價處於高檔且老闆在賣，請給出『極度危險』或『高度警戒』的戰術評價。
        - 若為「散戶接刀 (籌碼凌亂)」，即便技術面良好，也必須在 SOP 中強烈警告風險。
        - 若「投信」大買且籌碼集中：請提及『投信積極作帳，籌碼安定』。
-    4. 【新增欄位要求】：
-       - 若有內部人轉讓數據，請在 JSON 中新增 "insiderComment" 欄位，輸出一段犀利的操盤手評論。
-       - 格式範例：『【內部人短評】：大股東高檔倒貨，壓力量大，建議避開』。若無數據則不需此欄位。
+    4. 【新增輸出要求】：
+       - 欄位 "shortSummary": 輸出「一句 15 字以內的白話文總結」（例如：外資連買，突破月線壓力）。
+       - 欄位 "insiderComment": 針對轉讓數據的犀利短評（若有數據才需提供）。
 
-    必須回傳 JSON 格式：
-    - verdict: 4字內精煉結論
-    - verdictColor: "red" (看多), "green" (看空), "amber" (警示), "slate" (中性)
-    - actionSteps: 3條操作步驟陣列
-    - watchTargets: 2條觀察指標陣列
-    - insiderComment: (選填) 針對轉讓數據的犀利短評
+    必須回傳 JSON 格式 (嚴格遵守，不要帶有任何 Markdown 標記，直接輸出 JSON 物件)：
+    {
+      "verdict": "4字內精煉結論",
+      "verdictColor": "red|green|amber|slate",
+      "actionSteps": ["操作步驟1", "操作步驟2", "操作步驟3"],
+      "watchTargets": ["觀察指標1", "觀察指標2"],
+      "shortSummary": "15字內白話總結",
+      "insiderComment": "針對轉讓數據的犀利短評(選填)"
+    }
 
-    規則：繁體中文、嚴禁 Emoji、文字極度洗鍊。
+    規則：
+    1. 繁體中文輸出。
+    2. 嚴禁 Emoji 與任何形式的括號。
+    3. 文字極度洗鍊，展現專業靈魂。
+    4. actionSteps 與 watchTargets 必須是乾淨的字串陣列 (String Array)。
   `;
 
   let result: ActionPlaybook | null = null;

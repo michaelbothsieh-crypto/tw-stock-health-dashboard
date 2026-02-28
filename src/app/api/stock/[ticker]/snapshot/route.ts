@@ -325,6 +325,12 @@ export async function GET(
     }
 
     return NextResponse.json({
+      // Watchlist specific fields (Single Source of Truth)
+      stockName: companyNameZh || norm.symbol,
+      score: Math.round(strategy.confidence),
+      shortSummary: playbook.shortSummary || "數據整理中",
+      
+      overallHealthScore: Math.round(strategy.confidence), // Maintain backward compatibility if used elsewhere
       normalizedTicker: {
         ...norm,
         companyNameZh,
