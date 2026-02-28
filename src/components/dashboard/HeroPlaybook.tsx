@@ -398,25 +398,24 @@ export function HeroPlaybook({
                                     AI 決策底層數據
                                 </span>
                             </div>
-                            <div className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar gap-2.5 pb-1 md:flex-wrap">
-                                <div className="snap-start shrink-0 inline-flex items-center h-7 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20 gap-1.5 whitespace-nowrap">
-                                    <Globe className="h-3 w-3" />
-                                    總經 {snapshot.crashWarning?.level || "平穩"}
-                                </div>
-                                <div className="snap-start shrink-0 inline-flex items-center h-7 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 gap-1.5 whitespace-nowrap">
-                                    <Activity className="h-3 w-3" />
-                                    籌碼 {snapshot.signals.flow.flowScore ? (snapshot.signals.flow.flowScore > 60 ? "偏多" : "中性") : "評估"}
-                                </div>
-                                <div className="snap-start shrink-0 inline-flex items-center h-7 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 gap-1.5 whitespace-nowrap">
-                                    <Shield className="h-3 w-3" />
-                                    支撐 {snapshot.keyLevels.supportLevel?.toFixed(1) ?? '--'}
-                                </div>
-                                <div className="snap-start shrink-0 inline-flex items-center h-7 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 gap-1.5 whitespace-nowrap">
-                                    <Target className="h-3 w-3" />
-                                    壓力 {snapshot.keyLevels.breakoutLevel?.toFixed(1) ?? '--'}
-                                </div>
-                            </div>
-                        </div>
+                                                    <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2.5 mt-4">
+                                                        <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
+                                                            <Globe className="h-3 w-3" />
+                                                            總經 {snapshot.crashWarning?.level || "平穩"}
+                                                        </div>
+                                                        <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
+                                                            <Activity className="h-3 w-3" />
+                                                            籌碼 {snapshot.signals.flow.flowScore ? (snapshot.signals.flow.flowScore > 60 ? "偏多" : "中性") : "評估"}
+                                                        </div>
+                                                        <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
+                                                            <Shield className="h-3 w-3" />
+                                                            支撐 {snapshot.keyLevels.supportLevel?.toFixed(1) ?? '--'}
+                                                        </div>
+                                                        <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
+                                                            <Target className="h-3 w-3" />
+                                                            壓力 {snapshot.keyLevels.breakoutLevel?.toFixed(1) ?? '--'}
+                                                        </div>
+                                                    </div>                        </div>
 
                         {/* 獨立風險提示橫幅 */}
                         {(snapshot.strategy.explain.contradictions.length > 0 || snapshot.consistency.score < 55) && (

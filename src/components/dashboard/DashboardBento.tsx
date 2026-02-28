@@ -141,7 +141,10 @@ function StockPicker({
                   <button
                     key={itemTicker}
                     type="button"
-                    onClick={() => onSelect(itemTicker)}
+                    onClick={() => {
+                      onSelect(itemTicker);
+                      onClose();
+                    }}
                     onMouseEnter={() => setSelectedIndex(idx)}
                     className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all duration-150 ${isSelected
                       ? "border-emerald-500/40 bg-emerald-500/10"
