@@ -11,6 +11,8 @@ export interface ActionPlaybook {
     actionSteps: string[];
     /** 重要觀察對象，長度 1–2 */
     watchTargets: string[];
+    /** 針對內部人轉讓的短評 (選填) */
+    insiderComment?: string;
 }
 
 /**
@@ -34,10 +36,10 @@ export function generatePlaybook(snapshot: SnapshotResponse): ActionPlaybook {
 
     if (crashScore >= 75) {
         verdict = "系統性風險規避";
-        verdictColor = "green"; // TWSE: Down/Bearish/Caution
+        verdictColor = "green";
     } else if (direction === "偏多" && confidence >= 68 && consistencyLevel === "高一致性") {
         verdict = "強勢偏多";
-        verdictColor = "red"; // TWSE: Up/Bullish
+        verdictColor = "red";
     } else if (direction === "偏多" && confidence >= 50) {
         verdict = "偏多觀察中";
         verdictColor = "red";
@@ -59,7 +61,6 @@ export function generatePlaybook(snapshot: SnapshotResponse): ActionPlaybook {
     const actionSteps: string[] = [];
 
     if (crashScore >= 75) {
-        // 系統性風險情境
         actionSteps.push("1. 現金為王，全面降低持股比例至 20% 以下");
         actionSteps.push("2. 等待崩盤風險指標回落至 50 以下後再重新評估");
         actionSteps.push("3. 若已持有部位，逢反彈至壓力區立即減碼");
@@ -91,7 +92,6 @@ export function generatePlaybook(snapshot: SnapshotResponse): ActionPlaybook {
         actionSteps.push("1. 訊號分歧不是做多時機，保持空手或輕倉觀察");
         actionSteps.push("2. 等待技術面或籌碼面有一方出現明確方向再行動");
     } else {
-        // 區間震盪
         const support = keyLevels.supportLevel?.toFixed(1) ?? "--";
         const resistance = keyLevels.breakoutLevel?.toFixed(1) ?? "--";
         actionSteps.push(`1. 目前為區間整理格局，可於下緣（${support} 元）小量佈局`);
@@ -101,12 +101,10 @@ export function generatePlaybook(snapshot: SnapshotResponse): ActionPlaybook {
     // ── 3. 生成觀察重點 ──────────────────────────────────────────────
     const watchTargets: string[] = [];
 
-    // 優先看崩盤警示
     if (crashScore > 40 && crashScore < 75) {
         watchTargets.push(`留意系統風險指數（目前 ${crashScore.toFixed(0)}），若持續攀升至 75 須立刻降倉`);
     }
 
-    // 根據訊號強弱決定第二個觀察點
     if (watchTargets.length < 2) {
         const prob5d = predictions.upProb5D;
         if (flowScore < 45) {
@@ -122,11 +120,20 @@ export function generatePlaybook(snapshot: SnapshotResponse): ActionPlaybook {
         }
     }
 
-    // 最多保留 2 個觀察點
+    let insiderComment = "";
+    if (snapshot.insiderTransfers && snapshot.insiderTransfers.length > 0) {
+        const selling = snapshot.insiderTransfers.filter(t => t.type === "市場拋售");
+        if (selling.length > 0) {
+            const total = selling.reduce((s, i) => s + i.lots, 0);
+            insiderComment = `大股東近期申報賣出共 ${total.toLocaleString()} 張，籌碼面出現防空訊號。`;
+        }
+    }
+
     return {
         verdict,
         verdictColor,
         actionSteps: actionSteps.slice(0, 3),
         watchTargets: watchTargets.slice(0, 2),
+        insiderComment
     };
 }

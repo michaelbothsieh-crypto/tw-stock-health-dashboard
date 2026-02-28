@@ -36,9 +36,20 @@ export type SnapshotResponse = {
   technicals?: import('@/lib/providers/tradingViewFetch').TvTechnicalData | null;
   technicalTactics?: import('@/lib/ux/technicalTranslator').TranslatedTechnicals | null;
   playbook?: import('@/lib/ai/playbookAgent').ActionPlaybook;
+  insiderTransfers?: import('@/lib/providers/twseInsiderFetch').InsiderTransfer[];
   signals: {
     trend: { trendScore: number | null };
-    flow: { flowScore: number | null; marginChange20D: number | null };
+    flow: {
+      flowScore: number | null;
+      marginChange20D: number | null;
+      smartMoneyFlow?: number;
+      retailSentiment?: number;
+      flowVerdict?: string;
+      institutionalLots?: number;
+      trustLots?: number;
+      marginLots?: number;
+      shortLots?: number;
+    };
     fundamental: { fundamentalScore: number | null };
   };
   shortTerm: {
