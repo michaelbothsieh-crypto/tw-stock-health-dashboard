@@ -69,19 +69,24 @@ export function StockChart({ data, keyLevels }: ChartProps) {
 
   return (
     <div className="mt-1 w-full space-y-3">
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 text-sm lg:text-base">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-blue-500" /> {zhTW.chart.close}：{formatLineValue(latestClose)}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> {zhTW.chart.sma20}：{formatLineValue(latestSma20)}
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-teal-400" /> {zhTW.chart.sma60}：{formatLineValue(latestSma60)}
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 text-sm lg:text-base">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-blue-500" /> {zhTW.chart.close}：{formatLineValue(latestClose)}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> {zhTW.chart.sma20}：{formatLineValue(latestSma20)}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-teal-400" /> {zhTW.chart.sma60}：{formatLineValue(latestSma60)}
+          </span>
+        </div>
+        <div className="text-[10px] text-muted-foreground md:hidden italic">
+          Tip: 雙指縮放與拖曳圖表
+        </div>
       </div>
 
-      <div className="h-72 w-full sm:h-80">
+      <div className="h-72 w-full sm:h-80 touch-pan-y">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 8, right: 40, left: 0, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
