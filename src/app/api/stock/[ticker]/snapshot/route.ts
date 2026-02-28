@@ -38,6 +38,7 @@ import { getTvTechnicalIndicators } from "@/lib/providers/tradingViewFetch";
 import { translateTechnicals } from "@/lib/ux/technicalTranslator";
 import { fetchStockSnapshot } from "@/lib/api/stockRouter";
 import { getTacticalPlaybook } from "@/lib/ai/playbookAgent";
+import { getFilteredInsiderTransfers } from "@/lib/providers/twseInsiderFetch";
 
 function isTaiwanStock(symbol: string) {
   return /^\d+$/.test(symbol) || symbol.endsWith(".TW") || symbol.endsWith(".TWO");
@@ -289,6 +290,16 @@ export async function GET(
     const marketData = await getMarketIndicators({ symbols: crashSymbols, rangeDays: 65 });
     const crashWarning = evaluateCrashWarning(marketData);
 
+    // Fetch Insider Transfers (Taiwan Only)
+    let insiderTransfers: import("@/lib/providers/twseInsiderFetch").InsiderTransfer[] = [];
+    if (isTaiwanStock(norm.symbol)) {
+      try {
+        insiderTransfers = await getFilteredInsiderTransfers(norm.symbol);
+      } catch (e) {
+        console.warn("[Snapshot] Failed to fetch insider transfers", e);
+      }
+    }
+
     const playbook = await getTacticalPlaybook({
       ticker: norm.symbol,
       stockName: companyNameZh || norm.symbol,
@@ -298,6 +309,14 @@ export async function GET(
       macroRisk: crashWarning.score ?? 0,
       technicalTrend: technicalTactics?.signals[0]?.status || "趨勢不明",
       flowScore: flowSignals.flowScore ?? 50,
+      smartMoneyFlow: flowSignals.smartMoneyFlow,
+      retailSentiment: flowSignals.retailSentiment,
+      flowVerdict: flowSignals.flowVerdict,
+      institutionalLots: flowSignals.institutionalLots,
+      trustLots: flowSignals.trustLots,
+      marginLots: flowSignals.marginLots,
+      shortLots: flowSignals.shortLots,
+      insiderTransfers,
     });
 
     // Adjust strategy confidence based on crash score
@@ -343,6 +362,7 @@ export async function GET(
       technicals,
       technicalTactics,
       playbook,
+      insiderTransfers,
       signals: {
         trend: trendSignals,
         flow: flowSignals,

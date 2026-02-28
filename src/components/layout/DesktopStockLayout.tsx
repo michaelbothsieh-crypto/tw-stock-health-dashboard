@@ -5,7 +5,7 @@ import { RadarOverview } from "@/components/charts/RadarOverview";
 import { StockChart } from "@/components/StockChart";
 import { GlobalLinkageTile } from "@/components/tiles/GlobalLinkageTile";
 import { TechnicalTile } from "@/components/tiles/TechnicalTile";
-import { MacroRadarTile } from "@/components/tiles/MacroRadarTile";
+import { FlowRadarTile } from "@/components/tiles/FlowRadarTile";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DashboardLayoutProps, ExplainTab } from "./types";
@@ -206,12 +206,11 @@ export function DesktopStockLayout({
 
           <GlobalLinkageTile snapshot={snapshot} />
 
-          <TechnicalTile tactics={snapshot.technicalTactics} />
-
-          <MacroRadarTile snapshot={snapshot} />
-
-          {/* Evidence Strip */}
-          <Tile className="rounded-2xl p-6 overflow-hidden">
+                  <TechnicalTile tactics={snapshot.technicalTactics} />
+          
+                  <FlowRadarTile snapshot={snapshot} />
+          
+                  {/* Evidence Strip */}          <Tile className="rounded-2xl p-6 overflow-hidden">
             <div className="mb-4 text-[16px] font-medium text-neutral-400 flex items-center justify-between">
               <span>證據摘要</span>
               <Button variant="ghost" size="sm" onClick={() => {

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GlobalLinkageTile } from "@/components/tiles/GlobalLinkageTile";
 import { TechnicalTile } from "@/components/tiles/TechnicalTile";
-import { MacroRadarTile } from "@/components/tiles/MacroRadarTile";
+import { FlowRadarTile } from "@/components/tiles/FlowRadarTile";
 import { DashboardLayoutProps, ExplainTab } from "./types";
 import { EXPLAIN_TABS, formatScoreAsPercent, chipColorClass, chipBarColorClass, directionLabel, strategyLabel, ExplainComponentsTable } from "./utils";
 
@@ -47,7 +47,7 @@ export function MobileStockLayout({
 
       <TechnicalTile tactics={snapshot.technicalTactics} />
 
-      <MacroRadarTile snapshot={snapshot} />
+      <FlowRadarTile snapshot={snapshot} />
 
       {/* Evidence Section (Card list instead of chips) */}
       <Tile className="rounded-2xl p-5 overflow-hidden">
