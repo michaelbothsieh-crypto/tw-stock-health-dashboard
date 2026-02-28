@@ -4,7 +4,7 @@ import { CrashWarningOutput } from "@/lib/global/crash/crashEngine";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Settings, X } from "lucide-react";
+import { Search, LayoutDashboard, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { defaultWatchlist, stockNameMap } from "@/i18n/zh-TW";
@@ -264,10 +264,13 @@ export function DashboardBento({ initialTicker = "2330" }: { initialTicker?: str
   return (
     <div className="min-h-screen overflow-x-hidden bg-neutral-950 text-neutral-100 selection:bg-emerald-500/30">
       <header className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/95 px-4 py-3 backdrop-blur lg:hidden flex justify-between items-center">
-        <div className="text-[15px] text-neutral-400">股票診斷</div>
-        <Button asChild variant="outline" className="h-11 w-11 rounded-full border-neutral-700 bg-neutral-900 p-0 text-neutral-100 transition-all duration-150 hover:brightness-105">
-          <Link href="/watchlist" aria-label="設定">
-            <Settings className="h-5 w-5" />
+        <div className="text-[15px] font-black tracking-tighter text-neutral-100 flex items-center gap-2">
+          <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          台股診斷 PRO
+        </div>
+        <Button asChild variant="outline" className="h-10 w-10 rounded-xl border-neutral-800 bg-neutral-900 p-0 text-neutral-400 transition-all duration-150 hover:text-emerald-500 hover:bg-emerald-500/10">
+          <Link href="/watchlist" aria-label="AI 健康戰情室">
+            <LayoutDashboard className="h-5 w-5" />
           </Link>
         </Button>
       </header>

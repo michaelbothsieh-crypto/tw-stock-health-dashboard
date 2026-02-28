@@ -31,6 +31,8 @@ export type ConsistencyDetail = ExplainSection & {
 };
 
 export type SnapshotResponse = {
+  overallHealthScore?: number;
+  displayName?: string;
   crashWarning?: CrashWarningOutput;
   warnings?: string[];
   technicals?: import('@/lib/providers/tradingViewFetch').TvTechnicalData | null;

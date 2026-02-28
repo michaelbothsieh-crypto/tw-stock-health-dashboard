@@ -1,9 +1,11 @@
 "use client";
 
-import { ListChecks, Eye, AlertCircle, Globe, Search, Target, Zap, TrendingUp, TrendingDown, Activity, Bot, Shield, ArrowRight, Database, Clock, DollarSign, Cpu, AlertTriangle, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ListChecks, Eye, AlertCircle, Globe, Search, Target, Zap, TrendingUp, TrendingDown, Activity, Bot, Shield, ArrowRight, Database, Clock, DollarSign, Cpu, AlertTriangle, ShieldAlert, ShieldCheck, Star } from "lucide-react";
 import { SnapshotResponse } from "@/components/layout/types";
 import { generatePlaybook, VerdictColor } from "@/lib/ux/playbookGenerator";
 import { getTwseColor } from "../layout/utils";
+import { useWatchlist } from "@/hooks/useWatchlist";
+import { getSharedScoreStyle } from "@/lib/ux/scoreStyles";
 import {
     Tooltip,
     TooltipContent,
@@ -38,7 +40,7 @@ const VERDICT_STYLES: Record<
     },
     amber: {
         banner: "bg-amber-900/30 border-amber-700/40 text-amber-300",
-        badge: "bg-amber-500/10 text-amber-400 border border-amber-500/20",
+        badge: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20",
         dot: "bg-amber-500",
         stepNumber: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20",
         accent: "text-amber-600 dark:text-amber-400",
@@ -98,6 +100,8 @@ export function HeroPlaybook({
     currentStockLabel: string;
     onSwitchStock?: () => void;
 }) {
+    const { hasStock, toggleStock } = useWatchlist();
+    
     // Use AI generated playbook from API, fallback to local generator if missing
     const playbook = snapshot.playbook || generatePlaybook(snapshot);
     const styles = VERDICT_STYLES[playbook.verdictColor as VerdictColor];
@@ -184,19 +188,33 @@ export function HeroPlaybook({
                     <div className="md:border-r border-slate-100 dark:border-neutral-800 p-5 md:p-8 flex flex-col justify-between gap-6 md:gap-8">
                         <div className="space-y-6 md:space-y-8">
                             {/* 股票 Header Identity */}
-                            <button
-                                type="button"
-                                onClick={onSwitchStock}
-                                className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl p-3 -m-3 transition-all group text-left outline-none"
-                            >
-                                <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-neutral-100 leading-none truncate">
-                                    {stockName}
-                                </h1>
-                                <div className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/10 text-sm font-medium text-muted-foreground dark:text-neutral-400 tracking-widest font-mono">
-                                    {tickerCode}
-                                </div>
-                                <Search className="h-4 w-4 shrink-0 text-slate-300 dark:text-neutral-600 group-hover:text-slate-900 dark:group-hover:text-neutral-300 transition-colors" />
-                            </button>
+                            <div className="flex items-center justify-between gap-4">
+                                <button
+                                    type="button"
+                                    onClick={onSwitchStock}
+                                    className="flex items-center gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl p-3 -m-3 transition-all group text-left outline-none min-w-0 flex-1"
+                                >
+                                    <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-neutral-100 leading-none truncate">
+                                        {stockName}
+                                    </h1>
+                                    <div className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/10 text-sm font-medium text-muted-foreground dark:text-neutral-400 tracking-widest font-mono">
+                                        {tickerCode}
+                                    </div>
+                                    <Search className="h-4 w-4 shrink-0 text-slate-300 dark:text-neutral-600 group-hover:text-slate-900 dark:group-hover:text-neutral-300 transition-colors" />
+                                </button>
+
+                                <button
+                                    onClick={() => toggleStock(tickerCode)}
+                                    className={`p-2.5 rounded-xl border transition-all duration-300 shrink-0 ${
+                                        hasStock(tickerCode)
+                                        ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-500 shadow-sm shadow-yellow-500/10"
+                                        : "border-slate-100 dark:border-neutral-800 text-slate-300 dark:text-neutral-600 hover:text-yellow-500 hover:border-yellow-500/30"
+                                    }`}
+                                    aria-label={hasStock(tickerCode) ? "從觀察清單移除" : "加入觀察清單"}
+                                >
+                                    <Star className={`h-5 w-5 ${hasStock(tickerCode) ? "fill-current" : ""}`} />
+                                </button>
+                            </div>
 
                             {/* 股價儀表 (Visual Focus) */}
                             <PriceTicker prices={snapshot.data.prices} />
@@ -216,11 +234,7 @@ export function HeroPlaybook({
                                     <div className="text-[10px] md:text-xs font-bold text-muted-foreground dark:text-neutral-500 uppercase tracking-wider">
                                         出手信心
                                     </div>
-                                    <div className={`text-xl md:text-2xl font-black tabular-nums tracking-tighter ${
-                                        snapshot.strategy.confidence >= 70 ? "text-red-600 dark:text-red-500" : 
-                                        snapshot.strategy.confidence >= 50 ? "text-amber-600 dark:text-amber-500" : 
-                                        "text-green-600 dark:text-green-500"
-                                    }`}>
+                                    <div className={`text-xl md:text-2xl font-black tabular-nums tracking-tighter ${getSharedScoreStyle(snapshot.strategy.confidence).text}`}>
                                         {snapshot.strategy.confidence.toFixed(1)}%
                                     </div>
                                 </div>
@@ -349,7 +363,7 @@ export function HeroPlaybook({
                             </span>
                             </div>
                             <div className="space-y-4 md:space-y-5">
-                                {playbook.actionSteps.map((step, idx) => (
+                                {(playbook.actionSteps || []).map((step, idx) => (
                                     <div key={idx} className="flex items-start gap-3 md:gap-4 group">
                                         <div
                                             className={`mt-0.5 shrink-0 flex h-5 w-5 md:h-6 md:w-6 items-center justify-center rounded-full text-[10px] md:text-[11px] font-black transition-all duration-300 group-hover:scale-110 ${styles.stepNumber}`}
@@ -358,7 +372,7 @@ export function HeroPlaybook({
                                         </div>
                                         <div className="flex flex-col flex-1">
                                             <p className="text-sm md:text-[15px] font-medium text-slate-700 dark:text-neutral-200 leading-snug">
-                                                {step.replace(/^\d+\.\s*/, "")}
+                                                {typeof step === 'string' ? step.replace(/^\d+\.\s*/, "") : "資料格式異常"}
                                             </p>
                                             {idx < playbook.actionSteps.length - 1 && (
                                                 <div className="mt-3 ml-[-24px] md:ml-[-28px] pl-[35px] md:pl-[39px] h-4 md:h-5 border-l-2 border-dashed border-slate-100 dark:border-neutral-800" />
@@ -379,18 +393,18 @@ export function HeroPlaybook({
                             </div>
                             
                             <div className="flex flex-col gap-2 mt-3">
-                                {playbook.watchTargets.map((target, idx) => (
+                                {(playbook.watchTargets || []).map((target, idx) => (
                                     <div key={idx} className="flex items-start gap-3 bg-slate-50/50 dark:bg-white/5 px-4 py-3 rounded-lg transition-colors hover:bg-slate-100 dark:hover:bg-white/10 group">
                                         <ArrowRight className="h-4 w-4 text-blue-400 shrink-0 mt-0.5 transition-transform group-hover:translate-x-0.5" />
                                         <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-snug">
-                                            {target}
+                                            {typeof target === 'string' ? target : "資料格式異常"}
                                         </p>
                                     </div>
                                 ))}
                             </div>
                         </div>
 
-                        {/* 下區塊：AI 決策底層數據 (Mobile swipeable) */}
+                        {/* 下區塊：AI 決策底層數據 (2x2 Grid on Mobile) */}
                         <div className="p-5 md:p-8 bg-slate-50/30 dark:bg-neutral-950/40 border-t border-slate-100 dark:border-neutral-800/50">
                             <div className="flex items-center gap-2 mb-4">
                                 <Database className="h-3.5 w-3.5 text-muted-foreground" />
@@ -398,24 +412,25 @@ export function HeroPlaybook({
                                     AI 決策底層數據
                                 </span>
                             </div>
-                                                    <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2.5 mt-4">
-                                                        <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
-                                                            <Globe className="h-3 w-3" />
-                                                            總經 {snapshot.crashWarning?.level || "平穩"}
-                                                        </div>
-                                                        <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
-                                                            <Activity className="h-3 w-3" />
-                                                            籌碼 {snapshot.signals.flow.flowScore ? (snapshot.signals.flow.flowScore > 60 ? "偏多" : "中性") : "評估"}
-                                                        </div>
-                                                        <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
-                                                            <Shield className="h-3 w-3" />
-                                                            支撐 {snapshot.keyLevels.supportLevel?.toFixed(1) ?? '--'}
-                                                        </div>
-                                                        <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
-                                                            <Target className="h-3 w-3" />
-                                                            壓力 {snapshot.keyLevels.breakoutLevel?.toFixed(1) ?? '--'}
-                                                        </div>
-                                                    </div>                        </div>
+                            <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2.5 mt-4">
+                                <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
+                                    <Globe className="h-3 w-3" />
+                                    總經 {snapshot.crashWarning?.level || "平穩"}
+                                </div>
+                                <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
+                                    <Activity className="h-3 w-3" />
+                                    籌碼 {snapshot.signals.flow.flowScore ? (snapshot.signals.flow.flowScore > 60 ? "偏多" : "中性") : "評估"}
+                                </div>
+                                <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-black bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
+                                    <Shield className="h-3 w-3" />
+                                    支撐 {snapshot.keyLevels.supportLevel?.toFixed(1) ?? '--'}
+                                </div>
+                                <div className="inline-flex items-center h-8 md:h-6 rounded-md px-2.5 text-[11px] font-black bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 gap-1.5 whitespace-nowrap justify-center md:justify-start">
+                                    <Target className="h-3 w-3" />
+                                    壓力 {snapshot.keyLevels.breakoutLevel?.toFixed(1) ?? '--'}
+                                </div>
+                            </div>
+                        </div>
 
                         {/* 獨立風險提示橫幅 */}
                         {(snapshot.strategy.explain.contradictions.length > 0 || snapshot.consistency.score < 55) && (
