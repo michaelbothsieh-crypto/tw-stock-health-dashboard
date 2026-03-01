@@ -300,14 +300,18 @@ async function ensureTelegramCommandsSynced() {
   }
 }
 
-function buildChartUrl(bars: Array<{ close?: number }>, support: number | null, resistance: number | null): string | null {
+function buildChartUrl(bars: Array<{ close?: number, volume?: number }>, support: number | null, resistance: number | null): string | null {
   if (!bars || bars.length < 2) return null;
   
   const data = bars.map(b => Number(b.close)).filter(Number.isFinite);
   if (data.length === 0) return null;
   
+  const volumes = bars.map(b => Number(b.volume)).filter(Number.isFinite);
+  const maxVol = volumes.length > 0 ? Math.max(...volumes) : 1;
+  
   const isUp = data[data.length - 1] > data[0];
   const color = isUp ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)'; // 紅漲綠跌
+  const latestPrice = data[data.length - 1];
   
   const annotations = [];
   
@@ -315,7 +319,7 @@ function buildChartUrl(bars: Array<{ close?: number }>, support: number | null, 
     annotations.push({
       type: 'line',
       mode: 'horizontal',
-      scaleID: 'y-axis-0',
+      scaleID: 'y',
       value: support,
       borderColor: 'rgba(34, 197, 94, 0.8)',
       borderWidth: 1.5,
@@ -328,7 +332,7 @@ function buildChartUrl(bars: Array<{ close?: number }>, support: number | null, 
     annotations.push({
       type: 'line',
       mode: 'horizontal',
-      scaleID: 'y-axis-0',
+      scaleID: 'y',
       value: resistance,
       borderColor: 'rgba(239, 68, 68, 0.8)',
       borderWidth: 1.5,
@@ -337,31 +341,64 @@ function buildChartUrl(bars: Array<{ close?: number }>, support: number | null, 
     });
   }
 
-  const chartConfig = {
+  annotations.push({
     type: 'line',
+    mode: 'horizontal',
+    scaleID: 'y',
+    value: latestPrice,
+    borderColor: color,
+    borderWidth: 1.5,
+    borderDash: [2, 2],
+    label: { enabled: true, content: '現價 ' + latestPrice.toFixed(2), position: 'right', backgroundColor: color }
+  });
+
+  const chartConfig = {
+    type: 'bar',
     data: {
       labels: data.map((_, i) => i),
-      datasets: [{
-        data: data,
-        borderColor: color,
-        borderWidth: 2,
-        fill: true,
-        backgroundColor: isUp ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
-        pointRadius: 0
-      }]
+      datasets: [
+        {
+          type: 'line',
+          data: data,
+          borderColor: color,
+          borderWidth: 2,
+          fill: false,
+          pointRadius: 0,
+          yAxisID: 'y'
+        },
+        ...(volumes.length === data.length ? [{
+          type: 'bar',
+          data: volumes,
+          backgroundColor: 'rgba(156, 163, 175, 0.3)',
+          yAxisID: 'yVol'
+        }] : [])
+      ]
     },
     options: {
       legend: { display: false },
       scales: {
         xAxes: [{ display: false }],
-        yAxes: [{ display: false }]
+        yAxes: [
+          {
+            id: 'y',
+            position: 'right',
+            gridLines: { color: 'rgba(255,255,255,0.1)' },
+            ticks: { fontColor: '#9ca3af' }
+          },
+          {
+            id: 'yVol',
+            display: false,
+            ticks: { min: 0, max: maxVol * 4 }
+          }
+        ]
       },
       layout: { padding: 10 },
       annotation: { annotations }
     }
   };
   
-  return `https://quickchart.io/chart?w=600&h=300&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
+  chartConfig['backgroundColor'] = '#1f2937';
+  return `https://quickchart.io/chart?w=800&h=400&bkg=1f2937&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
 }
 
 function resolveCodeFromInputLocal(input: string): string | null {
@@ -395,6 +432,7 @@ function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
     ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
     ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
     ...(Array.isArray(snapshot?.news?.topNews) ? snapshot.news.topNews : []),
+    ...(Array.isArray(snapshot?.news?.timeline) ? snapshot.news.timeline : []),
     ...(Array.isArray(snapshot?.news?.items) ? snapshot.news.items : []),
   ];
 
@@ -407,10 +445,12 @@ function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
   }
 
   if (snapshot?.news?.error) {
+    // 即使有 error，如果我們其實有抓到備用新聞，上面已經返回了。
+    // 如果走到這，代表真的沒新聞，只是被標記了 error。
     return "—（新聞來源暫時不可用）";
   }
 
-  return "—";
+  return "—（近期無重大新聞）";
 }
 
 function buildOverseasCandidates(snapshot: SnapshotLike): OverseasCandidate[] {
@@ -558,7 +598,8 @@ function buildStockCardLines(card: StockCard): string {
 
   const lines = [
     `📊 ${card.symbol} ${card.nameZh}`,
-    `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）  【量能】 ${volumeState}（vs5D ${formatSignedPct(card.volumeVs5dPct, 1)}）`,
+    `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）`,
+    `【量能】 ${volumeState}（vs5D ${formatSignedPct(card.volumeVs5dPct, 1)}）`,
     `【法人】 ${flowHuman}（單位：${flowUnit}）`,
     `【趨勢】 ${stanceText}（勝率 ${formatPct(card.confidence, 1)}）`,
     "",

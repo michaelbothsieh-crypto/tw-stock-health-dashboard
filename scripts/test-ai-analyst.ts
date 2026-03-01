@@ -55,32 +55,57 @@ async function sendTG(text: string, photoUrl?: string) {
 }
 
 function buildMockChartUrl(): string {
-    // 模擬過去 180 天台積電股價走勢
-    const data = Array.from({ length: 180 }, (_, i) => 700 + i * 0.5 + Math.sin(i / 10) * 30 + Math.random() * 20);
+    const barsCount = 180;
+    const data = Array.from({ length: barsCount }, (_, i) => 700 + i * 0.5 + Math.sin(i / 10) * 30 + Math.random() * 20);
+    const volumes = Array.from({ length: barsCount }, () => Math.random() * 50000 + 10000);
+    
     const isUp = data[data.length - 1] > data[0];
     const color = isUp ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)'; // 台灣股市紅漲綠跌
     
     const support = 848.00;
     const resistance = 878.00;
+    const latestPrice = data[data.length - 1];
+    const maxVol = Math.max(...volumes);
     
     const chartConfig = {
-        type: 'line',
+        type: 'bar',
         data: {
             labels: data.map((_, i) => i),
-            datasets: [{
-                data: data,
-                borderColor: color,
-                borderWidth: 2,
-                fill: true,
-                backgroundColor: isUp ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
-                pointRadius: 0
-            }]
+            datasets: [
+                {
+                    type: 'line',
+                    data: data,
+                    borderColor: color,
+                    borderWidth: 2,
+                    fill: false,
+                    pointRadius: 0,
+                    yAxisID: 'y'
+                },
+                {
+                    type: 'bar',
+                    data: volumes,
+                    backgroundColor: 'rgba(156, 163, 175, 0.3)',
+                    yAxisID: 'yVol'
+                }
+            ]
         },
         options: {
             legend: { display: false },
             scales: {
                 xAxes: [{ display: false }],
-                yAxes: [{ display: false }]
+                yAxes: [
+                    {
+                        id: 'y',
+                        position: 'right',
+                        gridLines: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { fontColor: '#9ca3af' }
+                    },
+                    {
+                        id: 'yVol',
+                        display: false,
+                        ticks: { min: 0, max: maxVol * 4 } // 讓成交量只佔下方 1/4
+                    }
+                ]
             },
             layout: { padding: 10 },
             annotation: {
@@ -88,7 +113,7 @@ function buildMockChartUrl(): string {
                     {
                         type: 'line',
                         mode: 'horizontal',
-                        scaleID: 'y-axis-0',
+                        scaleID: 'y',
                         value: support,
                         borderColor: 'rgba(34, 197, 94, 0.8)',
                         borderWidth: 1.5,
@@ -98,19 +123,32 @@ function buildMockChartUrl(): string {
                     {
                         type: 'line',
                         mode: 'horizontal',
-                        scaleID: 'y-axis-0',
+                        scaleID: 'y',
                         value: resistance,
                         borderColor: 'rgba(239, 68, 68, 0.8)',
                         borderWidth: 1.5,
                         borderDash: [4, 4],
                         label: { enabled: true, content: '壓力 ' + resistance, position: 'left', backgroundColor: 'rgba(239, 68, 68, 0.8)' }
+                    },
+                    {
+                        type: 'line',
+                        mode: 'horizontal',
+                        scaleID: 'y',
+                        value: latestPrice,
+                        borderColor: color,
+                        borderWidth: 1.5,
+                        borderDash: [2, 2],
+                        label: { enabled: true, content: '現價 ' + latestPrice.toFixed(2), position: 'right', backgroundColor: color }
                     }
                 ]
             }
         }
     };
     
-    return `https://quickchart.io/chart?w=600&h=300&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
+    // QuickChart background color
+    chartConfig['backgroundColor'] = '#1f2937'; // dark mode background
+    
+    return `https://quickchart.io/chart?w=800&h=400&bkg=1f2937&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
 }
 
 async function main() {
