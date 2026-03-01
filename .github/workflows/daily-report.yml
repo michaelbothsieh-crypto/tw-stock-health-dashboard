@@ -39,14 +39,16 @@ jobs:
       - name: Install Dependencies
         run: npm ci
 
-      - name: Generate Daily Report
+      - name: Generate Daily Report and Push to Telegram
         run: npm run report:daily
 
       - name: Commit and Push Report
+        # 若 REPORT_WRITE_FILES=true 才會有 reports/ 變動，這步驟 fail-safe 跳過
+        continue-on-error: true
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add reports/
+          git add reports/ 2>/dev/null || true
           # Commit will only happen if there are changes
           git diff --quiet && git diff --staged --quiet || (git commit -m "docs: 📈 Add daily stock report [skip ci]" && git push)
         env:
