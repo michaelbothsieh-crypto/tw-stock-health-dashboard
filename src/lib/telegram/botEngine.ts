@@ -593,7 +593,7 @@ function buildStockCardLines(card: StockCard): string {
   const insiderWarningLine = hasInsiderSell
     ? `🚨 【內部人警示】 ${card.insiderSells
       .slice(0, 2)
-      .map(s => `${s.role}「${s.declarer}」拋售 ${s.lots.toLocaleString()} 張（${s.valueText}）`)
+      .map(s => `${s.date} ${s.role}「${s.declarer}」拋售 ${s.lots.toLocaleString()} 張（${s.valueText}）`)
       .join("；")}`
     : null;
 
