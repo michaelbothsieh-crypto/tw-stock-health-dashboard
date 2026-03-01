@@ -1,4 +1,7 @@
-﻿import { fetchLatestReport } from "./reportFetcher";
+import { fetchLatestReport } from "./reportFetcher";
+import { getAllChatIds } from "./chatStore";
+import { generateStockAnalysis } from "../ai/stockAnalyst";
+import { getFilteredInsiderTransfers } from "../providers/twseInsiderFetch";
 import { twStockNames } from "../../data/twStockNames";
 import { fetchYahooFinanceBars } from "../global/yahooFinance";
 import { fetchRecentBars } from "../range";
@@ -76,6 +79,7 @@ type StockCard = {
   syncLevel: string;
   newsLine: string;
   sourceLabel: string;
+  insiderSells: Array<{ date: string; declarer: string; role: string; humanMode: string; lots: number; valueText: string; transferRatio: number }>;
 };
 
 type TelegramHandleOptions = {
@@ -84,12 +88,15 @@ type TelegramHandleOptions = {
 
 type SnapshotLike = {
   news?: {
-    topBullishNews?: Array<{ title?: string }>;
-    topBearishNews?: Array<{ title?: string }>;
+    topBullishNews?: Array<{ title?: string; sentiment?: string }>;
+    topBearishNews?: Array<{ title?: string; sentiment?: string }>;
+    topNews?: Array<{ title?: string; sentiment?: string }>;
+    items?: Array<{ title?: string; sentiment?: string }>;
     error?: string | null;
   };
   newsMeta?: {
     count?: number;
+    sentiment?: string;
   };
   globalLinkage?: {
     drivers?: {
@@ -256,19 +263,20 @@ function buildTrendByProb(upProb1D: number | null): string {
 }
 
 function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
-  const topNews = [
+  // 將所有可能的新聞來源合並，優先取最重要的
+  const allNews: Array<{ title?: string }> = [
     ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
     ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
+    ...(Array.isArray(snapshot?.news?.topNews) ? snapshot.news.topNews : []),
+    ...(Array.isArray(snapshot?.news?.items) ? snapshot.news.items : []),
   ];
 
-  const firstNewsTitle = topNews.length > 0 && topNews[0]?.title ? String(topNews[0].title) : "";
-  if (firstNewsTitle.trim()) {
-    return buildNewsLine(firstNewsTitle, 96);
-  }
-
-  const newsCount = typeof snapshot?.newsMeta?.count === "number" ? snapshot.newsMeta.count : 0;
-  if (newsCount > 0) {
-    return `📰 近7日共 ${newsCount} 則新聞（中性）`;
+  // 取第一則有標題的新聞
+  for (const item of allNews) {
+    const title = item?.title?.trim();
+    if (title && title.length > 0 && !title.startsWith("近")) {
+      return buildNewsLine(title, 96);
+    }
   }
 
   if (snapshot?.news?.error) {
@@ -402,7 +410,7 @@ function buildOverseasSummary(overseas: OverseasLine[]): string {
     .join("｜");
 }
 
-function buildStockCardMessage(card: StockCard): string {
+function buildStockCardLines(card: StockCard): string {
   const stanceText = buildStanceText(card.shortDir, card.strategySignal, card.confidence);
   const overseasText = buildOverseasSummary(card.overseas);
   const volumeState = buildVolumeState(card.volume, card.volumeVs5dPct);
@@ -413,23 +421,69 @@ function buildStockCardMessage(card: StockCard): string {
   const bullTarget = formatPrice(card.bullTarget, 2);
   const bearTarget = formatPrice(card.bearTarget, 2);
 
+  const hasInsiderSell = card.insiderSells && card.insiderSells.length > 0;
+  const insiderWarningLine = hasInsiderSell
+    ? `🚨 【內部人警示】 ${card.insiderSells
+      .slice(0, 2)
+      .map(s => `${s.role}「${s.declarer}」拋售 ${s.lots.toLocaleString()} 張（${s.valueText}）`)
+      .join("；")}`
+    : null;
+
   const lines = [
-    `${card.symbol} ${card.nameZh}`,
-    `【收盤】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）  【量】 ${volumeState}（vs5D ${formatSignedPct(card.volumeVs5dPct, 1)}）`,
+    `📊 ${card.symbol} ${card.nameZh}`,
+    `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）  【量能】 ${volumeState}（vs5D ${formatSignedPct(card.volumeVs5dPct, 1)}）`,
     `【法人】 ${flowHuman}（單位：${flowUnit}）`,
     `【趨勢】 ${stanceText}（信心 ${formatPct(card.confidence, 1)}）｜1D↑ ${formatPct(card.p1d, 1)}（3D ${formatPct(card.p3d, 1)} / 5D ${formatPct(card.p5d, 1)}）`,
     "",
     `【關鍵價】 支撐 ${support} ｜ 壓力 ${resistance}`,
-    "【明日劇本】",
-    `• 站上 ${resistance} → 看 ${bullTarget}（續強）`,
+    `• 站穩 ${resistance} → 看 ${bullTarget}（續強）`,
     `• 跌破 ${support} → 防 ${bearTarget}（轉弱）`,
     "",
     `【海外】 ${overseasText}（同步度：${card.syncLevel || "—"}）`,
     `【新聞】 ${card.newsLine || "—"}`,
-    `來源：${card.sourceLabel}`,
+    ...(insiderWarningLine ? ["", insiderWarningLine] : []),
   ];
 
   return lines.map((line) => escapeHtml(line)).join("\n");
+}
+
+async function buildStockCardWithAI(card: StockCard): Promise<string> {
+  const structuredPart = buildStockCardLines(card);
+
+  try {
+    const aiText = await generateStockAnalysis({
+      symbol: card.symbol,
+      nameZh: card.nameZh,
+      close: card.close,
+      chgPct: card.chgPct,
+      volume: card.volume,
+      volumeVs5dPct: card.volumeVs5dPct,
+      flowNet: card.flowNet,
+      flowUnit: card.flowUnit,
+      shortDir: card.shortDir,
+      strategySignal: card.strategySignal,
+      confidence: card.confidence,
+      p1d: card.p1d,
+      p3d: card.p3d,
+      p5d: card.p5d,
+      support: card.support,
+      resistance: card.resistance,
+      newsLine: card.newsLine,
+      syncLevel: card.syncLevel,
+      overseas: card.overseas.map(o => ({ symbol: o.symbol, chgPct: o.chgPct })),
+      insiderSells: card.insiderSells || [],
+    });
+
+    if (aiText) {
+      const divider = escapeHtml("━━━━━━━━━━━━━━");
+      const aiSection = `${divider}\n🤖 <b>AI 分析師點評</b>\n${escapeHtml(aiText)}`;
+      return `${structuredPart}\n\n${aiSection}`;
+    }
+  } catch (e) {
+    console.warn("[TelegramBot] AI analysis failed, using plain card:", e);
+  }
+
+  return structuredPart;
 }
 
 function createFallbackCard(symbol: string, nameZh: string, sourceLabel: string): StockCard {
@@ -457,6 +511,7 @@ function createFallbackCard(symbol: string, nameZh: string, sourceLabel: string)
     syncLevel: "—",
     newsLine: "—",
     sourceLabel,
+    insiderSells: [],
   };
 }
 
@@ -516,6 +571,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
     }
 
     card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? snapshot.signals.flow.foreign5D : null;
+    card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? snapshot.signals.flow.foreign5D : null;
     card.flowUnit = "股";
 
     card.p1d = typeof snapshot?.predictions?.upProb1D === "number" ? snapshot.predictions.upProb1D : null;
@@ -532,6 +588,26 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
     // Dynamic overseas list from linkage results (not fixed 4 names).
     card.overseas = await fetchOverseasQuotes(overseasCandidates);
     card.syncLevel = buildSyncLevel(card.overseas);
+
+    // 平行查詢內部人申報轉讓（60天內，門檻1000萬）
+    try {
+      const insiderRaw = await getFilteredInsiderTransfers(symbol);
+      // 只取市場拋售型（最重要的警示，其他類型略過）
+      card.insiderSells = insiderRaw
+        .filter(t => t.type === "市場拋售")
+        .map(t => ({
+          date: t.date,
+          declarer: t.declarer,
+          role: t.role,
+          humanMode: t.humanMode,
+          lots: t.lots,
+          valueText: t.valueText,
+          transferRatio: t.transferRatio,
+        }));
+    } catch (e) {
+      console.warn(`[TelegramBot] insider fetch failed for ${symbol}:`, e);
+      card.insiderSells = [];
+    }
 
     return card;
   } catch (error) {
@@ -579,14 +655,15 @@ export async function handleTelegramMessage(
   isBackgroundPush = false,
   options?: TelegramHandleOptions,
 ) {
-  const privateChatId = process.env.TELEGRAM_CHAT_ID;
-
   if (isBackgroundPush) {
-    if (!privateChatId) {
-      console.warn("[TelegramBot] Skipping background push: TELEGRAM_CHAT_ID is missing");
+    // 動態從 Redis 取得所有 chat_id，fallback 使用 env TELEGRAM_CHAT_ID
+    const chatIds = await getAllChatIds();
+    if (chatIds.length === 0) {
+      console.warn("[TelegramBot] Skipping background push: no chat_ids found (Redis empty and TELEGRAM_CHAT_ID not set)");
       return;
     }
-    await sendMessage(privateChatId, text);
+    console.log(`[TelegramBot] Broadcasting to ${chatIds.length} chat(s): ${chatIds.join(", ")}`);
+    await Promise.all(chatIds.map((id) => sendMessage(id, text)));
     return;
   }
 
@@ -610,7 +687,7 @@ export async function handleTelegramMessage(
       "例如：<code>/tw 2330</code> 或 <code>/tw 台積電</code>",
       "",
       "如果是剛加入群組，建議直接輸入指令試試看喔！",
-    ].join("\n");
+      ].join("\n");
     await sendMessage(chatId, welcome);
     return;
   }
@@ -629,7 +706,7 @@ export async function handleTelegramMessage(
 
   const liveCard = await fetchLiveStockCard(query, options?.baseUrl);
   if (liveCard) {
-    await replyOrEdit(chatId, progressMessageId, buildStockCardMessage(liveCard));
+    await replyOrEdit(chatId, progressMessageId, await buildStockCardWithAI(liveCard));
     return;
   }
 
@@ -662,5 +739,5 @@ export async function handleTelegramMessage(
     return;
   }
 
-  await replyOrEdit(chatId, progressMessageId, buildStockCardMessage(cardFromReportRow(stock)));
+  await replyOrEdit(chatId, progressMessageId, await buildStockCardWithAI(cardFromReportRow(stock)));
 }
