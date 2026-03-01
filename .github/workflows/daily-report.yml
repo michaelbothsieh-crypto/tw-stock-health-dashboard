@@ -17,7 +17,11 @@ jobs:
       BACKTEST_WINDOW: "120"
       REPORT_TIMEZONE: "Asia/Taipei"
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      # chat_id 現在由 Upstash Redis 動態提供（透過 /api/telegram/webhook 自動更新）
+      # 若 Redis 無資料，會 fallback 到此 env（可選，作為保底）
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      UPSTASH_REDIS_REST_URL: ${{ secrets.UPSTASH_REDIS_REST_URL }}
+      UPSTASH_REDIS_REST_TOKEN: ${{ secrets.UPSTASH_REDIS_REST_TOKEN }}
 
     steps:
       - name: Checkout Repository
