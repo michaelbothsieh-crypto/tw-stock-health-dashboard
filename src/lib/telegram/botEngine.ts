@@ -80,6 +80,7 @@ type StockCard = {
   newsLine: string;
   sourceLabel: string;
   insiderSells: Array<{ date: string; declarer: string; role: string; humanMode: string; lots: number; valueText: string; transferRatio: number }>;
+  chartUrl: string | null;
 };
 
 type TelegramHandleOptions = {
@@ -142,6 +143,57 @@ async function sendMessage(chatId: string | number, text: string): Promise<numbe
   }
 }
 
+async function sendPhoto(chatId: string | number, photoUrl: string, caption: string): Promise<number | null> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return null;
+
+  const url = `https://api.telegram.org/bot${token}/sendPhoto`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: photoUrl,
+        caption,
+        parse_mode: "HTML",
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("[TelegramBot] SendPhoto Error:", await res.text());
+      return null;
+    }
+
+    const payload = await res.json().catch(() => null);
+    const messageId = payload?.result?.message_id;
+    return typeof messageId === "number" ? messageId : null;
+  } catch (error) {
+    console.error("[TelegramBot] SendPhoto Network Error:", error);
+    return null;
+  }
+}
+
+async function deleteMessage(chatId: string | number, messageId: number): Promise<boolean> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return false;
+
+  const url = `https://api.telegram.org/bot${token}/deleteMessage`;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+      }),
+    });
+    return res.ok;
+  } catch (error) {
+    return false;
+  }
+}
+
 async function editMessage(chatId: string | number, messageId: number, text: string): Promise<boolean> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
@@ -180,6 +232,17 @@ async function replyOrEdit(chatId: number, progressMessageId: number | null, tex
     if (ok) return;
   }
   await sendMessage(chatId, text);
+}
+
+async function replyWithCard(chatId: number, progressMessageId: number | null, text: string, photoUrl: string | null) {
+  if (photoUrl) {
+    if (progressMessageId !== null) {
+      await deleteMessage(chatId, progressMessageId);
+    }
+    await sendPhoto(chatId, photoUrl, text);
+  } else {
+    await replyOrEdit(chatId, progressMessageId, text);
+  }
 }
 
 function escapeHtml(input: string): string {
@@ -235,6 +298,70 @@ async function ensureTelegramCommandsSynced() {
   } catch (error) {
     console.error("[TelegramBot] setMyCommands failed", error);
   }
+}
+
+function buildChartUrl(bars: Array<{ close?: number }>, support: number | null, resistance: number | null): string | null {
+  if (!bars || bars.length < 2) return null;
+  
+  const data = bars.map(b => Number(b.close)).filter(Number.isFinite);
+  if (data.length === 0) return null;
+  
+  const isUp = data[data.length - 1] > data[0];
+  const color = isUp ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)'; // 紅漲綠跌
+  
+  const annotations = [];
+  
+  if (support !== null) {
+    annotations.push({
+      type: 'line',
+      mode: 'horizontal',
+      scaleID: 'y-axis-0',
+      value: support,
+      borderColor: 'rgba(34, 197, 94, 0.8)',
+      borderWidth: 1.5,
+      borderDash: [4, 4],
+      label: { enabled: true, content: '支撐 ' + support, position: 'left', backgroundColor: 'rgba(34, 197, 94, 0.8)' }
+    });
+  }
+  
+  if (resistance !== null) {
+    annotations.push({
+      type: 'line',
+      mode: 'horizontal',
+      scaleID: 'y-axis-0',
+      value: resistance,
+      borderColor: 'rgba(239, 68, 68, 0.8)',
+      borderWidth: 1.5,
+      borderDash: [4, 4],
+      label: { enabled: true, content: '壓力 ' + resistance, position: 'left', backgroundColor: 'rgba(239, 68, 68, 0.8)' }
+    });
+  }
+
+  const chartConfig = {
+    type: 'line',
+    data: {
+      labels: data.map((_, i) => i),
+      datasets: [{
+        data: data,
+        borderColor: color,
+        borderWidth: 2,
+        fill: true,
+        backgroundColor: isUp ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+        pointRadius: 0
+      }]
+    },
+    options: {
+      legend: { display: false },
+      scales: {
+        xAxes: [{ display: false }],
+        yAxes: [{ display: false }]
+      },
+      layout: { padding: 10 },
+      annotation: { annotations }
+    }
+  };
+  
+  return `https://quickchart.io/chart?w=600&h=300&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
 }
 
 function resolveCodeFromInputLocal(input: string): string | null {
@@ -433,13 +560,12 @@ function buildStockCardLines(card: StockCard): string {
     `📊 ${card.symbol} ${card.nameZh}`,
     `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）  【量能】 ${volumeState}（vs5D ${formatSignedPct(card.volumeVs5dPct, 1)}）`,
     `【法人】 ${flowHuman}（單位：${flowUnit}）`,
-    `【趨勢】 ${stanceText}（信心 ${formatPct(card.confidence, 1)}）｜1D↑ ${formatPct(card.p1d, 1)}（3D ${formatPct(card.p3d, 1)} / 5D ${formatPct(card.p5d, 1)}）`,
+    `【趨勢】 ${stanceText}（勝率 ${formatPct(card.confidence, 1)}）`,
     "",
     `【關鍵價】 支撐 ${support} ｜ 壓力 ${resistance}`,
     `• 站穩 ${resistance} → 看 ${bullTarget}（續強）`,
     `• 跌破 ${support} → 防 ${bearTarget}（轉弱）`,
     "",
-    `【海外】 ${overseasText}（同步度：${card.syncLevel || "—"}）`,
     `【新聞】 ${card.newsLine || "—"}`,
     ...(insiderWarningLine ? ["", insiderWarningLine] : []),
   ];
@@ -512,6 +638,7 @@ function createFallbackCard(symbol: string, nameZh: string, sourceLabel: string)
     newsLine: "—",
     sourceLabel,
     insiderSells: [],
+    chartUrl: null,
   };
 }
 
@@ -535,9 +662,9 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       ? snapshot.data.prices
       : [];
 
-    if (bars.length < 2) {
+    if (bars.length < 180) {
       try {
-        const recent = await fetchRecentBars(symbol, 60);
+        const recent = await fetchRecentBars(symbol, 180);
         bars = recent.data.map((b) => ({ high: b.max, low: b.min, close: b.close, volume: b.Trading_Volume }));
       } catch (error) {
         console.error(`[TelegramBot] bars fallback failed: ${symbol}`, error);
@@ -568,11 +695,12 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.resistance = key.resistance;
       card.bullTarget = key.bullTarget;
       card.bearTarget = key.bearTarget;
+      
+      card.chartUrl = buildChartUrl(bars.slice(-180), card.support, card.resistance);
     }
 
-    card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? snapshot.signals.flow.foreign5D : null;
-    card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? snapshot.signals.flow.foreign5D : null;
-    card.flowUnit = "股";
+    card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? Math.round(snapshot.signals.flow.foreign5D / 1000) : null;
+    card.flowUnit = "張";
 
     card.p1d = typeof snapshot?.predictions?.upProb1D === "number" ? snapshot.predictions.upProb1D : null;
     card.p3d = typeof snapshot?.predictions?.upProb3D === "number" ? snapshot.predictions.upProb3D : null;
@@ -635,8 +763,11 @@ function cardFromReportRow(rowRaw: TelegramStockRow): StockCard {
   const card = createFallbackCard(row.symbol, row.nameZh, "收盤報告");
   card.close = typeof row.price === "number" ? row.price : null;
   card.chgPct = parseChangePct(row.changePct);
-  card.flowNet = parseSignedNumberLoose(row.flowTotal);
-  card.flowUnit = "股";
+  
+  const rawFlow = parseSignedNumberLoose(row.flowTotal);
+  card.flowNet = rawFlow !== null ? Math.round(rawFlow / 1000) : null;
+  card.flowUnit = "張";
+  
   card.shortDir = row.tomorrowTrend || "中立";
   card.strategySignal = row.strategySignal || "觀察";
   card.confidence = row.strategyConfidence;
@@ -706,7 +837,8 @@ export async function handleTelegramMessage(
 
   const liveCard = await fetchLiveStockCard(query, options?.baseUrl);
   if (liveCard) {
-    await replyOrEdit(chatId, progressMessageId, await buildStockCardWithAI(liveCard));
+    const finalMsg = await buildStockCardWithAI(liveCard);
+    await replyWithCard(chatId, progressMessageId, finalMsg, liveCard.chartUrl);
     return;
   }
 
@@ -739,5 +871,7 @@ export async function handleTelegramMessage(
     return;
   }
 
-  await replyOrEdit(chatId, progressMessageId, await buildStockCardWithAI(cardFromReportRow(stock)));
+  const reportCard = cardFromReportRow(stock);
+  const finalMsg = await buildStockCardWithAI(reportCard);
+  await replyWithCard(chatId, progressMessageId, finalMsg, reportCard.chartUrl);
 }
