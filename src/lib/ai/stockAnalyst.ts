@@ -79,24 +79,22 @@ function buildAnalystPrompt(input: StockAnalystInput): string {
 - 策略訊號：${input.strategySignal}（信心 ${input.confidence?.toFixed(1) ?? "N/A"}%）
 - 短線方向：${input.shortDir}
 - 支撐：${input.support?.toFixed(2) ?? "N/A"}　壓力：${input.resistance?.toFixed(2) ?? "N/A"}
-- 海外市場：${overseasText}（同步度 ${input.syncLevel}）
 - 重大新聞：${input.newsLine || "無"}
 - 內部人申報：${insiderText}${insiderWarning}
 
 📋 任務
-請依據上述數據，用繁體中文寫出一段高級分析師評語（約 130~170 字）。
+請依據上述數據，用繁體中文寫出一段高級分析師評語（極嚴格限制：最多 80 字內），風格要求極度犀利、冷酷、一針見血，不說廢話。
 
 格式要求：
-1. 第一句：直接說現在這支股票「是什麼狀況」（多/空/中性）+ 最關鍵的理由（1個）
-2. 中段：解讀量、籌碼、海外聯動三者之間的「故事」（說含意，不要乾燥列數字）
-3. ${hasInsiderSell ? "特別提醒：用強烈語氣點出內部人拋售是重大風險警示，散戶應高度警惕" : "最後一句：給一個明確的操作邏輯（例如：站上 xxx 可輕倉、跌破 xxx 不要追）"}
+1. 第一句：直接說現在這支股票「是什麼狀況」（多/空/中性）+ 1個最致命的理由。
+2. 中段：一句話點破量與籌碼背後的真相。
+3. ${hasInsiderSell ? "最後一句：極強烈警告內部人拋售風險，叫散戶避開。" : "最後一句：給一個最冷酷、明確的操作底線（如：破 xxx 停損，過 xxx 才看）。"}
 
 規則：
-- 嚴禁廢話或重複數字（數字只作佐證）
-- 語氣要有觀點，像跟朋友分析，不能太官腔
-- 絕對不要加免責聲明
-- 不要用 markdown 格式，純文字段落即可
-- ${hasInsiderSell ? "內部人拋售必須是最突出的警示，放在最顯眼的位置" : "如果沒有重大風險，給出積極但理性的操作建議"}`;
+- 總字數絕對不能超過 80 字。
+- 嚴禁廢話或重複數據，只要給結論。
+- 語氣要像冷酷的交易員。
+- 絕對不要加免責聲明、不要 markdown。`;
 }
 
 export async function generateStockAnalysis(input: StockAnalystInput): Promise<string | null> {
