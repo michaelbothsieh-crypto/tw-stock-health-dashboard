@@ -92,6 +92,7 @@ type SnapshotLike = {
     topBullishNews?: Array<{ title?: string; sentiment?: string }>;
     topBearishNews?: Array<{ title?: string; sentiment?: string }>;
     topNews?: Array<{ title?: string; sentiment?: string }>;
+    timeline?: Array<{ title?: string; sentiment?: string }>;
     items?: Array<{ title?: string; sentiment?: string }>;
     error?: string | null;
   };
@@ -352,7 +353,7 @@ function buildChartUrl(bars: Array<{ close?: number, volume?: number }>, support
     label: { enabled: true, content: '現價 ' + latestPrice.toFixed(2), position: 'right', backgroundColor: color }
   });
 
-  const chartConfig = {
+  const chartConfig: any = {
     type: 'bar',
     data: {
       labels: data.map((_, i) => i),
