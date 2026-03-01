@@ -67,7 +67,7 @@ function buildMockChartUrl(): string {
     const latestPrice = data[data.length - 1];
     const maxVol = Math.max(...volumes);
     
-    const chartConfig = {
+    const chartConfig: any = {
         type: 'bar',
         data: {
             labels: data.map((_, i) => i),
