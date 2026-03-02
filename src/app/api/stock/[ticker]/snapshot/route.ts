@@ -302,6 +302,20 @@ export async function GET(
         console.warn("[Snapshot] Failed to fetch insider transfers", e);
       }
     }
+    // Calculate Recent Trend String for AI Context
+    let recentTrend = "區間震盪 / 橫盤整理";
+    const sma20 = trendSignals.sma20;
+    const sma60 = trendSignals.sma60;
+    if (sma20 && sma60) {
+      if (latestClose > sma20 && sma20 > sma60) {
+        recentTrend = "多頭排列 / 強勢續航";
+        if (shortTerm.breakoutScore > 70) recentTrend = "多頭排列 / 突破創高";
+      } else if (latestClose < sma20 && sma20 < sma60) {
+        recentTrend = "空頭排列 / 弱勢整理";
+      } else if (latestClose > sma20 && latestClose > sma60) {
+        recentTrend = "均線糾結 / 股價轉強";
+      }
+    }
 
     const playbook = await getTacticalPlaybook({
       ticker: norm.symbol,
@@ -320,6 +334,7 @@ export async function GET(
       marginLots: flowSignals.marginLots,
       shortLots: flowSignals.shortLots,
       insiderTransfers,
+      recentTrend,
     });
 
     // Adjust strategy confidence based on crash score

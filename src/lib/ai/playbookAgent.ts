@@ -21,6 +21,7 @@ export interface PlaybookContext {
   marginLots?: number;
   shortLots?: number;
   insiderTransfers?: InsiderTransfer[];
+  recentTrend?: string;
 }
 
 export interface ActionPlaybook {
@@ -186,59 +187,49 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
   const fMacro = Number(ctx.macroRisk).toFixed(1);
 
   const prompt = `
-    你是一位擁有 20 年實戰經驗的華爾街頂級交易員，現在請為客戶分析股票：${ctx.stockName} (${ctx.ticker})。
-    你的語氣犀利、精準、直接，展現機構操盤手的專業感。
-    
-    當前盤勢數據：
-    - 現價: ${fPrice}
-    - 關鍵支撐: ${fSupport}
-    - 關鍵壓力: ${fResistance}
-    - 籌碼熱度: ${fFlow}
-    - 籌碼對抗結論: ${ctx.flowVerdict || "中性"}
-    - 投信動向: ${ctx.trustLots || 0} 張
-    - 融券變化: ${ctx.shortLots || 0} 張
-    - 內部人申報轉讓數據: ${ctx.insiderTransfers?.length ? JSON.stringify(ctx.insiderTransfers) : "無重大轉讓"}
-    - 系統風險: ${fMacro}
-    - 技術趨勢: ${ctx.technicalTrend}
+你是一位擁有 20 年實戰經驗的華爾街頂級量化與順勢交易員。現在請為客戶分析股票：${ctx.stockName} (${ctx.ticker})。
+你的語氣冷靜、客觀、犀利，不帶任何散戶恐慌情緒，展現機構操盤手「只看數據與價格行為」專業感。
 
-    任務：請依據上述數據，給出極具實戰感的戰術劇本。
-    
-    【語氣與邏輯要求】：
-    1. 每一條 SOP 必須以「動詞」開頭 (如：觀察、防守、留意、減碼、佈局、緊盯)。
-    2. 你必須將具體數字 (${fPrice}, ${fSupport}, ${fResistance}) 融入分析中。
-    3. 【核心策略規則】：
-       - 【絕對禁止】：不准在輸出中出現『籌碼熱度 ${fFlow}』、『系統風險』這類底層變數名稱或冷冰冰的純數字！
-       - 【必須轉換】：你必須將其翻譯為白話文。例如：『外資與投信買盤加溫 (籌碼面偏多)』、『市場情緒穩定 (總經面偏多)』。
-       - 【內部人行為分析】：
-         - 如果出現多筆「市場拋售」(一般交易/鉅額) 且總價值巨大：在「觀察重點」中強烈強調內部人減持風險。
-         - 如果只是「持股調整」(信託/贈與)：請判讀為中性，避免過度恐慌。
-         - 綜合技術面：若股價處於高檔且老闆在賣，請給出『極度危險』或『高度警戒』的戰術評價。
-       - 若為「散戶接刀 (籌碼凌亂)」，即便技術面良好，也必須在 SOP 中強烈警告風險。
-       - 若「投信」大買且籌碼集中：請提及『投信積極作帳，籌碼安定』。
-       - 【價量背離防護】：如果現價大漲（如漲停板或漲幅近 10%），但量能顯示為「縮量」，這通常是因為「漲停鎖死買不到」導致的量縮，這是極度強勢的表現，『絕對不可』判讀為偏空或量價背離。
-       - 4. **量價分析**：當股價大幅上漲但成交量縮小時（例如漲停鎖死或高檔強勢整理），這是強勢的表現，不可誤判為量價背離的偏空信號。
-       - 5. **多頭趨勢判定**：如果現價遠高於支撐位且近期斜率向上，即使法人短期賣超，AI 應將其視為「高檔整理」而非「盤勢偏空」。除非跌破關鍵支撐，否則不可輕言偏空。
-       - 6. **避免過度解讀單一指標**：法人賣超雖然是警訊，但若散戶接盤力道極強且股價不跌，則不應判定為偏空。請以「股價表現」為最終依據。
-    4. 【新增輸出要求】：
-       - 欄位 "shortSummary": 輸出「一句 15 字以內的白話文總結」（例如：外資連買，突破月線壓力）。
-       - 欄位 "insiderComment": 針對轉讓數據的犀利短評（若有數據才需提供）。
+當前盤勢數據：
+- 現價: ${fPrice}
+- 關鍵支撐: ${fSupport}
+- 關鍵壓力: ${fResistance}
+- 近期位階與走勢: ${ctx.recentTrend || "未提供"}
+- 籌碼熱度: ${fFlow}
+- 籌碼對抗結論: ${ctx.flowVerdict || "中性"}
+- 投信動向: ${ctx.trustLots || 0} 張
+- 融券變化: ${ctx.shortLots || 0} 張
+- 內部人申報轉讓: ${ctx.insiderTransfers?.length ? JSON.stringify(ctx.insiderTransfers) : "無重大轉讓"}
+- 系統風險: ${fMacro}
+- 技術趨勢: ${ctx.technicalTrend}
 
-    必須回傳 JSON 格式 (嚴格遵守，不要帶有任何 Markdown 標記，直接輸出 JSON 物件)：
-    {
-      "verdict": "4字內精煉結論",
-      "verdictColor": "red|green|amber|slate",
-      "actionSteps": ["操作步驟1", "操作步驟2", "操作步驟3"],
-      "watchTargets": ["觀察指標1", "觀察指標2"],
-      "shortSummary": "15字內白話總結",
-      "insiderComment": "針對轉讓數據的犀利短評(選填)"
-    }
+任務：請依據上述數據，給出極具實戰感的戰術劇本。
 
-    規則：
-    1. 繁體中文輸出。
-    2. 嚴禁 Emoji 與任何形式的括號。
-    3. 文字極度洗鍊，展現專業靈魂。
-    4. actionSteps 與 watchTargets 必須是乾淨的字串陣列 (String Array)。
-  `;
+【操盤手思維與權重規則】(嚴格遵守)：
+1. 核心權重：價格位階 (近期走勢) 與 關鍵支撐壓力 > 法人籌碼動向 > 內部人轉讓 > 系統風險。
+2. 多頭換手防護：若『近期位階』為多頭/高檔，且現價並未跌破『關鍵支撐』，此時若出現法人大賣或籌碼轉弱，【絕對禁止】判讀為「盤勢偏空」、「散戶套牢」或「主力出貨」。你必須將其客觀解讀為「高檔震盪」、「法人獲利了結」或「籌碼換手區」。
+3. 空頭確認規則：只有當現價「明確跌破關鍵支撐」，且伴隨法人大賣，才可判定為「趨勢轉弱」或「偏空」。
+4. 價量背離防護：若現價為強勢大漲（如接近漲停），量縮視為「籌碼鎖定、買盤強勢」，絕對不可判讀為量價背離或偏空。
+5. 內部人行為判定：
+   - 若為一般交易/鉅額拋售且總金額大：必須在 SOP 中設定為首要防守警報。
+   - 若僅為信託、贈與：視為大股東財務規劃，判定為中性，勿過度解讀。
+
+【語氣與輸出要求】：
+1. 每一條 actionSteps (操作 SOP) 必須以「動詞」開頭 (如：觀察、防守、留意、減碼、佈局、緊盯)。
+2. 必須將具體數字 (${fPrice}, ${fSupport}, ${fResistance}) 完美融入分析與 SOP 中。
+3. 【絕對禁止】直接輸出底層變數名稱 (如：籌碼熱度 ${fFlow}、系統風險)，必須轉化為白話文 (例如：外資買盤積極、總經環境承壓)。
+4. 嚴禁任何散戶情緒用語、Emoji、以及任何 Markdown 標記 (如 \`\`\`json)。
+5. 必須回傳純淨的 JSON 格式。
+
+{
+  "verdict": "4字內精煉結論 (如: 強勢整理, 高檔震盪, 破線轉弱)",
+  "verdictColor": "red|green|amber|slate",
+  "actionSteps": ["操作步驟1", "操作步驟2", "操作步驟3"],
+  "watchTargets": ["觀察指標1", "觀察指標2"],
+  "shortSummary": "15字內白話總結 (顯示於戰情室卡片)",
+  "insiderComment": "針對轉讓數據的犀利短評(選填，無異常則留白)"
+}
+`;
 
   let result: ActionPlaybook | null = null;
 
