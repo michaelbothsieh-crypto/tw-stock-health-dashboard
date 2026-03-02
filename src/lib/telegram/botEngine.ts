@@ -392,18 +392,22 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
       borderColor: baseColor,
       borderWidth: 2,
       borderDash: [2, 2],
-      label: {
-         display: true,
-         content: latestPrice.toFixed(2),
-         position: 'end',
-         xAdjust: 55, // Push into right margin
-         backgroundColor: baseColor,
-         color: 'white',
-         font: { size: 12, weight: 'bold' },
-         padding: 5,
-         borderRadius: 4
-      },
       drawTime: 'afterDatasetsDraw'
+   };
+
+   // Positioning the price label in the extended X-axis space (Right margin area)
+   annotations.priceLabel = {
+      type: 'label',
+      yValue: latestPrice,
+      xValue: bars.length + 4, // Pin to the extra space on the right
+      backgroundColor: baseColor,
+      color: 'white',
+      content: latestPrice.toFixed(1),
+      font: { size: 11, weight: 'bold' },
+      position: 'center',
+      padding: 4,
+      borderRadius: 4,
+      drawTime: 'afterDraw'
    };
 
    const isCandlestick = bars.every(b => (
@@ -458,7 +462,10 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
             }
          },
          scales: {
-            x: { display: false },
+            x: {
+               display: false,
+               max: bars.length + 10 // Create space on the right for annotations
+            },
             y: {
                position: 'right',
                grid: { color: 'rgba(0,0,0,0.1)' },
