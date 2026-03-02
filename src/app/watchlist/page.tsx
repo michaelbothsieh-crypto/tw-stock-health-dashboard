@@ -6,18 +6,15 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { HealthCard } from "@/components/watchlist/HealthCard";
-import { useState, useMemo, useEffect } from "react";
-import { defaultWatchlist, stockNameMap } from "@/i18n/zh-TW";
-import { resolveStockName } from "@/lib/stocks/nameResolver";
+import { useState, useMemo } from "react";
+import { twStockNames } from "@/data/twStockNames";
 
 export default function WatchlistPage() {
   const { watchlist, removeStock, addStock } = useWatchlist();
   const [keyword, setKeyword] = useState("");
-  const [fullWatchlist, setFullWatchlist] = useState<Array<{ code: string; name: string }>>([]);
 
-  useEffect(() => {
-    Promise.all(defaultWatchlist.map(async code => ({ code, name: await resolveStockName(code) })))
-      .then(setFullWatchlist);
+  const fullWatchlist = useMemo(() => {
+    return Object.entries(twStockNames).map(([code, name]) => ({ code, name }));
   }, []);
 
   const filtered = useMemo(() => {
