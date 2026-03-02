@@ -384,18 +384,29 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
       };
    }
 
-   annotations.price = {
+   annotations.priceLine = {
       type: 'line', scaleID: 'y', yMin: latestPrice, yMax: latestPrice,
       borderColor: baseColor, borderWidth: 2, borderDash: [2, 2],
+      drawTime: 'afterDatasetsDraw'
+   };
+
+   // Box Annotation for Price Label (Guaranteed to work in QuickChart)
+   annotations.priceTag = {
+      type: 'box',
+      yMin: latestPrice * 0.998,
+      yMax: latestPrice * 1.002,
+      xMin: lastIndex + 1,
+      backgroundColor: baseColor,
+      borderColor: 'white',
+      borderWidth: 1,
       label: {
          display: true,
-         content: '現價 ' + latestPrice.toFixed(2),
-         position: 'end',
-         backgroundColor: baseColor,
+         content: latestPrice.toFixed(2),
          color: 'white',
-         font: { size: 12, weight: 'bold' },
-         padding: 6
-      }
+         font: { size: 14, weight: 'bold' },
+         position: 'center'
+      },
+      drawTime: 'afterDatasetsDraw'
    };
 
    const isCandlestick = bars.every(b => (
@@ -465,40 +476,8 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
                max: maxVol * 4
             }
          },
-         layout: { padding: { left: 10, right: 110, top: 10, bottom: 10 } }
-      },
-      plugins: [{
-         id: 'priceLabelPlugin',
-         afterDraw: (chart: any) => {
-            const { ctx, chartArea: { right }, scales: { y } } = chart;
-            const price = latestPrice;
-            const yPos = y.getPixelForValue(price);
-
-            ctx.save();
-            ctx.font = 'bold 12px Arial';
-            const text = '現價 ' + price.toFixed(2);
-            const textWidth = ctx.measureText(text).width;
-
-            // Draw Box
-            const boxPadding = 6;
-            const boxHeight = 22;
-            const boxWidth = textWidth + (boxPadding * 2);
-            const boxX = right + 5;
-            const boxY = yPos - (boxHeight / 2);
-
-            ctx.fillStyle = baseColor;
-            ctx.beginPath();
-            ctx.roundRect ? ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 4) : ctx.rect(boxX, boxY, boxWidth, boxHeight);
-            ctx.fill();
-
-            // Draw Text
-            ctx.fillStyle = 'white';
-            ctx.textBaseline = 'middle';
-            ctx.textAlign = 'left';
-            ctx.fillText(text, boxX + boxPadding, yPos);
-            ctx.restore();
-         }
-      }]
+         layout: { padding: { left: 10, right: 100, top: 10, bottom: 10 } }
+      }
    };
 
    // Use QuickChart Short URL API to avoid length limits on Telegram/LINE
