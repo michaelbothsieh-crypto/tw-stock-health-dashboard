@@ -6,7 +6,8 @@ export async function fetchYahooQuote(symbol: string) {
 
     const attemptFetch = async (suffix: string) => {
         const yahooSym = `${symbol}${suffix}`;
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1d&range=1d`;
+        // Use the v7 quote API for more reliable instant snapshots
+        const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${yahooSym}`;
         try {
             const res = await fetch(url, {
                 headers: {
@@ -15,16 +16,23 @@ export async function fetchYahooQuote(symbol: string) {
             });
             if (!res.ok) return null;
             const data = await res.json();
-            const result = data?.chart?.result?.[0];
+            const result = data?.quoteResponse?.result?.[0];
             if (!result) return null;
 
-            const meta = result.meta;
-            return {
-                price: meta.regularMarketPrice,
-                previousClose: meta.chartPreviousClose,
-                changePct: ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100,
-                volume: meta.regularMarketVolume
-            };
+            const price = result.regularMarketPrice;
+            const previousClose = result.regularMarketPreviousClose;
+
+            // If we have both, calculate change. Otherwise fallback.
+            if (typeof price === "number" && typeof previousClose === "number" && previousClose !== 0) {
+                return {
+                    price,
+                    previousClose,
+                    change: price - previousClose,
+                    changePct: ((price - previousClose) / previousClose) * 100,
+                    volume: result.regularMarketVolume
+                };
+            }
+            return null;
         } catch {
             return null;
         }
