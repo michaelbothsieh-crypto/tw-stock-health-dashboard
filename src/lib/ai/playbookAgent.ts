@@ -120,12 +120,19 @@ async function callGemini(prompt: string): Promise<ActionPlaybook> {
   if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-flash",
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: "application/json",
+    }
+  });
 
   const fetchWithTimeout = async () => {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
+    // Gemini sometimes wraps in markdown blocks even with responseMimeType
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const cleanJson = jsonMatch ? jsonMatch[0] : text;
     return JSON.parse(cleanJson) as ActionPlaybook;
@@ -150,8 +157,9 @@ async function callGroq(prompt: string, modelName: string): Promise<ActionPlaybo
 
   try {
     const completion = await groq.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "system", content: prompt }],
       model: modelName,
+      temperature: 0,
       response_format: { type: "json_object" },
     }, { signal: controller.signal });
 

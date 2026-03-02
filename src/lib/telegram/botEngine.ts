@@ -1,6 +1,6 @@
 import { fetchLatestReport } from "./reportFetcher";
 import { getAllChatIds } from "./chatStore";
-import { generateStockAnalysis } from "../ai/stockAnalyst";
+import { getTacticalPlaybook } from "../ai/playbookAgent";
 import { getFilteredInsiderTransfers } from "../providers/twseInsiderFetch";
 import { twStockNames } from "../../data/twStockNames";
 import { fetchYahooFinanceBars } from "../global/yahooFinance";
@@ -241,8 +241,8 @@ async function replyWithCard(chatId: number, progressMessageId: number | null, t
          await deleteMessage(chatId, progressMessageId);
       }
       const sentPhoto = await sendPhoto(chatId, photoUrl, text);
-      // If photo failed (e.g. URL too long), fallback to plain text.
       if (!sentPhoto) {
+         console.warn(`[TelegramBot] Failed to send photo (possibly URL too long: ${photoUrl.length} chars)`);
          await sendMessage(chatId, text);
       }
    } else {
@@ -311,154 +311,105 @@ function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: number;
    const data = bars.map(b => Number(b.close)).filter(Number.isFinite);
    if (data.length === 0) return null;
 
-   const volumes = bars.map(b => Number(b.volume)).filter(Number.isFinite);
-   const maxVol = volumes.length > 0 ? Math.max(...volumes) : 1;
-
    const latestPrice = data[data.length - 1];
    const prevPrice = data.length > 1 ? data[data.length - 2] : data[0];
    const isUp = latestPrice >= prevPrice;
-   const baseColor = isUp ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)'; // 紅漲綠跌
+   const baseColor = isUp ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)';
 
-   const annotations = [];
-
+   const annotations: any[] = [];
    if (support !== null) {
       annotations.push({
-         type: 'line',
-         mode: 'horizontal',
-         scaleID: 'y',
-         value: support,
-         borderColor: 'rgba(34, 197, 94, 0.8)',
-         borderWidth: 1.5,
-         borderDash: [4, 4],
-         label: {
-            enabled: true,
-            content: '支撐 ' + support,
-            position: 'left',
-            backgroundColor: 'rgba(34, 197, 94, 0.8)',
-            fontSize: 10,
-            xPadding: 4,
-            yPadding: 4
-         }
+         type: 'line', mode: 'horizontal', scaleID: 'y', value: support,
+         borderColor: 'rgba(34, 197, 94, 0.8)', borderWidth: 1.5, borderDash: [4, 4],
+         label: { enabled: true, content: '支撐 ' + support, position: 'left', backgroundColor: 'rgba(34, 197, 94, 0.8)', fontSize: 10 }
       });
    }
-
    if (resistance !== null) {
       annotations.push({
-         type: 'line',
-         mode: 'horizontal',
-         scaleID: 'y',
-         value: resistance,
-         borderColor: 'rgba(239, 68, 68, 0.8)',
-         borderWidth: 1.5,
-         borderDash: [4, 4],
-         label: {
-            enabled: true,
-            content: '壓力 ' + resistance,
-            position: 'left',
-            backgroundColor: 'rgba(239, 68, 68, 0.8)',
-            fontSize: 10,
-            xPadding: 4,
-            yPadding: 4
-         }
+         type: 'line', mode: 'horizontal', scaleID: 'y', value: resistance,
+         borderColor: 'rgba(239, 68, 68, 0.8)', borderWidth: 1.5, borderDash: [4, 4],
+         label: { enabled: true, content: '壓力 ' + resistance, position: 'left', backgroundColor: 'rgba(239, 68, 68, 0.8)', fontSize: 10 }
       });
    }
-
    annotations.push({
-      type: 'line',
-      mode: 'horizontal',
-      scaleID: 'y',
-      value: latestPrice,
-      borderColor: baseColor,
-      borderWidth: 1.5,
-      borderDash: [2, 2],
-      label: {
-         enabled: true,
-         content: '現價 ' + latestPrice.toFixed(2),
-         position: 'right',
-         backgroundColor: baseColor,
-         fontSize: 10,
-         xPadding: 4,
-         yPadding: 4,
-         xAdjust: 35
-      }
+      type: 'line', mode: 'horizontal', scaleID: 'y', value: latestPrice,
+      borderColor: baseColor, borderWidth: 1.5, borderDash: [2, 2],
+      label: { enabled: true, content: '現價 ' + latestPrice.toFixed(2), position: 'right', backgroundColor: baseColor, fontSize: 10, xAdjust: 35 }
    });
 
-   // Ensure we have at least some basic OHLC data to attempt candlestick.
-   const isCandlestick = (bars.length > 0) && bars.every(b => (
-      typeof b.open === 'number' && typeof b.high === 'number' &&
-      typeof b.low === 'number' && typeof b.close === 'number'
-   ));
-   const datasets: any[] = [];
+   const getUrl = (chartBars: typeof bars, forceLine = false) => {
+      const isCandlestick = !forceLine && chartBars.every(b => (
+         typeof b.open === 'number' && typeof b.high === 'number' &&
+         typeof b.low === 'number' && typeof b.close === 'number'
+      ));
 
-   if (isCandlestick) {
-      datasets.push({
-         type: 'candlestick',
-         label: 'Price',
-         data: bars.map((b, i) => ({ x: i, o: b.open, h: b.high, l: b.low, c: b.close })),
-         color: {
-            up: 'rgb(239, 68, 68)',
-            down: 'rgb(34, 197, 94)',
-            unchanged: 'gray'
-         },
-         yAxisID: 'y'
-      });
-   } else {
-      datasets.push({
-         type: 'line',
-         data: data,
-         borderColor: baseColor,
-         borderWidth: 2,
-         fill: false,
-         pointRadius: 0,
-         yAxisID: 'y'
-      });
-   }
+      const chartData = chartBars.map(b => Number(b.close)).filter(Number.isFinite);
+      const chartVols = chartBars.map(b => Number(b.volume)).filter(Number.isFinite);
+      const maxVol = chartVols.length > 0 ? Math.max(...chartVols) : 1;
 
-   if (volumes.length === data.length) {
-      datasets.push({
-         type: 'bar',
-         data: volumes,
-         backgroundColor: 'rgba(156, 163, 175, 0.3)',
-         yAxisID: 'yVol'
-      });
-   }
-
-   const chartConfig: any = {
-      type: 'bar',
-      data: {
-         labels: data.map((_, i) => i),
-         datasets
-      },
-      options: {
-         legend: { display: false },
-         scales: {
-            xAxes: [{ display: false }],
-            yAxes: [
-               {
-                  id: 'y',
-                  position: 'right',
-                  gridLines: { color: 'rgba(255,255,255,0.1)' },
-                  ticks: { fontColor: '#9ca3af' }
-               },
-               {
-                  id: 'yVol',
-                  display: false,
-                  ticks: { min: 0, max: maxVol * 4 }
-               }
-            ]
-         },
-         layout: { padding: { left: 10, right: 60, top: 10, bottom: 10 } },
-         annotation: { annotations }
+      const datasets: any[] = [];
+      if (isCandlestick) {
+         datasets.push({
+            type: 'candlestick',
+            data: chartBars.map((b, i) => ({ x: i, o: b.open, h: b.high, l: b.low, c: b.close })),
+            color: { up: 'rgb(239, 68, 68)', down: 'rgb(34, 197, 94)', unchanged: 'gray' },
+            yAxisID: 'y'
+         });
+      } else {
+         datasets.push({
+            type: 'line',
+            data: chartData,
+            borderColor: baseColor,
+            borderWidth: 2,
+            fill: false,
+            pointRadius: 0,
+            yAxisID: 'y'
+         });
       }
+
+      if (chartVols.length === chartData.length) {
+         datasets.push({
+            type: 'bar',
+            data: chartVols,
+            backgroundColor: 'rgba(156, 163, 175, 0.3)',
+            yAxisID: 'yVol'
+         });
+      }
+
+      const config = {
+         type: 'bar',
+         data: { labels: chartData.map((_, i) => i), datasets },
+         options: {
+            legend: { display: false },
+            scales: {
+               xAxes: [{ display: false }],
+               yAxes: [
+                  { id: 'y', position: 'right', gridLines: { color: 'rgba(0,0,0,0.1)' }, ticks: { fontColor: '#6b7280' } },
+                  { id: 'yVol', display: false, ticks: { min: 0, max: maxVol * 4 } }
+               ]
+            },
+            layout: { padding: { left: 10, right: 60, top: 10, bottom: 10 } },
+            annotation: { annotations }
+         }
+      };
+
+      return `https://quickchart.io/chart?bkg=white&c=${encodeURIComponent(JSON.stringify(config))}`;
    };
 
-   chartConfig['backgroundColor'] = '#1f2937';
-   return `https://quickchart.io/chart?w=800&h=400&bkg=1f2937&c=${encodeURIComponent(JSON.stringify(chartConfig))}`;
+   let url = getUrl(bars);
+   if (url.length > 2000) {
+      url = getUrl(bars, true); // Fallback to line chart
+   }
+   if (url.length > 2000) {
+      url = getUrl(bars.slice(-30), true); // Final fallback: 30-bar line chart
+   }
+
+   console.log(`[TelegramBot] Generated Chart URL (len=${url.length})`);
+   return url;
 }
 
 function resolveCodeFromInputLocal(input: string): string | null {
    const query = input.trim();
-   if (!query) return null;
 
    const codeMatch = query.match(/^(\d{4,})(\.TW|\.TWO)?$/i);
    if (codeMatch) return codeMatch[1];
@@ -673,36 +624,54 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
    const structuredPart = buildStockCardLines(card);
 
    try {
-      const aiText = await generateStockAnalysis({
-         symbol: card.symbol,
-         nameZh: card.nameZh,
-         close: card.close,
-         chgPct: card.chgPct,
-         volume: card.volume,
-         volumeVs5dPct: card.volumeVs5dPct,
-         flowNet: card.flowNet,
-         flowUnit: card.flowUnit,
-         shortDir: card.shortDir,
-         strategySignal: card.strategySignal,
-         confidence: card.confidence,
-         p1d: card.p1d,
-         p3d: card.p3d,
-         p5d: card.p5d,
-         support: card.support,
-         resistance: card.resistance,
-         newsLine: card.newsLine,
-         syncLevel: card.syncLevel,
-         overseas: card.overseas.map(o => ({ symbol: o.symbol, chgPct: o.chgPct })),
-         insiderSells: card.insiderSells || [],
+      const playbook = await getTacticalPlaybook({
+         ticker: card.symbol,
+         stockName: card.nameZh,
+         price: card.close || 0,
+         support: card.support || 0,
+         resistance: card.resistance || 0,
+         macroRisk: 0, // Default to 0 for bot if unknown
+         technicalTrend: card.shortDir,
+         flowScore: 50, // Default neutral
+         flowVerdict: card.shortDir,
+         trustLots: 0,
+         shortLots: 0,
+         insiderTransfers: card.insiderSells.map(s => ({
+            date: s.date,
+            declarer: s.declarer,
+            role: s.role,
+            transferMode: "一般交易", // Default fallback
+            humanMode: s.humanMode,
+            lots: s.lots,
+            valueText: s.valueText,
+            estimatedValue: 0, // Placeholder
+            currentHoldings: 0, // Placeholder
+            transferRatio: s.transferRatio,
+            type: "市場拋售"
+         })),
       });
 
-      if (aiText) {
+      if (playbook) {
          const divider = escapeHtml("━━━━━━━━━━━━━━");
-         const aiSection = `${divider}\n🤖 <b>AI 分析師點評</b>\n${escapeHtml(aiText)}`;
+         const formattedSteps = playbook.actionSteps.map(s => `• ${escapeHtml(s)}`).join("\n");
+         const formattedTargets = playbook.watchTargets.map(t => `• ${escapeHtml(t)}`).join("\n");
+
+         const aiSection = [
+            divider,
+            `🤖 <b>AI 戰報：【${escapeHtml(playbook.verdict)}】</b>`,
+            "",
+            `📍 <b>戰術 SOP：</b>`,
+            formattedSteps,
+            "",
+            `🎯 <b>觀察指標：</b>`,
+            formattedTargets,
+            ...(playbook.insiderComment ? ["", `💡 <b>內部人短評：</b>`, escapeHtml(playbook.insiderComment)] : []),
+         ].join("\n");
+
          return `${structuredPart}\n\n${aiSection}`;
       }
    } catch (e) {
-      console.warn("[TelegramBot] AI analysis failed, using plain card:", e);
+      console.warn("[TelegramBot] AI playbook failed, using plain card:", e);
    }
 
    return structuredPart;
