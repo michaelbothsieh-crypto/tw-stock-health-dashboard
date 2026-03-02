@@ -10,6 +10,7 @@ export async function fetchYahooQuote(symbol: string) {
         const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${yahooSym}`;
         try {
             const res = await fetch(url, {
+                cache: 'no-store',
                 headers: {
                     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
                 }

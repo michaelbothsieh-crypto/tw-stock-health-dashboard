@@ -240,10 +240,23 @@ async function replyWithCard(chatId: number, progressMessageId: number | null, t
       if (progressMessageId !== null) {
          await deleteMessage(chatId, progressMessageId);
       }
-      const sentPhoto = await sendPhoto(chatId, photoUrl, text);
+
+      // Caption limit: 1024 chars for Telegram
+      let finalCaption = text;
+      let extraText = "";
+      if (text.length > 1000) {
+         // Take first ~1000 chars (stay safe) and the rest in extraText
+         finalCaption = text.substring(0, 1000) + "... (見下文)";
+         extraText = text;
+      }
+
+      const sentPhoto = await sendPhoto(chatId, photoUrl, finalCaption);
       if (!sentPhoto) {
-         console.warn(`[TelegramBot] Failed to send photo (possibly URL too long: ${photoUrl.length} chars)`);
+         console.warn(`[TelegramBot] Failed to send photo (len=${photoUrl.length})`);
          await sendMessage(chatId, text);
+      } else if (extraText) {
+         // If we had to truncate the caption, send the full text as a reply
+         await sendMessage(chatId, extraText);
       }
    } else {
       await replyOrEdit(chatId, progressMessageId, text);
@@ -305,7 +318,7 @@ async function ensureTelegramCommandsSynced() {
    }
 }
 
-function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: number; close?: number; volume?: number }>, support: number | null, resistance: number | null): string | null {
+async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: number; close?: number; volume?: number }>, support: number | null, resistance: number | null): Promise<string | null> {
    if (!bars || bars.length < 2) return null;
 
    const data = bars.map(b => Number(b.close)).filter(Number.isFinite);
@@ -337,75 +350,77 @@ function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: number;
       label: { enabled: true, content: '現價 ' + latestPrice.toFixed(2), position: 'right', backgroundColor: baseColor, fontSize: 10, xAdjust: 35 }
    });
 
-   const getUrl = (chartBars: typeof bars, forceLine = false) => {
-      const isCandlestick = !forceLine && chartBars.every(b => (
-         typeof b.open === 'number' && typeof b.high === 'number' &&
-         typeof b.low === 'number' && typeof b.close === 'number'
-      ));
+   const isCandlestick = bars.every(b => (
+      typeof b.open === 'number' && typeof b.high === 'number' &&
+      typeof b.low === 'number' && typeof b.close === 'number'
+   ));
 
-      const chartData = chartBars.map(b => Number(b.close)).filter(Number.isFinite);
-      const chartVols = chartBars.map(b => Number(b.volume)).filter(Number.isFinite);
-      const maxVol = chartVols.length > 0 ? Math.max(...chartVols) : 1;
+   const chartData = bars.map(b => Number(b.close)).filter(Number.isFinite);
+   const chartVols = bars.map(b => Number(b.volume)).filter(Number.isFinite);
+   const maxVol = chartVols.length > 0 ? Math.max(...chartVols) : 1;
 
-      const datasets: any[] = [];
-      if (isCandlestick) {
-         datasets.push({
-            type: 'candlestick',
-            data: chartBars.map((b, i) => ({ x: i, o: b.open, h: b.high, l: b.low, c: b.close })),
-            color: { up: 'rgb(239, 68, 68)', down: 'rgb(34, 197, 94)', unchanged: 'gray' },
-            yAxisID: 'y'
-         });
-      } else {
-         datasets.push({
-            type: 'line',
-            data: chartData,
-            borderColor: baseColor,
-            borderWidth: 2,
-            fill: false,
-            pointRadius: 0,
-            yAxisID: 'y'
-         });
-      }
+   const datasets: any[] = [];
+   if (isCandlestick) {
+      datasets.push({
+         type: 'candlestick',
+         data: bars.map((b, i) => ({ x: i, o: b.open, h: b.high, l: b.low, c: b.close })),
+         color: { up: 'rgb(239, 68, 68)', down: 'rgb(34, 197, 94)', unchanged: 'gray' },
+         yAxisID: 'y'
+      });
+   } else {
+      datasets.push({
+         type: 'line',
+         data: chartData,
+         borderColor: baseColor,
+         borderWidth: 2,
+         fill: false,
+         pointRadius: 0,
+         yAxisID: 'y'
+      });
+   }
 
-      if (chartVols.length === chartData.length) {
-         datasets.push({
-            type: 'bar',
-            data: chartVols,
-            backgroundColor: 'rgba(156, 163, 175, 0.3)',
-            yAxisID: 'yVol'
-         });
-      }
-
-      const config = {
+   if (chartVols.length === chartData.length) {
+      datasets.push({
          type: 'bar',
-         data: { labels: chartData.map((_, i) => i), datasets },
-         options: {
-            legend: { display: false },
-            scales: {
-               xAxes: [{ display: false }],
-               yAxes: [
-                  { id: 'y', position: 'right', gridLines: { color: 'rgba(0,0,0,0.1)' }, ticks: { fontColor: '#6b7280' } },
-                  { id: 'yVol', display: false, ticks: { min: 0, max: maxVol * 4 } }
-               ]
-            },
-            layout: { padding: { left: 10, right: 60, top: 10, bottom: 10 } },
-            annotation: { annotations }
-         }
-      };
+         data: chartVols,
+         backgroundColor: 'rgba(156, 163, 175, 0.3)',
+         yAxisID: 'yVol'
+      });
+   }
 
-      return `https://quickchart.io/chart?bkg=white&c=${encodeURIComponent(JSON.stringify(config))}`;
+   const config = {
+      type: 'bar',
+      data: { labels: chartData.map((_, i) => i), datasets },
+      options: {
+         legend: { display: false },
+         scales: {
+            xAxes: [{ display: false }],
+            yAxes: [
+               { id: 'y', position: 'right', gridLines: { color: 'rgba(0,0,0,0.1)' }, ticks: { fontColor: '#6b7280' } },
+               { id: 'yVol', display: false, ticks: { min: 0, max: maxVol * 4 } }
+            ]
+         },
+         layout: { padding: { left: 10, right: 60, top: 10, bottom: 10 } },
+         annotation: { annotations }
+      }
    };
 
-   let url = getUrl(bars);
-   if (url.length > 2000) {
-      url = getUrl(bars, true); // Fallback to line chart
+   // Use QuickChart Short URL API to avoid length limits on Telegram/LINE
+   try {
+      const resp = await fetch('https://quickchart.io/chart/create', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ chart: config, backgroundColor: 'white' })
+      });
+      if (!resp.ok) throw new Error('QuickChart failed');
+      const result = await resp.json();
+      console.log(`[TelegramBot] Using Short URL: ${result.url}`);
+      return result.url;
+   } catch (e) {
+      const longUrl = `https://quickchart.io/chart?bkg=white&c=${encodeURIComponent(JSON.stringify(config))}`;
+      console.warn(`[TelegramBot] QuickChart Short URL API failed, falling back to long URL (len=${longUrl.length})`);
+      return longUrl;
    }
-   if (url.length > 2000) {
-      url = getUrl(bars.slice(-30), true); // Final fallback: 30-bar line chart
-   }
-
-   console.log(`[TelegramBot] Generated Chart URL (len=${url.length})`);
-   return url;
 }
 
 function resolveCodeFromInputLocal(input: string): string | null {
@@ -719,7 +734,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
    if (!baseUrl) return null;
 
    try {
-      const res = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`);
+      const res = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`, { cache: 'no-store' });
       if (!res.ok) return null;
 
       const snapshot = await res.json();
@@ -746,23 +761,48 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          const latest = Number(bars[bars.length - 1].close ?? NaN);
          const prev = Number(bars[bars.length - 2].close ?? NaN);
          if (Number.isFinite(latest)) card.close = latest;
-         if (Number.isFinite(latest) && Number.isFinite(prev)) {
+
+         // Prioritize real-time quote from snapshot API
+         if (snapshot.realTimeQuote && typeof snapshot.realTimeQuote.price === 'number') {
+            const rtPrice = snapshot.realTimeQuote.price;
+            card.close = rtPrice;
+            if (typeof snapshot.realTimeQuote.changePct === 'number') {
+               const rtChgPct = snapshot.realTimeQuote.changePct;
+               card.chgPct = rtChgPct;
+               const changePkg = rtChgPct / 100;
+               if (changePkg !== -1) {
+                  card.chgAbs = changePkg * (rtPrice / (1 + changePkg)); // Reverse calculate
+               } else {
+                  card.chgAbs = 0;
+               }
+            }
+         } else if (Number.isFinite(latest) && Number.isFinite(prev)) {
             card.chgAbs = latest - prev;
             card.chgPct = prev !== 0 ? ((latest - prev) / prev) * 100 : null;
          }
 
-         const volInfo = calcVolumeVs5d(bars);
-         card.volume = volInfo.volume;
-         card.volumeVs5dPct = volInfo.volumeVs5dPct;
+         console.log(`[TelegramBot] Using Price: ${card.close} for ${symbol}`);
+      }
 
+      const volInfo = calcVolumeVs5d(bars);
+      card.volume = volInfo.volume;
+      card.volumeVs5dPct = volInfo.volumeVs5dPct;
+
+      // Prioritize key levels from snapshot API if available
+      if (snapshot.keyLevels && typeof snapshot.keyLevels.support === 'number' && typeof snapshot.keyLevels.resistance === 'number') {
+         card.support = snapshot.keyLevels.support;
+         card.resistance = snapshot.keyLevels.resistance;
+         card.bullTarget = snapshot.keyLevels.bullTarget ?? null;
+         card.bearTarget = snapshot.keyLevels.bearTarget ?? null;
+      } else {
          const key = calcSupportResistance(bars);
          card.support = key.support;
          card.resistance = key.resistance;
          card.bullTarget = key.bullTarget;
          card.bearTarget = key.bearTarget;
 
-         // Shorten even more to 40 entries to stay well under 2000 chars (safe for LINE/TG)
-         card.chartUrl = buildChartUrl(bars.slice(-40), card.support, card.resistance);
+         // Return a short URL from QuickChart to avoid length errors on bot platforms
+         card.chartUrl = await buildChartUrl(bars.slice(-60), card.support, card.resistance);
       }
 
       card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? Math.round(snapshot.signals.flow.foreign5D / 1000) : null;
