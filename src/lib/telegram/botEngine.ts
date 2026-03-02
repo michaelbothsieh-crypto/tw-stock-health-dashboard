@@ -854,9 +854,9 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          card.bearTarget = key.bearTarget;
       }
 
-      // Ensure chart is ALWAYS generated if we have enough data
+      // Ensure chart is ALWAYS generated if we have enough data (Show approx. 6 months / 120 bars)
       if (bars.length >= 2) {
-         card.chartUrl = await buildChartUrl(bars.slice(-60), card.support, card.resistance);
+         card.chartUrl = await buildChartUrl(bars.slice(-120), card.support, card.resistance);
       }
 
       card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? Math.round(snapshot.signals.flow.foreign5D / 1000) : null;
