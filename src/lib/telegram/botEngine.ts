@@ -326,26 +326,26 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
    const isUp = latestPrice >= prevPrice;
    const baseColor = isUp ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)';
 
-   const annotations: any[] = [];
+   const annotations: any = {};
    if (support !== null) {
-      annotations.push({
-         type: 'line', mode: 'horizontal', scaleID: 'y', value: support,
+      annotations.support = {
+         type: 'line', scaleID: 'y', yMin: support, yMax: support,
          borderColor: 'rgba(34, 197, 94, 0.8)', borderWidth: 1.5, borderDash: [4, 4],
-         label: { enabled: true, content: '支撐 ' + support, position: 'left', backgroundColor: 'rgba(34, 197, 94, 0.8)', fontSize: 10 }
-      });
+         label: { display: true, content: '支撐 ' + support, position: 'start', backgroundColor: 'rgba(34, 197, 94, 0.8)', font: { size: 10 } }
+      };
    }
    if (resistance !== null) {
-      annotations.push({
-         type: 'line', mode: 'horizontal', scaleID: 'y', value: resistance,
+      annotations.resistance = {
+         type: 'line', scaleID: 'y', yMin: resistance, yMax: resistance,
          borderColor: 'rgba(239, 68, 68, 0.8)', borderWidth: 1.5, borderDash: [4, 4],
-         label: { enabled: true, content: '壓力 ' + resistance, position: 'left', backgroundColor: 'rgba(239, 68, 68, 0.8)', fontSize: 10 }
-      });
+         label: { display: true, content: '壓力 ' + resistance, position: 'start', backgroundColor: 'rgba(239, 68, 68, 0.8)', font: { size: 10 } }
+      };
    }
-   annotations.push({
-      type: 'line', mode: 'horizontal', scaleID: 'y', value: latestPrice,
+   annotations.price = {
+      type: 'line', scaleID: 'y', yMin: latestPrice, yMax: latestPrice,
       borderColor: baseColor, borderWidth: 1.5, borderDash: [2, 2],
-      label: { enabled: true, content: '現價 ' + latestPrice.toFixed(2), position: 'right', backgroundColor: baseColor, fontSize: 10, xAdjust: 35 }
-   });
+      label: { display: true, content: '現價 ' + latestPrice.toFixed(2), position: 'end', backgroundColor: baseColor, font: { size: 10 } }
+   };
 
    const isCandlestick = bars.every(b => (
       typeof b.open === 'number' && typeof b.high === 'number' &&
@@ -386,33 +386,32 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
    }
 
    const config = {
-      type: isCandlestick ? 'candlestick' : 'bar',
+      type: isCandlestick ? 'candlestick' : 'line',
       data: {
          labels: bars.map((_, i) => i),
          datasets
       },
       options: {
-         legend: { display: false },
-         scales: {
-            xAxes: [{ display: false }],
-            yAxes: [
-               {
-                  id: 'y',
-                  position: 'right',
-                  gridLines: { color: 'rgba(0,0,0,0.1)' },
-                  ticks: { fontColor: '#6b7280' }
-               },
-               {
-                  id: 'yVol',
-                  display: false,
-                  ticks: { min: 0, max: maxVol * 4 }
-               }
-            ]
+         plugins: {
+            legend: { display: false },
+            annotation: {
+               annotations
+            }
          },
-         layout: { padding: { left: 10, right: 60, top: 10, bottom: 10 } },
-         annotation: {
-            annotations
-         }
+         scales: {
+            x: { display: false },
+            y: {
+               position: 'right',
+               grid: { color: 'rgba(0,0,0,0.1)' },
+               ticks: { color: '#6b7280' }
+            },
+            yVol: {
+               display: false,
+               min: 0,
+               max: maxVol * 4
+            }
+         },
+         layout: { padding: { left: 10, right: 60, top: 10, bottom: 10 } }
       }
    };
 
@@ -430,7 +429,7 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
             height: 400,
             backgroundColor: 'white',
             format: 'png',
-            version: '2.9.4'
+            version: '3'
          }),
          signal: controller.signal
       });
