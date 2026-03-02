@@ -407,15 +407,27 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
       const resp = await fetch('https://quickchart.io/chart/create', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ chart: config, backgroundColor: 'white' })
+         body: JSON.stringify({
+            chart: config,
+            width: 600,
+            height: 400,
+            backgroundColor: 'white',
+            format: 'png'
+         })
       });
-      if (!resp.ok) throw new Error('QuickChart failed');
+      if (!resp.ok) {
+         const errText = await resp.text();
+         throw new Error(`QuickChart API Error: ${resp.status} - ${errText}`);
+      }
       const result = await resp.json();
-      console.log(`[TelegramBot] Using Short URL: ${result.url}`);
-      return result.url;
+      if (result.success && result.url) {
+         console.log(`[BotEngine] QuickChart Short URL created: ${result.url}`);
+         return result.url;
+      }
+      throw new Error('QuickChart result missing success or url');
    } catch (e) {
       const longUrl = `https://quickchart.io/chart?bkg=white&c=${encodeURIComponent(JSON.stringify(config))}`;
-      console.warn(`[TelegramBot] QuickChart Short URL API failed, falling back to long URL (len=${longUrl.length})`);
+      console.warn(`[BotEngine] Short URL fail, using long URL (len=${longUrl.length}):`, e);
       return longUrl;
    }
 }

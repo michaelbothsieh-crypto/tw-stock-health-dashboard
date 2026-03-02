@@ -65,11 +65,14 @@ export async function POST(req: NextRequest) {
                     const safePhotoUrl = (reply.photoUrl && reply.photoUrl.length < 2000) ? reply.photoUrl : null;
 
                     if (safePhotoUrl && isStockCmd) {
+                        console.log(`[LINE Webhook] Sending photo: ${safePhotoUrl}`);
                         messages.push({
                             type: "image",
                             originalContentUrl: safePhotoUrl,
                             previewImageUrl: safePhotoUrl,
                         });
+                    } else if (reply.photoUrl && !safePhotoUrl) {
+                        console.warn(`[LINE Webhook] Photo URL too long for LINE: ${reply.photoUrl.length}`);
                     }
 
                     messages.push({
