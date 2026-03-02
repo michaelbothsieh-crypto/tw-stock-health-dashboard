@@ -390,24 +390,20 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
       yMin: latestPrice,
       yMax: latestPrice,
       borderColor: baseColor,
-      borderWidth: 2,
-      borderDash: [2, 2],
+      borderWidth: 1.5,
+      borderDash: [3, 3],
+      label: {
+         display: true,
+         content: latestPrice.toFixed(2),
+         position: 'end',
+         xAdjust: 40, // Precision alignment with right axis
+         backgroundColor: baseColor,
+         color: 'white',
+         font: { size: 11, weight: 'bold' },
+         padding: 4,
+         borderRadius: 2
+      },
       drawTime: 'afterDatasetsDraw'
-   };
-
-   // Positioning the price label in the extended X-axis space (Right margin area)
-   annotations.priceLabel = {
-      type: 'label',
-      yValue: latestPrice,
-      xValue: bars.length + 4, // Pin to the extra space on the right
-      backgroundColor: baseColor,
-      color: 'white',
-      content: latestPrice.toFixed(1),
-      font: { size: 11, weight: 'bold' },
-      position: 'center',
-      padding: 4,
-      borderRadius: 4,
-      drawTime: 'afterDraw'
    };
 
    const isCandlestick = bars.every(b => (
@@ -462,15 +458,14 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
             }
          },
          scales: {
-            x: {
-               display: false,
-               max: bars.length + 10 // Create space on the right for annotations
-            },
+            x: { display: false },
             y: {
                position: 'right',
-               grid: { color: 'rgba(0,0,0,0.1)' },
+               grid: { color: 'rgba(0,0,0,0.05)', borderDash: [2, 2] },
                ticks: {
                   color: '#6b7280',
+                  font: { size: 10 },
+                  padding: 5,
                   callback: (val: any) => val.toFixed(0)
                }
             },
@@ -480,7 +475,7 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
                max: maxVol * 4
             }
          },
-         layout: { padding: { left: 10, right: 120, top: 10, bottom: 10 } }
+         layout: { padding: { left: 10, right: 60, top: 20, bottom: 10 } }
       }
    };
 
