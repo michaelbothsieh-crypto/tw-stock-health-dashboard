@@ -385,26 +385,22 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
    }
 
    annotations.priceLine = {
-      type: 'line', scaleID: 'y', yMin: latestPrice, yMax: latestPrice,
-      borderColor: baseColor, borderWidth: 2, borderDash: [2, 2],
-      drawTime: 'afterDatasetsDraw'
-   };
-
-   // Box Annotation for Price Label (Guaranteed to work in QuickChart)
-   annotations.priceTag = {
-      type: 'box',
-      yMin: latestPrice * 0.998,
-      yMax: latestPrice * 1.002,
-      xMin: lastIndex + 1,
-      backgroundColor: baseColor,
-      borderColor: 'white',
-      borderWidth: 1,
+      type: 'line',
+      scaleID: 'y',
+      yMin: latestPrice,
+      yMax: latestPrice,
+      borderColor: baseColor,
+      borderWidth: 2,
+      borderDash: [2, 2],
       label: {
          display: true,
          content: latestPrice.toFixed(2),
+         position: 'end',
+         xAdjust: 10,
+         backgroundColor: baseColor,
          color: 'white',
          font: { size: 14, weight: 'bold' },
-         position: 'center'
+         padding: 6
       },
       drawTime: 'afterDatasetsDraw'
    };
@@ -874,17 +870,23 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
             const todayStr = new Date().toISOString().split('T')[0];
             const lastBar = bars.length > 0 ? (bars[bars.length - 1] as any) : null;
 
-            if (lastBar && lastBar.date === todayStr) {
+            if (lastBar && (lastBar.date === todayStr || !lastBar.date)) {
                // Update existing bar to reflect latest price
                lastBar.close = rtPrice;
                if (rtPrice > (lastBar.high ?? 0)) lastBar.high = rtPrice;
                if (rtPrice < (lastBar.low ?? 999999)) lastBar.low = rtPrice;
+               // Ensure it has a valid open price for visual consistency
+               if (lastBar.open === undefined || lastBar.open === rtPrice) {
+                  const prevClose = bars.length > 1 ? (bars[bars.length - 2] as any).close : rtPrice;
+                  lastBar.open = prevClose;
+               }
             } else {
                // Push a new bar
+               const prevClose = bars.length > 0 ? (bars[bars.length - 1] as any).close : rtPrice;
                bars.push({
-                  open: rtPrice,
-                  high: rtPrice,
-                  low: rtPrice,
+                  open: prevClose || rtPrice,
+                  high: Math.max(prevClose || 0, rtPrice),
+                  low: Math.min(prevClose || 999999, rtPrice),
                   close: rtPrice,
                   volume: 0,
                   date: todayStr
