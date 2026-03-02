@@ -35,7 +35,7 @@ export interface ActionPlaybook {
 // Tier 3: Rule-based Fallback
 export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook {
   console.log('🤖 Current AI Tier: Rule-based');
-  
+
   const fPrice = Number(ctx.price).toFixed(2);
   const fSupport = Number(ctx.support).toFixed(2);
   const fResistance = Number(ctx.resistance).toFixed(2);
@@ -215,6 +215,7 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
          - 綜合技術面：若股價處於高檔且老闆在賣，請給出『極度危險』或『高度警戒』的戰術評價。
        - 若為「散戶接刀 (籌碼凌亂)」，即便技術面良好，也必須在 SOP 中強烈警告風險。
        - 若「投信」大買且籌碼集中：請提及『投信積極作帳，籌碼安定』。
+       - 【價量背離防護】：如果現價大漲（如漲停板或漲幅近 10%），但量能顯示為「縮量」，這通常是因為「漲停鎖死買不到」導致的量縮，這是極度強勢的表現，『絕對不可』判讀為偏空或量價背離。
     4. 【新增輸出要求】：
        - 欄位 "shortSummary": 輸出「一句 15 字以內的白話文總結」（例如：外資連買，突破月線壓力）。
        - 欄位 "insiderComment": 針對轉讓數據的犀利短評（若有數據才需提供）。
@@ -240,7 +241,7 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
 
   // Step 1: Dynamic Groq Discovery & Routing
   const availableModels = await getAvailableGroqModels();
-  
+
   for (const modelName of availableModels) {
     try {
       result = await callGroq(prompt, modelName);
