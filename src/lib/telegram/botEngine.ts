@@ -392,17 +392,22 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
       borderColor: baseColor,
       borderWidth: 2,
       borderDash: [2, 2],
-      label: {
-         display: true,
-         content: latestPrice.toFixed(2),
-         position: 'end',
-         xAdjust: 10,
-         backgroundColor: baseColor,
-         color: 'white',
-         font: { size: 14, weight: 'bold' },
-         padding: 6
-      },
       drawTime: 'afterDatasetsDraw'
+   };
+
+   // Use 'label' annotation for the price tag - more reliable on right margin in QCv3
+   annotations.priceLabel = {
+      type: 'label',
+      yValue: latestPrice,
+      xValue: bars.length - 0.5, // Center on the last candle or just after it
+      backgroundColor: baseColor,
+      color: 'white',
+      content: latestPrice.toFixed(2),
+      font: { size: 14, weight: 'bold' },
+      position: 'center',
+      padding: 6,
+      borderRadius: 4,
+      drawTime: 'afterDraw'
    };
 
    const isCandlestick = bars.every(b => (
@@ -472,7 +477,7 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
                max: maxVol * 4
             }
          },
-         layout: { padding: { left: 10, right: 100, top: 10, bottom: 10 } }
+         layout: { padding: { left: 10, right: 80, top: 10, bottom: 10 } }
       }
    };
 
