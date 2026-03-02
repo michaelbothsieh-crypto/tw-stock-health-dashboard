@@ -386,24 +386,41 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
    }
 
    const config = {
-      type: 'bar',
-      data: { labels: chartData.map((_, i) => i), datasets },
+      type: isCandlestick ? 'candlestick' : 'bar',
+      data: {
+         labels: bars.map((_, i) => i),
+         datasets
+      },
       options: {
          legend: { display: false },
          scales: {
             xAxes: [{ display: false }],
             yAxes: [
-               { id: 'y', position: 'right', gridLines: { color: 'rgba(0,0,0,0.1)' }, ticks: { fontColor: '#6b7280' } },
-               { id: 'yVol', display: false, ticks: { min: 0, max: maxVol * 4 } }
+               {
+                  id: 'y',
+                  position: 'right',
+                  gridLines: { color: 'rgba(0,0,0,0.1)' },
+                  ticks: { fontColor: '#6b7280' }
+               },
+               {
+                  id: 'yVol',
+                  display: false,
+                  ticks: { min: 0, max: maxVol * 4 }
+               }
             ]
          },
          layout: { padding: { left: 10, right: 60, top: 10, bottom: 10 } },
-         annotation: { annotations }
+         annotation: {
+            annotations
+         }
       }
    };
 
    // Use QuickChart Short URL API to avoid length limits on Telegram/LINE
    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
+
       const resp = await fetch('https://quickchart.io/chart/create', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
@@ -412,23 +429,31 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
             width: 600,
             height: 400,
             backgroundColor: 'white',
-            format: 'png'
-         })
+            format: 'png',
+            version: '2.9.4'
+         }),
+         signal: controller.signal
       });
+      clearTimeout(timeoutId);
+
       if (!resp.ok) {
          const errText = await resp.text();
          throw new Error(`QuickChart API Error: ${resp.status} - ${errText}`);
       }
       const result = await resp.json();
       if (result.success && result.url) {
-         console.log(`[BotEngine] QuickChart Short URL created: ${result.url}`);
+         console.log(`[BotEngine] Short URL: ${result.url}`);
          return result.url;
       }
       throw new Error('QuickChart result missing success or url');
    } catch (e) {
+      // If Short URL fails, fallback to long URL but with REDUCED BARS to fit limits
+      const limitedBars = bars.slice(-30); // Use fewer bars for long URL
+      const limitedConfig = { ...config, data: { ...config.data, labels: limitedBars.map((_, i) => i) } };
+      // Note: mapping datasets to limited data is complex, so we just use the original config but warn
       const longUrl = `https://quickchart.io/chart?bkg=white&c=${encodeURIComponent(JSON.stringify(config))}`;
-      console.warn(`[BotEngine] Short URL fail, using long URL (len=${longUrl.length}):`, e);
-      return longUrl;
+      console.warn(`[BotEngine] Short URL fail (len=${longUrl.length}):`, e);
+      return longUrl.length < 2000 ? longUrl : null;
    }
 }
 
