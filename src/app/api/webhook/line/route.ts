@@ -17,10 +17,11 @@ export async function POST(req: NextRequest) {
         // 1. Get raw body string for signature validation
         const rawBody = await req.text();
         const signature = req.headers.get("x-line-signature") || "";
+        const origin = new URL(req.url).origin;
 
         // 2. Validate signature
         if (!line.validateSignature(rawBody, config.channelSecret, signature)) {
-            console.error("[LINE Webhook] Invalid signature");
+            console.error("[LINE Webhook] Invalid signature. Secret length:", config.channelSecret?.length);
             return NextResponse.json({ error: "Invalid signature" }, { status: 403 });
         }
 
@@ -34,46 +35,55 @@ export async function POST(req: NextRequest) {
 
         // 4. Process each event
         for (const event of events) {
-            if (event.type !== "message" || event.message.type !== "text") {
-                continue;
-            }
-
-            const userText = event.message.text;
-
-            // Only respond to recognized commands or text starting with '/'
-            if (!userText.startsWith("/")) {
-                continue;
-            }
-
-            // Generate reply using the extracted botEngine logic
-            const reply = await generateBotReply(userText);
-
-            if (reply) {
-                // Strip HTML tags and markdown asterisks for LINE text format
-                const cleanReply = reply.text
-                    .replace(/<[^>]*>?/gm, "")
-                    .replace(/\*/g, "");
-
-                const messages: line.messagingApi.Message[] = [];
-
-                if (reply.photoUrl && (userText.startsWith("/stock") || userText.startsWith("/tw"))) {
-                    messages.push({
-                        type: "image",
-                        originalContentUrl: reply.photoUrl,
-                        previewImageUrl: reply.photoUrl,
-                    });
+            try {
+                if (event.type !== "message" || event.message.type !== "text") {
+                    continue;
                 }
 
-                messages.push({
-                    type: "text",
-                    text: cleanReply,
-                });
+                const userText = event.message.text.trim();
+                console.log(`[LINE Webhook] Processing text from user: ${userText}`);
 
-                // Send reply to LINE user
-                await client.replyMessage({
-                    replyToken: event.replyToken,
-                    messages,
-                });
+                // Only respond to recognized commands or text starting with '/'
+                if (!userText.startsWith("/")) {
+                    continue;
+                }
+
+                // Generate reply using the extracted botEngine logic
+                // Pass origin as baseUrl to ensure chart URLs are resolved if using local assets
+                const reply = await generateBotReply(userText, { baseUrl: origin });
+
+                if (reply) {
+                    // Strip HTML tags and markdown asterisks for LINE text format
+                    const cleanReply = reply.text
+                        .replace(/<[^>]*>?/gm, "")
+                        .replace(/\*/g, "");
+
+                    const messages: line.messagingApi.Message[] = [];
+
+                    const isStockCmd = userText.startsWith("/stock") || userText.startsWith("/tw");
+                    if (reply.photoUrl && isStockCmd) {
+                        messages.push({
+                            type: "image",
+                            originalContentUrl: reply.photoUrl,
+                            previewImageUrl: reply.photoUrl,
+                        });
+                    }
+
+                    messages.push({
+                        type: "text",
+                        text: cleanReply,
+                    });
+
+                    // Send reply to LINE user
+                    await client.replyMessage({
+                        replyToken: event.replyToken,
+                        messages,
+                    });
+                    console.log(`[LINE Webhook] Successfully replied to ${userText}`);
+                }
+            } catch (eventErr) {
+                console.error("[LINE Webhook] Error processing specific event:", eventErr);
+                // Continue to next event
             }
         }
 
