@@ -868,12 +868,23 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
                   card.chgAbs = 0;
                }
             }
+
+            // CRITICAL: Inject real-time point as the final bar for visual consistency
+            const latestDate = bars.length > 0 ? (bars[bars.length - 1] as any).date : new Date().toISOString().split('T')[0];
+            bars.push({
+               open: rtPrice, // Approximate for point injection
+               high: rtPrice,
+               low: rtPrice,
+               close: rtPrice,
+               volume: 0,
+               date: latestDate // Same day or slightly ahead
+            } as any);
          } else if (Number.isFinite(latest) && Number.isFinite(prev)) {
             card.chgAbs = latest - prev;
             card.chgPct = prev !== 0 ? ((latest - prev) / prev) * 100 : null;
          }
 
-         console.log(`[TelegramBot] Using Price: ${card.close} for ${symbol}`);
+         console.log(`[TelegramBot] Using Price: ${card.close} for ${symbol} (Bars: ${bars.length})`);
       }
 
       const volInfo = calcVolumeVs5d(bars);
@@ -896,6 +907,11 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       // Ensure chart is ALWAYS generated if we have enough data (Show approx. 6 months / 120 bars)
       if (bars.length >= 2) {
          card.chartUrl = await buildChartUrl(bars.slice(-120), card.support, card.resistance);
+         if (card.chartUrl) {
+            // Append a cache-buster timestamp to ensure Telegram/LINE refresh the image
+            const ts = Date.now();
+            card.chartUrl += (card.chartUrl.includes('?') ? '&' : '?') + `t=${ts}`;
+         }
       }
 
       card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? Math.round(snapshot.signals.flow.foreign5D / 1000) : null;
