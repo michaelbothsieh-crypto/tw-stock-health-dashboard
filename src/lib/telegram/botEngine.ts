@@ -792,7 +792,8 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          card.bullTarget = key.bullTarget;
          card.bearTarget = key.bearTarget;
 
-         card.chartUrl = buildChartUrl(bars.slice(-90), card.support, card.resistance);
+         // Aggressively shortened for LINE/Telegram URL limits (approx 1400-1800 chars)
+         card.chartUrl = buildChartUrl(bars.slice(-60), card.support, card.resistance);
       }
 
       card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? Math.round(snapshot.signals.flow.foreign5D / 1000) : null;

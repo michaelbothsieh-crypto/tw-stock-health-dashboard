@@ -61,11 +61,14 @@ export async function POST(req: NextRequest) {
                     const messages: line.messagingApi.Message[] = [];
 
                     const isStockCmd = userText.startsWith("/stock") || userText.startsWith("/tw");
-                    if (reply.photoUrl && isStockCmd) {
+                    // LINE has a strict 2000 character limit for image URLs.
+                    const safePhotoUrl = (reply.photoUrl && reply.photoUrl.length < 2000) ? reply.photoUrl : null;
+
+                    if (safePhotoUrl && isStockCmd) {
                         messages.push({
                             type: "image",
-                            originalContentUrl: reply.photoUrl,
-                            previewImageUrl: reply.photoUrl,
+                            originalContentUrl: safePhotoUrl,
+                            previewImageUrl: safePhotoUrl,
                         });
                     }
 
