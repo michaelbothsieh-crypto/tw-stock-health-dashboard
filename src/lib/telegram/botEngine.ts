@@ -325,7 +325,15 @@ function buildChartUrl(bars: Array<{ close?: number, volume?: number }>, support
          borderColor: 'rgba(34, 197, 94, 0.8)',
          borderWidth: 1.5,
          borderDash: [4, 4],
-         label: { enabled: true, content: '支撐 ' + support, position: 'left', backgroundColor: 'rgba(34, 197, 94, 0.8)' }
+         label: {
+            enabled: true,
+            content: '支撐 ' + support,
+            position: 'left',
+            backgroundColor: 'rgba(34, 197, 94, 0.8)',
+            fontSize: 10,
+            xPadding: 4,
+            yPadding: 4
+         }
       });
    }
 
@@ -338,7 +346,15 @@ function buildChartUrl(bars: Array<{ close?: number, volume?: number }>, support
          borderColor: 'rgba(239, 68, 68, 0.8)',
          borderWidth: 1.5,
          borderDash: [4, 4],
-         label: { enabled: true, content: '壓力 ' + resistance, position: 'left', backgroundColor: 'rgba(239, 68, 68, 0.8)' }
+         label: {
+            enabled: true,
+            content: '壓力 ' + resistance,
+            position: 'left',
+            backgroundColor: 'rgba(239, 68, 68, 0.8)',
+            fontSize: 10,
+            xPadding: 4,
+            yPadding: 4
+         }
       });
    }
 
@@ -350,7 +366,16 @@ function buildChartUrl(bars: Array<{ close?: number, volume?: number }>, support
       borderColor: color,
       borderWidth: 1.5,
       borderDash: [2, 2],
-      label: { enabled: true, content: '現價 ' + latestPrice.toFixed(2), position: 'right', backgroundColor: color }
+      label: {
+         enabled: true,
+         content: '現價 ' + latestPrice.toFixed(2),
+         position: 'right',
+         backgroundColor: color,
+         fontSize: 10,
+         xPadding: 4,
+         yPadding: 4,
+         xAdjust: 35
+      }
    });
 
    const chartConfig: any = {
@@ -393,7 +418,7 @@ function buildChartUrl(bars: Array<{ close?: number, volume?: number }>, support
                }
             ]
          },
-         layout: { padding: 10 },
+         layout: { padding: { left: 10, right: 60, top: 10, bottom: 10 } },
          annotation: { annotations }
       }
    };
