@@ -1,6 +1,30 @@
 "use client";
 
-import { ListChecks, Eye, AlertCircle, Globe, Search, Target, Zap, TrendingUp, TrendingDown, Activity, Bot, Shield, ArrowRight, Database, Clock, DollarSign, Cpu, AlertTriangle, ShieldAlert, ShieldCheck, Star } from "lucide-react";
+import {
+    AlertCircle,
+    TrendingUp,
+    TrendingDown,
+    BarChart3,
+    Zap,
+    Shield,
+    Eye,
+    Clock,
+    MessageSquare,
+    Target,
+    Activity,
+    Gem,
+    ListChecks,
+    ArrowRight,
+    ShieldAlert,
+    Database,
+    Globe,
+    DollarSign,
+    Cpu,
+    Search,
+    Star,
+    Bot,
+    ShieldCheck
+} from 'lucide-react';
 import { SnapshotResponse } from "@/components/layout/types";
 import { generatePlaybook, VerdictColor } from "@/lib/ux/playbookGenerator";
 import { getTwseColor } from "../layout/utils";
@@ -220,8 +244,8 @@ export function HeroPlaybook({
                                 <button
                                     onClick={() => toggleStock(tickerCode)}
                                     className={`p-2.5 rounded-xl border transition-all duration-300 shrink-0 ${hasStock(tickerCode)
-                                            ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-500 shadow-sm shadow-yellow-500/10"
-                                            : "border-slate-100 dark:border-neutral-800 text-slate-300 dark:text-neutral-600 hover:text-yellow-500 hover:border-yellow-500/30"
+                                        ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-500 shadow-sm shadow-yellow-500/10"
+                                        : "border-slate-100 dark:border-neutral-800 text-slate-300 dark:text-neutral-600 hover:text-yellow-500 hover:border-yellow-500/30"
                                         }`}
                                     aria-label={hasStock(tickerCode) ? "從觀察清單移除" : "加入觀察清單"}
                                 >
@@ -286,8 +310,8 @@ export function HeroPlaybook({
                                                 <div
                                                     key={idx}
                                                     className={`relative overflow-hidden p-3 rounded-xl border transition-all duration-300 ${item.type === "市場拋售"
-                                                            ? "bg-red-500/5 border-red-500/10 hover:border-red-500/30"
-                                                            : "bg-blue-400/5 border-blue-400/10 hover:border-blue-400/30"
+                                                        ? "bg-red-500/5 border-red-500/10 hover:border-red-500/30"
+                                                        : "bg-blue-400/5 border-blue-400/10 hover:border-blue-400/30"
                                                         }`}
                                                 >
                                                     {/* Side color bar */}
@@ -366,53 +390,32 @@ export function HeroPlaybook({
                     {/* ── 右側 2/3：戰術沙盤區 ── */}
                     <div className="md:col-span-2 flex flex-col divide-y divide-slate-100 dark:divide-neutral-800 h-full">
 
-                        {/* 上區塊：SOP 操作順序 */}
-                        <div className="p-5 md:p-8 flex-1">
+                        <div className="p-5 md:p-8 flex-1 flex flex-col justify-center">
                             <div className="flex items-center gap-2 mb-4 md:mb-6">
-                                <ListChecks className={`h-4 w-4 ${styles.accent}`} />
+                                <Zap className={`h-4 w-4 ${styles.accent}`} />
                                 <span className="text-[10px] md:text-xs font-bold text-slate-400 dark:text-neutral-400 uppercase tracking-widest">
-                                    SOP 操作順序
+                                    戰術實戰腳本 (IF-THEN)
                                 </span>
                             </div>
-                            <div className="space-y-4 md:space-y-5">
-                                {(playbook.actionSteps || []).map((step, idx) => (
-                                    <div key={idx} className="flex items-start gap-3 md:gap-4 group">
-                                        <div
-                                            className={`mt-0.5 shrink-0 flex h-5 w-5 md:h-6 md:w-6 items-center justify-center rounded-full text-[10px] md:text-[11px] font-black transition-all duration-300 group-hover:scale-110 ${styles.stepNumber}`}
-                                        >
-                                            {idx + 1}
-                                        </div>
-                                        <div className="flex flex-col flex-1">
-                                            <p className="text-sm md:text-[15px] font-medium text-slate-700 dark:text-neutral-200 leading-snug">
-                                                {typeof step === 'string' ? step.replace(/^\d+\.\s*/, "") : "資料格式異常"}
+                            <div className="relative group p-6 md:p-10 rounded-2xl bg-slate-50/50 dark:bg-white/5 border border-slate-100 dark:border-neutral-800 transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/10 hover:border-blue-500/30">
+                                <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 rounded-full" />
+                                <p className="text-lg md:text-2xl font-black text-slate-800 dark:text-neutral-100 leading-tight md:leading-relaxed tracking-tight">
+                                    「{(playbook as any).tacticalScript}」
+                                </p>
+
+                                {playbook.insiderComment && (
+                                    <div className="mt-8 flex items-start gap-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                                        <ShieldAlert className="h-5 w-5 text-amber-500 shrink-0 mt-1" />
+                                        <div className="space-y-1">
+                                            <p className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">
+                                                內部人異常警示
                                             </p>
-                                            {idx < playbook.actionSteps.length - 1 && (
-                                                <div className="mt-3 ml-[-24px] md:ml-[-28px] pl-[35px] md:pl-[39px] h-4 md:h-5 border-l-2 border-dashed border-slate-100 dark:border-neutral-800" />
-                                            )}
+                                            <p className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                                                {playbook.insiderComment}
+                                            </p>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* 中區塊：重要觀察對象 */}
-                        <div className="p-5 md:p-8 flex-1">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Eye className={`h-4 w-4 ${styles.accent}`} />
-                                <span className="text-[10px] md:text-xs font-bold text-slate-400 dark:text-neutral-400 uppercase tracking-widest">
-                                    重要觀察對象
-                                </span>
-                            </div>
-
-                            <div className="flex flex-col gap-2 mt-3">
-                                {(playbook.watchTargets || []).map((target, idx) => (
-                                    <div key={idx} className="flex items-start gap-3 bg-slate-50/50 dark:bg-white/5 px-4 py-3 rounded-lg transition-colors hover:bg-slate-100 dark:hover:bg-white/10 group">
-                                        <ArrowRight className="h-4 w-4 text-blue-400 shrink-0 mt-0.5 transition-transform group-hover:translate-x-0.5" />
-                                        <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-snug">
-                                            {typeof target === 'string' ? target : "資料格式異常"}
-                                        </p>
-                                    </div>
-                                ))}
+                                )}
                             </div>
                         </div>
 

@@ -27,10 +27,9 @@ export interface PlaybookContext {
 export interface ActionPlaybook {
   verdict: string;
   verdictColor: "red" | "green" | "amber" | "slate";
-  actionSteps: string[];
-  watchTargets: string[];
+  tacticalScript: string;
+  shortSummary: string;
   insiderComment?: string;
-  shortSummary?: string; // 新增：供戰情室使用的極短總結
 }
 
 // Tier 3: Rule-based Fallback
@@ -60,14 +59,9 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
     return {
       verdict: "內部人拋售",
       verdictColor: "amber",
-      actionSteps: [
-        `偵測到 ${ctx.stockName} 內部人大額申報轉讓，籌碼面出現強烈警戒`,
-        "大股東倒貨期間，建議空手者絕對觀望",
-        `嚴格守住 ${fSupport} 支撐，若跌破則全面撤退`
-      ],
-      watchTargets: ["內部人轉讓是否持續", "量能是否異常放大"],
-      insiderComment,
-      shortSummary: shortSummary || "內部人大筆賣出"
+      tacticalScript: `偵測到大額拋售，若跌破 ${fSupport} 則全面撤退，持股建議減碼。`,
+      shortSummary: shortSummary || "內部人大筆賣出",
+      insiderComment
     };
   }
 
@@ -75,12 +69,7 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
     return {
       verdict: "避險觀望",
       verdictColor: "green",
-      actionSteps: [
-        `全面降低 ${ctx.stockName} 持股至兩成以下`,
-        `目前現價 ${fPrice} 靠近壓力 ${fResistance}，嚴禁追高`,
-        "保留現金等待市場情緒回穩"
-      ],
-      watchTargets: ["留意 VIX 恐慌指數是否回落", "觀察美元指數 DXY 走勢"],
+      tacticalScript: `市場風險極高，現價 ${fPrice} 靠近壓力 ${fResistance}，建議空手觀望。`,
       shortSummary: "市場系統風險極高"
     };
   }
@@ -89,12 +78,7 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
     return {
       verdict: "籌碼警戒",
       verdictColor: "amber",
-      actionSteps: [
-        `${ctx.stockName} 出現法人拋售、散戶接刀現象`,
-        `現價 ${fPrice} 雖有技術支撐，但籌碼面極度凌亂`,
-        "建議空手者觀望，持有者嚴守支撐"
-      ],
-      watchTargets: ["三大法人買賣超動向", "融資餘額是否止增"],
+      tacticalScript: `法人拋售且籌碼凌亂，若跌破 ${fSupport} 則立即停損，空手者禁追。`,
       shortSummary: "法人賣散戶接，籌碼亂"
     };
   }
@@ -103,13 +87,11 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
   return {
     verdict: isBull ? "多頭趨勢" : "震盪整理",
     verdictColor: isBull ? "red" : "slate",
-    actionSteps: [
-      `目前現價 ${fPrice} 於 ${fSupport} 至 ${fResistance} 區間震盪`,
-      "維持現有部位，不主動加碼",
-      `若後續跌破支撐 ${fSupport} 則需嚴格執行減碼`
-    ],
-    watchTargets: ["觀察月線支撐力道", "量能是否有效放大"],
-    shortSummary: isBull ? "技術籌碼雙多，續抱" : "區間整理，靜待方向"
+    tacticalScript: isBull
+      ? `若守住 ${fSupport} 支撐則續抱，站穩 ${fResistance} 且法人續買可加碼。`
+      : `股價於 ${fSupport} 至 ${fResistance} 區間震盪，未破支撐前暫行觀望。`,
+    shortSummary: isBull ? "趨勢偏多，持股續抱" : "區間整理，靜待突破",
+    insiderComment: insiderComment || undefined
   };
 }
 
@@ -196,7 +178,7 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
 
   const prompt = `
 你是一位擁有 20 年實戰經驗的華爾街頂級量化與順勢交易員。現在請為客戶分析股票：${ctx.stockName} (${ctx.ticker})。
-你的語氣冷靜、客觀、犀利，不帶任何散戶恐慌情緒，展現機構操盤手「只看數據與價格行為」專業感。
+你的語氣冷靜、客觀、犀利，不帶任何散戶恐慌情緒，展現機構操盤手「只看數據與價格行為」的專業感。
 
 當前盤勢數據：
 - 現價: ${fPrice}
@@ -209,32 +191,22 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
 - 融券變化: ${ctx.shortLots || 0} 張
 - 內部人申報轉讓: ${ctx.insiderTransfers?.length ? JSON.stringify(ctx.insiderTransfers) : "無重大轉讓"}
 - 系統風險: ${fMacro}
-- 技術趨勢: ${ctx.technicalTrend}
 
-任務：請依據上述數據，給出極具實戰感的戰術劇本。
+任務：放棄所有條列式分析，請依據上述數據，給出「一句話」的極簡實戰腳本。
 
-【操盤手思維與權重規則】(嚴格遵守)：
-1. 核心權重：價格位階 (近期走勢) 與 關鍵支撐壓力 > 法人籌碼動向 > 內部人轉讓 > 系統風險。
-2. 多頭換手防護：若『近期位階』為多頭/高檔，且現價並未跌破『關鍵支撐』，此時若出現法人大賣或籌碼轉弱，【絕對禁止】判讀為「盤勢偏空」、「散戶套牢」或「主力出貨」。你必須將其客觀解讀為「高檔震盪」、「法人獲利了結」或「籌碼換手區」。
-3. 空頭確認規則：只有當現價「明確跌破關鍵支撐」，且伴隨法人大賣，才可判定為「趨勢轉弱」或「偏空」。
-4. 價量背離防護：若現價為強勢大漲（如接近漲停），量縮視為「籌碼鎖定、買盤強勢」，絕對不可判讀為量價背離或偏空。
-5. 內部人行為判定：
-   - 若為一般交易/鉅額拋售且總金額大：必須在 SOP 中設定為首要防守警報。
-   - 若僅為信託、贈與：視為大股東財務規劃，判定為中性，勿過度解讀。
-
-【語氣與輸出要求】：
-1. 每一條 actionSteps (操作 SOP) 必須以「動詞」開頭 (如：觀察、防守、留意、減碼、佈局、緊盯)。
-2. 必須將具體數字 (${fPrice}, ${fSupport}, ${fResistance}) 完美融入分析與 SOP 中。
-3. 【絕對禁止】直接輸出底層變數名稱 (如：籌碼熱度 ${fFlow}、系統風險)，必須轉化為白話文 (例如：外資買盤積極、總經環境承壓)。
-4. 嚴禁任何散戶情緒用語、Emoji、以及任何 Markdown 標記 (如 \`\`\`json)。
-5. 必須回傳純淨的 JSON 格式。
+【一句話戰術腳本 (tacticalScript) 撰寫規則】(嚴格遵守)：
+1. 【絕對精簡】：必須控制在 40 個字以內的一段話。
+2. 【IF-THEN 結構】：必須將「價格數字 (${fSupport} 或 ${fResistance})」結合「籌碼/位階條件」，給出明確的動作。
+3. 【禁用模糊廢話】：嚴禁出現「觀察、留意、是否、可能、建議」等模稜兩可的字眼。
+4. 【動作指令化】：只能使用明確的交易動作，如「停損、減碼、試單、加碼、續抱、空手觀望」。
+   - ✅ 正確範例：「若帶量跌破 1795 即停損，站穩 2465 且外資轉買才進場試單。」
+   - ❌ 錯誤範例：「觀察股價是否能站穩 1795 支撐，並留意外資動向決定是否進場。」
 
 {
-  "verdict": "4字內精煉結論 (如: 強勢整理, 高檔震盪, 破線轉弱)",
+  "verdict": "4字內精煉結論 (如: 強勢整理, 破線轉弱)",
   "verdictColor": "red|green|amber|slate",
-  "actionSteps": ["操作步驟1", "操作步驟2", "操作步驟3"],
-  "watchTargets": ["觀察指標1", "觀察指標2"],
-  "shortSummary": "15字內白話總結 (顯示於戰情室卡片)",
+  "tacticalScript": "40字內的 IF-THEN 一句話實戰腳本",
+  "shortSummary": "15字內白話總結 (供戰情室首頁卡片使用)",
   "insiderComment": "針對轉讓數據的犀利短評(選填，無異常則留白)"
 }
 `;

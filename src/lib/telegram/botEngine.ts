@@ -670,26 +670,20 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
             valueText: s.valueText,
             estimatedValue: 0, // Placeholder
             currentHoldings: 0, // Placeholder
-            transferRatio: s.transferRatio,
+            transferRatio: s.transferRatio || 0,
             type: "市場拋售"
          })),
       });
 
       if (playbook) {
          const divider = escapeHtml("━━━━━━━━━━━━━━");
-         const formattedSteps = playbook.actionSteps.map(s => `• ${escapeHtml(s)}`).join("\n");
-         const formattedTargets = playbook.watchTargets.map(t => `• ${escapeHtml(t)}`).join("\n");
-
          const aiSection = [
             divider,
             `🤖 <b>AI 戰報：【${escapeHtml(playbook.verdict)}】</b>`,
             "",
-            `📍 <b>戰術 SOP：</b>`,
-            formattedSteps,
-            "",
-            `🎯 <b>觀察指標：</b>`,
-            formattedTargets,
-            ...(playbook.insiderComment ? ["", `💡 <b>內部人短評：</b>`, escapeHtml(playbook.insiderComment)] : []),
+            `⚡ <b>戰術腳本：</b>`,
+            escapeHtml(playbook.tacticalScript),
+            ...(playbook.insiderComment ? ["", `⚠️ <b>內部人異動：</b>`, escapeHtml(playbook.insiderComment)] : []),
          ].join("\n");
 
          return `${structuredPart}\n\n${aiSection}`;
