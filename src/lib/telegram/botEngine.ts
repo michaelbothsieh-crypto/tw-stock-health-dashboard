@@ -357,7 +357,7 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
          type: 'line', xScaleID: 'x', yScaleID: 'y',
          xMin: troughIdx, xMax: lastIndex,
          yMin: troughPrice, yMax: support,
-         borderColor: 'rgba(34, 197, 94, 0.3)', borderWidth: 1, borderDash: [2, 2]
+         borderColor: 'rgba(34, 197, 94, 0.4)', borderWidth: 1.5
       };
    }
    if (resistance !== null) {
@@ -380,7 +380,7 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
          type: 'line', xScaleID: 'x', yScaleID: 'y',
          xMin: peakIdx, xMax: lastIndex,
          yMin: peakPrice, yMax: resistance,
-         borderColor: 'rgba(239, 68, 68, 0.3)', borderWidth: 1, borderDash: [2, 2]
+         borderColor: 'rgba(239, 68, 68, 0.4)', borderWidth: 1.5
       };
    }
 
@@ -392,22 +392,18 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
       borderColor: baseColor,
       borderWidth: 2,
       borderDash: [2, 2],
+      label: {
+         display: true,
+         content: latestPrice.toFixed(2),
+         position: 'end',
+         xAdjust: 55, // Push into right margin
+         backgroundColor: baseColor,
+         color: 'white',
+         font: { size: 12, weight: 'bold' },
+         padding: 5,
+         borderRadius: 4
+      },
       drawTime: 'afterDatasetsDraw'
-   };
-
-   // Use 'label' annotation for the price tag - more reliable on right margin in QCv3
-   annotations.priceLabel = {
-      type: 'label',
-      yValue: latestPrice,
-      xValue: bars.length - 0.5, // Center on the last candle or just after it
-      backgroundColor: baseColor,
-      color: 'white',
-      content: latestPrice.toFixed(2),
-      font: { size: 14, weight: 'bold' },
-      position: 'center',
-      padding: 6,
-      borderRadius: 4,
-      drawTime: 'afterDraw'
    };
 
    const isCandlestick = bars.every(b => (
@@ -477,7 +473,7 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
                max: maxVol * 4
             }
          },
-         layout: { padding: { left: 10, right: 80, top: 10, bottom: 10 } }
+         layout: { padding: { left: 10, right: 120, top: 10, bottom: 10 } }
       }
    };
 
