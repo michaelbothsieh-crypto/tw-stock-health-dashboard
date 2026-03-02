@@ -454,7 +454,10 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
             y: {
                position: 'right',
                grid: { color: 'rgba(0,0,0,0.1)' },
-               ticks: { color: '#6b7280' }
+               ticks: {
+                  color: '#6b7280',
+                  callback: (val: any) => val.toFixed(0)
+               }
             },
             yVol: {
                display: false,
@@ -462,8 +465,40 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
                max: maxVol * 4
             }
          },
-         layout: { padding: { left: 10, right: 100, top: 10, bottom: 10 } }
-      }
+         layout: { padding: { left: 10, right: 110, top: 10, bottom: 10 } }
+      },
+      plugins: [{
+         id: 'priceLabelPlugin',
+         afterDraw: (chart: any) => {
+            const { ctx, chartArea: { right }, scales: { y } } = chart;
+            const price = latestPrice;
+            const yPos = y.getPixelForValue(price);
+
+            ctx.save();
+            ctx.font = 'bold 12px Arial';
+            const text = '現價 ' + price.toFixed(2);
+            const textWidth = ctx.measureText(text).width;
+
+            // Draw Box
+            const boxPadding = 6;
+            const boxHeight = 22;
+            const boxWidth = textWidth + (boxPadding * 2);
+            const boxX = right + 5;
+            const boxY = yPos - (boxHeight / 2);
+
+            ctx.fillStyle = baseColor;
+            ctx.beginPath();
+            ctx.roundRect ? ctx.roundRect(boxX, boxY, boxWidth, boxHeight, 4) : ctx.rect(boxX, boxY, boxWidth, boxHeight);
+            ctx.fill();
+
+            // Draw Text
+            ctx.fillStyle = 'white';
+            ctx.textBaseline = 'middle';
+            ctx.textAlign = 'left';
+            ctx.fillText(text, boxX + boxPadding, yPos);
+            ctx.restore();
+         }
+      }]
    };
 
    // Use QuickChart Short URL API to avoid length limits on Telegram/LINE
