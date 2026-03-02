@@ -241,22 +241,19 @@ async function replyWithCard(chatId: number, progressMessageId: number | null, t
          await deleteMessage(chatId, progressMessageId);
       }
 
-      // Caption limit: 1024 chars for Telegram
-      let finalCaption = text;
-      let extraText = "";
-      if (text.length > 1000) {
-         // Take first ~1000 chars (stay safe) and the rest in extraText
-         finalCaption = text.substring(0, 1000) + "... (見下文)";
-         extraText = text;
-      }
+      // Use a very brief caption to avoid 1024 character limits and HTML truncation bugs.
+      // Usually the first line of 'text' contains the stock name.
+      const firstLine = (text.split('\n')[0] || "Stock Chart").replace(/<b>/g, "").replace(/<\/b>/g, "").trim();
+      const caption = `📊 ${firstLine}`;
 
-      const sentPhoto = await sendPhoto(chatId, photoUrl, finalCaption);
+      const sentPhoto = await sendPhoto(chatId, photoUrl, caption);
       if (!sentPhoto) {
          console.warn(`[TelegramBot] Failed to send photo (len=${photoUrl.length})`);
+         // Fallback: send just the text if photo fails
          await sendMessage(chatId, text);
-      } else if (extraText) {
-         // If we had to truncate the caption, send the full text as a reply
-         await sendMessage(chatId, extraText);
+      } else {
+         // Successfully sent photo, now send the full analysis as a second message
+         await sendMessage(chatId, text);
       }
    } else {
       await replyOrEdit(chatId, progressMessageId, text);
