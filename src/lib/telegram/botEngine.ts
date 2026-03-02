@@ -315,21 +315,40 @@ async function ensureTelegramCommandsSynced() {
    }
 }
 
-async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: number; close?: number; volume?: number }>, support: number | null, resistance: number | null): Promise<string | null> {
-   if (!bars || bars.length < 2) return null;
+async function buildChartUrl(allBars: Array<{ open?: number; high?: number; low?: number; close?: number; volume?: number }>, support: number | null, resistance: number | null): Promise<string | null> {
+   if (!allBars || allBars.length < 2) return null;
 
-   const data = bars.map(b => Number(b.close)).filter(Number.isFinite);
-   if (data.length === 0) return null;
+   const fullChartData = allBars.map(b => Number(b.close)).filter(Number.isFinite);
+   if (fullChartData.length === 0) return null;
 
-   const latestPrice = data[data.length - 1];
-   const prevPrice = data.length > 1 ? data[data.length - 2] : data[0];
+   const calculateSMA = (data: number[], period: number) => {
+      return data.map((_, idx, arr) => {
+         if (idx < period - 1) return null;
+         const slice = arr.slice(idx - period + 1, idx + 1);
+         const sum = slice.reduce((acc, val) => acc + val, 0);
+         return Number((sum / period).toFixed(2));
+      });
+   };
+
+   const fullSma20 = calculateSMA(fullChartData, 20);
+   const fullSma50 = calculateSMA(fullChartData, 50);
+   const fullSma200 = calculateSMA(fullChartData, 200);
+
+   const sliceLength = -120;
+   const bars = allBars.slice(sliceLength);
+   const chartData = fullChartData.slice(sliceLength);
+   const sma20 = fullSma20.slice(sliceLength);
+   const sma50 = fullSma50.slice(sliceLength);
+   const sma200 = fullSma200.slice(sliceLength);
+
+   const latestPrice = chartData[chartData.length - 1];
+   const prevPrice = chartData.length > 1 ? chartData[chartData.length - 2] : chartData[0];
    const isUp = latestPrice >= prevPrice;
    const baseColor = isUp ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)';
 
    const annotations: any = {};
    const lastIndex = bars.length - 1;
 
-   // Find actual local peaks and troughs in the window to draw better trend lines
    let peakPrice = -Infinity, peakIdx = 0;
    let troughPrice = Infinity, troughIdx = 0;
    bars.forEach((b, i) => {
@@ -351,8 +370,6 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
             padding: 4
          }
       };
-
-      // Triangle Support Line (Connect local trough to current support)
       annotations.triangleSupport = {
          type: 'line', xScaleID: 'x', yScaleID: 'y',
          xMin: troughIdx, xMax: lastIndex,
@@ -374,8 +391,6 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
             padding: 4
          }
       };
-
-      // Triangle Resistance Line (Connect local peak to current resistance)
       annotations.triangleResistance = {
          type: 'line', xScaleID: 'x', yScaleID: 'y',
          xMin: peakIdx, xMax: lastIndex,
@@ -396,7 +411,7 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
          display: true,
          content: latestPrice.toFixed(2),
          position: 'end',
-         xAdjust: 40, // Precision alignment with right axis
+         xAdjust: 40,
          backgroundColor: baseColor,
          color: 'white',
          font: { size: 11, weight: 'bold' },
@@ -411,23 +426,8 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
       typeof b.low === 'number' && typeof b.close === 'number'
    ));
 
-   const chartData = bars.map(b => Number(b.close)).filter(Number.isFinite);
    const chartVols = bars.map(b => Number(b.volume)).filter(Number.isFinite);
    const maxVol = chartVols.length > 0 ? Math.max(...chartVols) : 1;
-
-   // Calculate SMAs
-   const calculateSMA = (data: number[], period: number) => {
-      return data.map((_, idx, arr) => {
-         if (idx < period - 1) return null;
-         const slice = arr.slice(idx - period + 1, idx + 1);
-         const sum = slice.reduce((acc, val) => acc + val, 0);
-         return sum / period;
-      });
-   };
-
-   const sma20 = calculateSMA(chartData, 20);
-   const sma50 = calculateSMA(chartData, 50);
-   const sma200 = calculateSMA(chartData, 200);
 
    const datasets: any[] = [];
    if (isCandlestick) {
@@ -535,7 +535,7 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
    // Use QuickChart Short URL API to avoid length limits on Telegram/LINE
    try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout
 
       const resp = await fetch('https://quickchart.io/chart/create', {
          method: 'POST',
@@ -565,9 +565,18 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
    } catch (e) {
       // If Short URL fails, fallback to long URL but with REDUCED BARS to fit limits
       const limitedBars = bars.slice(-30); // Use fewer bars for long URL
-      const limitedConfig = { ...config, data: { ...config.data, labels: limitedBars.map((_, i) => i) } };
+      const limitedConfig = { 
+         ...config, 
+         data: { 
+            labels: limitedBars.map((_, i) => i), 
+            datasets: config.data.datasets.map(ds => ({
+               ...ds,
+               data: ds.data.slice(-30)
+            }))
+         } 
+      };
       // Note: mapping datasets to limited data is complex, so we just use the original config but warn
-      const longUrl = `https://quickchart.io/chart?bkg=white&c=${encodeURIComponent(JSON.stringify(config))}`;
+      const longUrl = `https://quickchart.io/chart?bkg=white&c=${encodeURIComponent(JSON.stringify(limitedConfig))}`;
       console.warn(`[BotEngine] Short URL fail (len=${longUrl.length}):`, e);
       return longUrl.length < 2000 ? longUrl : null;
    }
@@ -975,7 +984,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
 
       // Ensure chart is ALWAYS generated if we have enough data (Show approx. 6 months / 120 bars)
       if (bars.length >= 2) {
-         card.chartUrl = await buildChartUrl(bars.slice(-120), card.support, card.resistance);
+         card.chartUrl = await buildChartUrl(bars, card.support, card.resistance);
          if (card.chartUrl) {
             // Append a cache-buster timestamp to ensure Telegram/LINE refresh the image
             const ts = Date.now();
