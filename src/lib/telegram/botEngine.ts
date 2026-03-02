@@ -415,13 +415,28 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
    const chartVols = bars.map(b => Number(b.volume)).filter(Number.isFinite);
    const maxVol = chartVols.length > 0 ? Math.max(...chartVols) : 1;
 
+   // Calculate SMAs
+   const calculateSMA = (data: number[], period: number) => {
+      return data.map((_, idx, arr) => {
+         if (idx < period - 1) return null;
+         const slice = arr.slice(idx - period + 1, idx + 1);
+         const sum = slice.reduce((acc, val) => acc + val, 0);
+         return sum / period;
+      });
+   };
+
+   const sma20 = calculateSMA(chartData, 20);
+   const sma50 = calculateSMA(chartData, 50);
+   const sma200 = calculateSMA(chartData, 200);
+
    const datasets: any[] = [];
    if (isCandlestick) {
       datasets.push({
          type: 'candlestick',
          data: bars.map((b, i) => ({ x: i, o: b.open, h: b.high, l: b.low, c: b.close })),
          color: { up: 'rgb(239, 68, 68)', down: 'rgb(34, 197, 94)', unchanged: 'gray' },
-         yAxisID: 'y'
+         yAxisID: 'y',
+         order: 10
       });
    } else {
       datasets.push({
@@ -431,16 +446,50 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
          borderWidth: 2,
          fill: false,
          pointRadius: 0,
-         yAxisID: 'y'
+         yAxisID: 'y',
+         order: 10
       });
    }
+
+   // Add SMAs
+   datasets.push({
+      type: 'line',
+      data: sma20,
+      borderColor: 'rgba(245, 158, 11, 0.8)', // Orange-ish
+      borderWidth: 1.5,
+      fill: false,
+      pointRadius: 0,
+      yAxisID: 'y',
+      order: 5
+   });
+   datasets.push({
+      type: 'line',
+      data: sma50,
+      borderColor: 'rgba(234, 179, 8, 0.8)', // Yellow-ish
+      borderWidth: 1.5,
+      fill: false,
+      pointRadius: 0,
+      yAxisID: 'y',
+      order: 6
+   });
+   datasets.push({
+      type: 'line',
+      data: sma200,
+      borderColor: 'rgba(168, 85, 247, 0.8)', // Purple-ish
+      borderWidth: 1.5,
+      fill: false,
+      pointRadius: 0,
+      yAxisID: 'y',
+      order: 7
+   });
 
    if (chartVols.length === chartData.length) {
       datasets.push({
          type: 'bar',
          data: chartVols,
          backgroundColor: 'rgba(156, 163, 175, 0.3)',
-         yAxisID: 'yVol'
+         yAxisID: 'yVol',
+         order: 20
       });
    }
 
@@ -458,10 +507,14 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
             }
          },
          scales: {
-            x: { display: false },
+            x: {
+               display: true,
+               grid: { color: 'rgba(0,0,0,0.1)', borderDash: [2, 2], drawBorder: false },
+               ticks: { display: false } // Hide x-axis labels to save space or configure date labels if available
+            },
             y: {
                position: 'right',
-               grid: { color: 'rgba(0,0,0,0.05)', borderDash: [2, 2] },
+               grid: { color: 'rgba(0,0,0,0.1)', borderDash: [2, 2], drawBorder: false },
                ticks: {
                   color: '#6b7280',
                   font: { size: 10 },
