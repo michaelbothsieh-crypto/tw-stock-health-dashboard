@@ -882,10 +882,10 @@ export async function generateBotReply(
          "我會幫你整合技術面、籌碼動態與 AI 預測，提供一目了然的個股診斷報告。",
          "",
          "📌 <b>如何查詢？</b>",
-         "請使用 <code>/tw</code> 或 <code>/stock</code> 指令，後方加上股票代號或名稱。",
-         "例如：<code>/tw 2330</code> 或 <code>/stock 台積電</code>",
+         "請使用 <code>/tw</code> 指令，後方加上股票代號或名稱。",
+         "例如：<code>/tw 2330</code> 或 <code>/tw 台積電</code>",
          "",
-         "如果是剛加入，建議直接輸入指令試試看喔！",
+         "如果是剛加入，建議直接輸入 <code>/tw 2330</code> 試試看喔！",
       ].join("\n");
       return { text: welcome };
    }
