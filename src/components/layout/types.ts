@@ -95,6 +95,11 @@ export type SnapshotResponse = {
       volume?: number;
     }>;
   };
+  realTimeQuote?: {
+    price: number;
+    changePct?: number;
+    time: string;
+  };
 };
 
 export type MainTab = "數據判讀" | "分析詳解";

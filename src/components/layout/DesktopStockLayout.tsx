@@ -206,11 +206,11 @@ export function DesktopStockLayout({
 
           <GlobalLinkageTile snapshot={snapshot} />
 
-                  <TechnicalTile tactics={snapshot.technicalTactics} />
-          
-                  <FlowRadarTile snapshot={snapshot} />
-          
-                  {/* Evidence Strip */}          <Tile className="rounded-2xl p-6 overflow-hidden">
+          <TechnicalTile tactics={snapshot.technicalTactics} />
+
+          <FlowRadarTile snapshot={snapshot} />
+
+          {/* Evidence Strip */}          <Tile className="rounded-2xl p-6 overflow-hidden">
             <div className="mb-4 text-[16px] font-medium text-neutral-400 flex items-center justify-between">
               <span>證據摘要</span>
               <Button variant="ghost" size="sm" onClick={() => {

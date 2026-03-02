@@ -63,8 +63,17 @@ export function calculateKeyLevels(prices: PriceData[]): KeyLevelsResult {
   const sma60 = calculateSMA(closes, 60);
   const atr14 = calculateATR(prices, 14);
 
+  // Fallback safe values using ATR if available
+  const currentAtr = atr14 || (latestClose * 0.02); // rough estimate if ATR fails
+
+  // --- Breakout Level (壓力) ---
   let breakoutLevel = highest20;
-  
+  if (breakoutLevel !== null && (breakoutLevel - latestClose) > (currentAtr * 3)) {
+    // If 20-day high is too far away, use a closer ATR-based resistance
+    breakoutLevel = latestClose + (currentAtr * 1.5);
+  }
+
+  // --- Support Level (支撐) ---
   let supportLevel = sma20;
   if (sma20 !== null && lowest20 !== null) {
     const c1 = sma20;
@@ -78,11 +87,30 @@ export function calculateKeyLevels(prices: PriceData[]): KeyLevelsResult {
     }
   }
 
+  if (supportLevel !== null && (latestClose - supportLevel) > (currentAtr * 3)) {
+    // If support is too far (e.g., sharp recent rally), pull it up to an ATR-based trail
+    supportLevel = latestClose - (currentAtr * 1.5);
+  }
+
+  // --- Invalidation Level (防護/失效位) ---
   let invalidationLevel = sma60;
   if (sma60 !== null && lowest60 !== null) {
     if (latestClose < sma60) {
       invalidationLevel = lowest60;
     }
+  }
+
+  if (invalidationLevel !== null && (latestClose - invalidationLevel) > (currentAtr * 5)) {
+    // If invalidation is too far away, pull it up to a 2.5x ATR trailing stop
+    invalidationLevel = latestClose - (currentAtr * 2.5);
+  }
+
+  // Basic sanity check, ensure proper ordering: invalidation <= support <= breakout
+  if (supportLevel !== null && breakoutLevel !== null && supportLevel > breakoutLevel) {
+    supportLevel = breakoutLevel - currentAtr;
+  }
+  if (invalidationLevel !== null && supportLevel !== null && invalidationLevel > supportLevel) {
+    invalidationLevel = supportLevel - currentAtr;
   }
 
   const notes = [

@@ -70,64 +70,64 @@ export async function GET(
     const snapshotData = await fetchStockSnapshot(norm);
     const displayName = snapshotData.displayName ? `${norm.symbol} ${snapshotData.displayName}` : norm.symbol;
     const companyNameZh = snapshotData.displayName;
-    
+
     if (snapshotData.warnings.length > 0) {
       warnings.push(...snapshotData.warnings);
     }
-    
+
     const prices = snapshotData.prices;
     const investors = snapshotData.flow?.investors || [];
     const margin = snapshotData.flow?.margin || [];
     const revenue = snapshotData.fundamentals.revenue || [];
     const rawNews = snapshotData.news || [];
     const technicals = snapshotData.technicals;
-    
+
     const tradingDates = prices.map((p) => p.date);
-        const latestDate = prices[prices.length - 1].date;
-        const latestDateObj = new Date(latestDate);
-    
-        // Map unified prices to legacy PriceBar format for internal signals
-        const legacyPrices = prices.map(p => ({
-          date: p.date,
-          stock_id: norm.symbol,
-          Trading_Volume: p.volume,
-          open: p.open,
-          max: p.high,
-          min: p.low,
-          close: p.close
-        }));
-    
-        const technicalTactics = technicals ? translateTechnicals(technicals) : null;
-        const newsErrorCode = snapshotData.meta.newsMeta.errorCode ?? null;
-        const newsErrorMessage = snapshotData.meta.newsMeta.message ?? null;
-    
-        const trendSignals = calculateTrend(legacyPrices);
-        const flowSignals = calculateFlow(tradingDates, investors, margin);
-        
-        // Calculate fundamentals
-        let fundamentalSignals = calculateFundamental(revenue);
-        // US Stock fundamental fallback
-        if (!isTaiwanStock(norm.symbol) && snapshotData.fundamentals.eps !== null) {
-          // Basic fallback scoring for US stocks
-          let score = 50;
-          let reasons = [];
-          if ((snapshotData.fundamentals.revenueGrowth ?? 0) > 0.1) { score += 15; reasons.push("營收成長大於10%"); }
-          else if ((snapshotData.fundamentals.revenueGrowth ?? 0) < 0) { score -= 15; reasons.push("營收出現衰退"); }
-          if ((snapshotData.fundamentals.peRatio ?? 50) < 30) { score += 10; reasons.push("本益比在合理範圍"); }
-          if (reasons.length === 0) reasons.push("基本面穩健");
-          
-          fundamentalSignals = {
-            recent3MoYoyAverage: (snapshotData.fundamentals.revenueGrowth ?? 0) * 100,
-            recent6MoYoyAverage: (snapshotData.fundamentals.revenueGrowth ?? 0) * 100,
-            yoyTrend: (snapshotData.fundamentals.revenueGrowth ?? 0) > 0 ? 'up' : 'flat',
-            fundamentalScore: score,
-            reasons,
-            risks: []
-          };
-        }
-    
-        const shortTermVolatility = calculateShortTermVolatility(legacyPrices);
-        const shortTerm = calculateShortTermSignals(legacyPrices, trendSignals, shortTermVolatility);
+    const latestDate = prices[prices.length - 1].date;
+    const latestDateObj = new Date(latestDate);
+
+    // Map unified prices to legacy PriceBar format for internal signals
+    const legacyPrices = prices.map(p => ({
+      date: p.date,
+      stock_id: norm.symbol,
+      Trading_Volume: p.volume,
+      open: p.open,
+      max: p.high,
+      min: p.low,
+      close: p.close
+    }));
+
+    const technicalTactics = technicals ? translateTechnicals(technicals) : null;
+    const newsErrorCode = snapshotData.meta.newsMeta.errorCode ?? null;
+    const newsErrorMessage = snapshotData.meta.newsMeta.message ?? null;
+
+    const trendSignals = calculateTrend(legacyPrices);
+    const flowSignals = calculateFlow(tradingDates, investors, margin);
+
+    // Calculate fundamentals
+    let fundamentalSignals = calculateFundamental(revenue);
+    // US Stock fundamental fallback
+    if (!isTaiwanStock(norm.symbol) && snapshotData.fundamentals.eps !== null) {
+      // Basic fallback scoring for US stocks
+      let score = 50;
+      let reasons = [];
+      if ((snapshotData.fundamentals.revenueGrowth ?? 0) > 0.1) { score += 15; reasons.push("營收成長大於10%"); }
+      else if ((snapshotData.fundamentals.revenueGrowth ?? 0) < 0) { score -= 15; reasons.push("營收出現衰退"); }
+      if ((snapshotData.fundamentals.peRatio ?? 50) < 30) { score += 10; reasons.push("本益比在合理範圍"); }
+      if (reasons.length === 0) reasons.push("基本面穩健");
+
+      fundamentalSignals = {
+        recent3MoYoyAverage: (snapshotData.fundamentals.revenueGrowth ?? 0) * 100,
+        recent6MoYoyAverage: (snapshotData.fundamentals.revenueGrowth ?? 0) * 100,
+        yoyTrend: (snapshotData.fundamentals.revenueGrowth ?? 0) > 0 ? 'up' : 'flat',
+        fundamentalScore: score,
+        reasons,
+        risks: []
+      };
+    }
+
+    const shortTermVolatility = calculateShortTermVolatility(legacyPrices);
+    const shortTerm = calculateShortTermSignals(legacyPrices, trendSignals, shortTermVolatility);
 
     if (flowSignals.risks.includes("flow_data_missing")) {
       warnings.push("flow_data_missing");
@@ -195,7 +195,11 @@ export async function GET(
       riskFlags,
     });
 
-    const latestClose = prices[prices.length - 1].close;
+    const fLatestClose = prices[prices.length - 1].close;
+    // Attempt Real-time Fetch
+    const liveQuote = await import("@/lib/providers/yahooFinance").then(m => m.fetchYahooQuote(norm.symbol));
+    const latestClose = liveQuote ? liveQuote.price : fLatestClose;
+    const realTimeChangePct = liveQuote ? liveQuote.changePct : undefined;
     const explainBreakdown = buildExplainBreakdown({
       trend: trendSignals,
       flow: flowSignals,
@@ -226,24 +230,23 @@ export async function GET(
     // --- New Global Linkage Pipeline (Clustering & Auto-Mapping) ---
     const stockProfile = await resolveStockProfile(norm.symbol, displayName);
     const mappedPricesTw = prices.map(p => ({ date: p.date, close: p.close }));
-    
+
     // 1. Compute dynamic clusters
     const { members: allMembers, targetClusterId } = await getOrComputeClusters(
-        norm.symbol,
-        mappedPricesTw,
-        15
+      norm.symbol,
+      mappedPricesTw,
+      15
     );
-    
+
     // 2. Filter target's cluster members
     const clusterMembers = Array.from(allMembers.values()).filter(m => m.clusterId === targetClusterId);
-    
+
     // 3. Resolve dominant theme (Sector name)
     const themeName = stockProfile.sectorZh;
     const usMapping = mapThemeToUS(themeName, norm.symbol);
-    
+
     // 4. Local Peers (TW)
     const twPeerLinkage = await selectTwPeers(norm.symbol, clusterMembers, themeName, allMembers);
-    
     // 5. Overseas Drivers
     // Fetch Yahoo data for US candidates
     const allUsSymbols = Array.from(new Set([usMapping.sector.id, ...usMapping.hints]));
@@ -273,7 +276,7 @@ export async function GET(
     if (!globalFetchSuccess || !selectedDrivers.sector || selectedDrivers.peers.length === 0) {
       warnings.push("目前海外資料暫時無法取得，連動指標以可用資料估算或暫停顯示");
       if (!selectedDrivers.sector) {
-         selectedDrivers = { sector: null, peers: [] };
+        selectedDrivers = { sector: null, peers: [] };
       }
     }
 
@@ -329,7 +332,7 @@ export async function GET(
       stockName: companyNameZh || norm.symbol,
       score: Math.round(strategy.confidence),
       shortSummary: playbook.shortSummary || "數據整理中",
-      
+
       overallHealthScore: Math.round(strategy.confidence), // Maintain backward compatibility if used elsewhere
       normalizedTicker: {
         ...norm,
@@ -383,6 +386,11 @@ export async function GET(
       globalLinkage,
       crashWarning,
       keyLevels,
+      realTimeQuote: liveQuote ? {
+        price: latestClose,
+        changePct: realTimeChangePct,
+        time: new Date().toISOString()
+      } : undefined,
       uxSummary,
       aiSummary: {
         stance: aiExplanation.stance,

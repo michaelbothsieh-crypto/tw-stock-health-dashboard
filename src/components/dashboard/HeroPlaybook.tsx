@@ -62,25 +62,39 @@ const MACRO_INFO = {
 
 // ── 價格顯示 Helper ──────────────────────────────────────────────────
 function PriceTicker({
-    prices,
+    snapshot,
 }: {
-    prices: SnapshotResponse["data"]["prices"];
+    snapshot: SnapshotResponse;
 }) {
+    const prices = snapshot.data.prices;
     if (!prices || prices.length < 2) return null;
-    const latest = prices[prices.length - 1];
+
+    // Fallback to previous day's close for calculation basis
     const prev = prices[prices.length - 2];
-    const change = latest.close - prev.close;
+
+    const rt = snapshot.realTimeQuote;
+    const currentPrice = rt ? rt.price : prices[prices.length - 1].close;
+
+    const change = currentPrice - prev.close;
     const changePct = (change / prev.close) * 100;
-    
+
     const colorClass = getTwseColor(change, 'text');
     const bgColorClass = getTwseColor(change, 'bg');
 
     return (
         <div className="flex flex-col gap-1.5 mt-4">
-            <div className="text-[10px] md:text-xs text-muted-foreground font-bold uppercase tracking-widest opacity-80">最新收盤</div>
+            <div className="flex items-center gap-2 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-80">
+                {rt ? "即時價格" : "最新收盤"}
+                {rt && (
+                    <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                    </span>
+                )}
+            </div>
             <div className="flex items-center gap-3 md:gap-4">
                 <span className="text-4xl md:text-5xl font-black tracking-tighter text-slate-900 dark:text-neutral-100 tabular-nums leading-none">
-                    {latest.close.toFixed(1)}
+                    {currentPrice.toFixed(1)}
                 </span>
                 <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] md:text-sm font-black ${colorClass} ${bgColorClass} border border-current/10 whitespace-nowrap`}>
                     {change >= 0 ? "+" : ""}{change.toFixed(1)} {change >= 0 ? "+" : ""}{changePct.toFixed(2)}%
@@ -101,7 +115,7 @@ export function HeroPlaybook({
     onSwitchStock?: () => void;
 }) {
     const { hasStock, toggleStock } = useWatchlist();
-    
+
     // Use AI generated playbook from API, fallback to local generator if missing
     const playbook = snapshot.playbook || generatePlaybook(snapshot);
     const styles = VERDICT_STYLES[playbook.verdictColor as VerdictColor];
@@ -137,7 +151,7 @@ export function HeroPlaybook({
                                 : "宏觀環境：市場平穩"}
                         </span>
                     </div>
-                    
+
                     <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar ml-4">
                         {indicators && (
                             <>
@@ -205,11 +219,10 @@ export function HeroPlaybook({
 
                                 <button
                                     onClick={() => toggleStock(tickerCode)}
-                                    className={`p-2.5 rounded-xl border transition-all duration-300 shrink-0 ${
-                                        hasStock(tickerCode)
-                                        ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-500 shadow-sm shadow-yellow-500/10"
-                                        : "border-slate-100 dark:border-neutral-800 text-slate-300 dark:text-neutral-600 hover:text-yellow-500 hover:border-yellow-500/30"
-                                    }`}
+                                    className={`p-2.5 rounded-xl border transition-all duration-300 shrink-0 ${hasStock(tickerCode)
+                                            ? "border-yellow-500/30 bg-yellow-500/10 text-yellow-500 shadow-sm shadow-yellow-500/10"
+                                            : "border-slate-100 dark:border-neutral-800 text-slate-300 dark:text-neutral-600 hover:text-yellow-500 hover:border-yellow-500/30"
+                                        }`}
                                     aria-label={hasStock(tickerCode) ? "從觀察清單移除" : "加入觀察清單"}
                                 >
                                     <Star className={`h-5 w-5 ${hasStock(tickerCode) ? "fill-current" : ""}`} />
@@ -217,7 +230,7 @@ export function HeroPlaybook({
                             </div>
 
                             {/* 股價儀表 (Visual Focus) */}
-                            <PriceTicker prices={snapshot.data.prices} />
+                            <PriceTicker snapshot={snapshot} />
 
                             {/* AI 策略結論與信心 (Merged Block) */}
                             <div className="bg-slate-50 dark:bg-neutral-900/40 border border-slate-100 dark:border-neutral-800 p-4 md:p-5 rounded-2xl flex items-center justify-between shadow-inner">
@@ -270,17 +283,16 @@ export function HeroPlaybook({
                                         {/* 轉讓列表 */}
                                         <div className="max-h-[180px] overflow-y-auto pr-1 hide-scrollbar space-y-2">
                                             {snapshot.insiderTransfers.map((item, idx) => (
-                                                <div 
-                                                    key={idx} 
-                                                    className={`relative overflow-hidden p-3 rounded-xl border transition-all duration-300 ${
-                                                        item.type === "市場拋售" 
-                                                        ? "bg-red-500/5 border-red-500/10 hover:border-red-500/30" 
-                                                        : "bg-blue-400/5 border-blue-400/10 hover:border-blue-400/30"
-                                                    }`}
+                                                <div
+                                                    key={idx}
+                                                    className={`relative overflow-hidden p-3 rounded-xl border transition-all duration-300 ${item.type === "市場拋售"
+                                                            ? "bg-red-500/5 border-red-500/10 hover:border-red-500/30"
+                                                            : "bg-blue-400/5 border-blue-400/10 hover:border-blue-400/30"
+                                                        }`}
                                                 >
                                                     {/* Side color bar */}
                                                     <div className={`absolute left-0 top-0 bottom-0 w-1 ${item.type === "市場拋售" ? "bg-red-500" : "bg-blue-400"}`} />
-                                                    
+
                                                     <div className="flex flex-col gap-2">
                                                         <div className="flex items-center justify-between">
                                                             <div className="flex items-center gap-1.5 min-w-0">
@@ -308,8 +320,8 @@ export function HeroPlaybook({
                                                                     <span>{(item.transferRatio * 100).toFixed(1)}%</span>
                                                                 </div>
                                                                 <div className="h-1 w-full bg-slate-100 dark:bg-neutral-800 rounded-full overflow-hidden">
-                                                                    <div 
-                                                                        className={`h-full rounded-full transition-all duration-1000 ${item.type === "市場拋售" ? "bg-red-500" : "bg-blue-400"}`} 
+                                                                    <div
+                                                                        className={`h-full rounded-full transition-all duration-1000 ${item.type === "市場拋售" ? "bg-red-500" : "bg-blue-400"}`}
                                                                         style={{ width: `${Math.max(2, item.transferRatio * 100)}%` }}
                                                                     />
                                                                 </div>
@@ -360,7 +372,7 @@ export function HeroPlaybook({
                                 <ListChecks className={`h-4 w-4 ${styles.accent}`} />
                                 <span className="text-[10px] md:text-xs font-bold text-slate-400 dark:text-neutral-400 uppercase tracking-widest">
                                     SOP 操作順序
-                            </span>
+                                </span>
                             </div>
                             <div className="space-y-4 md:space-y-5">
                                 {(playbook.actionSteps || []).map((step, idx) => (
@@ -391,7 +403,7 @@ export function HeroPlaybook({
                                     重要觀察對象
                                 </span>
                             </div>
-                            
+
                             <div className="flex flex-col gap-2 mt-3">
                                 {(playbook.watchTargets || []).map((target, idx) => (
                                     <div key={idx} className="flex items-start gap-3 bg-slate-50/50 dark:bg-white/5 px-4 py-3 rounded-lg transition-colors hover:bg-slate-100 dark:hover:bg-white/10 group">
