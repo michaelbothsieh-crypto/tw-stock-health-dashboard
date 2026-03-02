@@ -386,16 +386,15 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
 
    annotations.price = {
       type: 'line', scaleID: 'y', yMin: latestPrice, yMax: latestPrice,
-      borderColor: baseColor, borderWidth: 1.5, borderDash: [2, 2],
+      borderColor: baseColor, borderWidth: 2, borderDash: [2, 2],
       label: {
          display: true,
          content: '現價 ' + latestPrice.toFixed(2),
          position: 'end',
          backgroundColor: baseColor,
          color: 'white',
-         font: { size: 11, weight: 'bold' },
-         padding: 5,
-         xAdjust: -40
+         font: { size: 12, weight: 'bold' },
+         padding: 6
       }
    };
 
@@ -463,7 +462,7 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
                max: maxVol * 4
             }
          },
-         layout: { padding: { left: 10, right: 80, top: 10, bottom: 10 } }
+         layout: { padding: { left: 10, right: 100, top: 10, bottom: 10 } }
       }
    };
 
