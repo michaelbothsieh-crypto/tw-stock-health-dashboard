@@ -240,7 +240,11 @@ async function replyWithCard(chatId: number, progressMessageId: number | null, t
       if (progressMessageId !== null) {
          await deleteMessage(chatId, progressMessageId);
       }
-      await sendPhoto(chatId, photoUrl, text);
+      const sentPhoto = await sendPhoto(chatId, photoUrl, text);
+      // If photo failed (e.g. URL too long), fallback to plain text.
+      if (!sentPhoto) {
+         await sendMessage(chatId, text);
+      }
    } else {
       await replyOrEdit(chatId, progressMessageId, text);
    }
@@ -379,7 +383,11 @@ function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: number;
       }
    });
 
-   const isCandlestick = bars.every(b => b.open !== undefined && b.high !== undefined && b.low !== undefined && b.close !== undefined);
+   // Ensure we have at least some basic OHLC data to attempt candlestick.
+   const isCandlestick = (bars.length > 0) && bars.every(b => (
+      typeof b.open === 'number' && typeof b.high === 'number' &&
+      typeof b.low === 'number' && typeof b.close === 'number'
+   ));
    const datasets: any[] = [];
 
    if (isCandlestick) {
@@ -784,7 +792,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          card.bullTarget = key.bullTarget;
          card.bearTarget = key.bearTarget;
 
-         card.chartUrl = buildChartUrl(bars.slice(-180), card.support, card.resistance);
+         card.chartUrl = buildChartUrl(bars.slice(-90), card.support, card.resistance);
       }
 
       card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? Math.round(snapshot.signals.flow.foreign5D / 1000) : null;
@@ -872,7 +880,8 @@ export async function generateBotReply(
    options?: TelegramHandleOptions,
 ): Promise<{ text: string, photoUrl?: string | null } | null> {
    const [commandRaw, ...argParts] = text.trim().split(/\s+/);
-   const command = commandRaw.toLowerCase();
+   // Support group commands like /tw@YourBot
+   const command = commandRaw.toLowerCase().split("@")[0];
    const query = argParts.join(" ").trim();
 
    if (command === "/start" || command === "/help") {
@@ -982,7 +991,7 @@ export async function handleTelegramMessage(
    await ensureTelegramCommandsSynced();
 
    const [commandRaw] = text.trim().split(/\s+/);
-   const command = commandRaw.toLowerCase();
+   const command = commandRaw.toLowerCase().split("@")[0];
 
    let progressMessageId: number | null = null;
    if (command === "/tw" || command === "/stock") {
