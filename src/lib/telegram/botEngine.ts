@@ -244,7 +244,7 @@ async function replyWithCard(chatId: number, progressMessageId: number | null, t
       // Use a very brief caption to avoid 1024 character limits and HTML truncation bugs.
       // Usually the first line of 'text' contains the stock name.
       const firstLine = (text.split('\n')[0] || "Stock Chart").replace(/<b>/g, "").replace(/<\/b>/g, "").trim();
-      const caption = `📊 ${firstLine}`;
+      const caption = `${firstLine}`;
 
       const sentPhoto = await sendPhoto(chatId, photoUrl, caption);
       if (!sentPhoto) {
@@ -327,11 +327,21 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
    const baseColor = isUp ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)';
 
    const annotations: any = {};
+   const lastIndex = bars.length - 1;
+
    if (support !== null) {
       annotations.support = {
          type: 'line', scaleID: 'y', yMin: support, yMax: support,
          borderColor: 'rgba(34, 197, 94, 0.8)', borderWidth: 1.5, borderDash: [4, 4],
          label: { display: true, content: '支撐 ' + support, position: 'start', backgroundColor: 'rgba(34, 197, 94, 0.8)', font: { size: 10 } }
+      };
+
+      // Triangle Support Line (Simplified: from start of window to current support)
+      annotations.triangleSupport = {
+         type: 'line', xScaleID: 'x', yScaleID: 'y',
+         xMin: 0, xMax: lastIndex,
+         yMin: bars[0].low ?? support, yMax: support,
+         borderColor: 'rgba(34, 197, 94, 0.3)', borderWidth: 1, borderDash: [2, 2]
       };
    }
    if (resistance !== null) {
@@ -340,11 +350,27 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
          borderColor: 'rgba(239, 68, 68, 0.8)', borderWidth: 1.5, borderDash: [4, 4],
          label: { display: true, content: '壓力 ' + resistance, position: 'start', backgroundColor: 'rgba(239, 68, 68, 0.8)', font: { size: 10 } }
       };
+
+      // Triangle Resistance Line (Simplified: from start of window to current resistance)
+      annotations.triangleResistance = {
+         type: 'line', xScaleID: 'x', yScaleID: 'y',
+         xMin: 0, xMax: lastIndex,
+         yMin: bars[0].high ?? resistance, yMax: resistance,
+         borderColor: 'rgba(239, 68, 68, 0.3)', borderWidth: 1, borderDash: [2, 2]
+      };
    }
+
    annotations.price = {
       type: 'line', scaleID: 'y', yMin: latestPrice, yMax: latestPrice,
       borderColor: baseColor, borderWidth: 1.5, borderDash: [2, 2],
-      label: { display: true, content: '現價 ' + latestPrice.toFixed(2), position: 'end', backgroundColor: baseColor, font: { size: 10 } }
+      label: {
+         display: true,
+         content: '現價 ' + latestPrice.toFixed(2),
+         position: 'end',
+         backgroundColor: baseColor,
+         font: { size: 10, weight: 'bold' },
+         xAdjust: -30 // Push label left to avoid edge clipping
+      }
    };
 
    const isCandlestick = bars.every(b => (
@@ -411,7 +437,7 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
                max: maxVol * 4
             }
          },
-         layout: { padding: { left: 10, right: 60, top: 10, bottom: 10 } }
+         layout: { padding: { left: 10, right: 80, top: 10, bottom: 10 } }
       }
    };
 
