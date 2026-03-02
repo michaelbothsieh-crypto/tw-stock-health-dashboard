@@ -870,15 +870,26 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
             }
 
             // CRITICAL: Inject real-time point as the final bar for visual consistency
-            const latestDate = bars.length > 0 ? (bars[bars.length - 1] as any).date : new Date().toISOString().split('T')[0];
-            bars.push({
-               open: rtPrice, // Approximate for point injection
-               high: rtPrice,
-               low: rtPrice,
-               close: rtPrice,
-               volume: 0,
-               date: latestDate // Same day or slightly ahead
-            } as any);
+            // Deduplication logic: If the last bar has the same date, update it. Otherwise push.
+            const todayStr = new Date().toISOString().split('T')[0];
+            const lastBar = bars.length > 0 ? (bars[bars.length - 1] as any) : null;
+
+            if (lastBar && lastBar.date === todayStr) {
+               // Update existing bar to reflect latest price
+               lastBar.close = rtPrice;
+               if (rtPrice > (lastBar.high ?? 0)) lastBar.high = rtPrice;
+               if (rtPrice < (lastBar.low ?? 999999)) lastBar.low = rtPrice;
+            } else {
+               // Push a new bar
+               bars.push({
+                  open: rtPrice,
+                  high: rtPrice,
+                  low: rtPrice,
+                  close: rtPrice,
+                  volume: 0,
+                  date: todayStr
+               } as any);
+            }
          } else if (Number.isFinite(latest) && Number.isFinite(prev)) {
             card.chgAbs = latest - prev;
             card.chgPct = prev !== 0 ? ((latest - prev) / prev) * 100 : null;
