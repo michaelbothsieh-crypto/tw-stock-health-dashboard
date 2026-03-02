@@ -329,18 +329,34 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
    const annotations: any = {};
    const lastIndex = bars.length - 1;
 
+   // Find actual local peaks and troughs in the window to draw better trend lines
+   let peakPrice = -Infinity, peakIdx = 0;
+   let troughPrice = Infinity, troughIdx = 0;
+   bars.forEach((b, i) => {
+      if ((b.high ?? 0) > peakPrice) { peakPrice = b.high!; peakIdx = i; }
+      if ((b.low ?? 999999) < troughPrice) { troughPrice = b.low!; troughIdx = i; }
+   });
+
    if (support !== null) {
       annotations.support = {
          type: 'line', scaleID: 'y', yMin: support, yMax: support,
          borderColor: 'rgba(34, 197, 94, 0.8)', borderWidth: 1.5, borderDash: [4, 4],
-         label: { display: true, content: '支撐 ' + support, position: 'start', backgroundColor: 'rgba(34, 197, 94, 0.8)', font: { size: 10 } }
+         label: {
+            display: true,
+            content: '支撐 ' + support,
+            position: 'start',
+            backgroundColor: 'rgba(34, 197, 94, 0.8)',
+            color: 'white',
+            font: { size: 10 },
+            padding: 4
+         }
       };
 
-      // Triangle Support Line (Simplified: from start of window to current support)
+      // Triangle Support Line (Connect local trough to current support)
       annotations.triangleSupport = {
          type: 'line', xScaleID: 'x', yScaleID: 'y',
-         xMin: 0, xMax: lastIndex,
-         yMin: bars[0].low ?? support, yMax: support,
+         xMin: troughIdx, xMax: lastIndex,
+         yMin: troughPrice, yMax: support,
          borderColor: 'rgba(34, 197, 94, 0.3)', borderWidth: 1, borderDash: [2, 2]
       };
    }
@@ -348,14 +364,22 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
       annotations.resistance = {
          type: 'line', scaleID: 'y', yMin: resistance, yMax: resistance,
          borderColor: 'rgba(239, 68, 68, 0.8)', borderWidth: 1.5, borderDash: [4, 4],
-         label: { display: true, content: '壓力 ' + resistance, position: 'start', backgroundColor: 'rgba(239, 68, 68, 0.8)', font: { size: 10 } }
+         label: {
+            display: true,
+            content: '壓力 ' + resistance,
+            position: 'start',
+            backgroundColor: 'rgba(239, 68, 68, 0.8)',
+            color: 'white',
+            font: { size: 10 },
+            padding: 4
+         }
       };
 
-      // Triangle Resistance Line (Simplified: from start of window to current resistance)
+      // Triangle Resistance Line (Connect local peak to current resistance)
       annotations.triangleResistance = {
          type: 'line', xScaleID: 'x', yScaleID: 'y',
-         xMin: 0, xMax: lastIndex,
-         yMin: bars[0].high ?? resistance, yMax: resistance,
+         xMin: peakIdx, xMax: lastIndex,
+         yMin: peakPrice, yMax: resistance,
          borderColor: 'rgba(239, 68, 68, 0.3)', borderWidth: 1, borderDash: [2, 2]
       };
    }
@@ -368,8 +392,10 @@ async function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: n
          content: '現價 ' + latestPrice.toFixed(2),
          position: 'end',
          backgroundColor: baseColor,
-         font: { size: 10, weight: 'bold' },
-         xAdjust: -30 // Push label left to avoid edge clipping
+         color: 'white',
+         font: { size: 11, weight: 'bold' },
+         padding: 5,
+         xAdjust: -40
       }
    };
 
