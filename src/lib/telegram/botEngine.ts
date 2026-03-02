@@ -301,7 +301,7 @@ async function ensureTelegramCommandsSynced() {
    }
 }
 
-function buildChartUrl(bars: Array<{ close?: number, volume?: number }>, support: number | null, resistance: number | null): string | null {
+function buildChartUrl(bars: Array<{ open?: number; high?: number; low?: number; close?: number; volume?: number }>, support: number | null, resistance: number | null): string | null {
    if (!bars || bars.length < 2) return null;
 
    const data = bars.map(b => Number(b.close)).filter(Number.isFinite);
@@ -310,9 +310,10 @@ function buildChartUrl(bars: Array<{ close?: number, volume?: number }>, support
    const volumes = bars.map(b => Number(b.volume)).filter(Number.isFinite);
    const maxVol = volumes.length > 0 ? Math.max(...volumes) : 1;
 
-   const isUp = data[data.length - 1] > data[0];
-   const color = isUp ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)'; // 紅漲綠跌
    const latestPrice = data[data.length - 1];
+   const prevPrice = data.length > 1 ? data[data.length - 2] : data[0];
+   const isUp = latestPrice >= prevPrice;
+   const baseColor = isUp ? 'rgb(239, 68, 68)' : 'rgb(34, 197, 94)'; // 紅漲綠跌
 
    const annotations = [];
 
@@ -363,14 +364,14 @@ function buildChartUrl(bars: Array<{ close?: number, volume?: number }>, support
       mode: 'horizontal',
       scaleID: 'y',
       value: latestPrice,
-      borderColor: color,
+      borderColor: baseColor,
       borderWidth: 1.5,
       borderDash: [2, 2],
       label: {
          enabled: true,
          content: '現價 ' + latestPrice.toFixed(2),
          position: 'right',
-         backgroundColor: color,
+         backgroundColor: baseColor,
          fontSize: 10,
          xPadding: 4,
          yPadding: 4,
@@ -378,27 +379,47 @@ function buildChartUrl(bars: Array<{ close?: number, volume?: number }>, support
       }
    });
 
+   const isCandlestick = bars.every(b => b.open !== undefined && b.high !== undefined && b.low !== undefined && b.close !== undefined);
+   const datasets: any[] = [];
+
+   if (isCandlestick) {
+      datasets.push({
+         type: 'candlestick',
+         label: 'Price',
+         data: bars.map((b, i) => ({ x: i, o: b.open, h: b.high, l: b.low, c: b.close })),
+         color: {
+            up: 'rgb(239, 68, 68)',
+            down: 'rgb(34, 197, 94)',
+            unchanged: 'gray'
+         },
+         yAxisID: 'y'
+      });
+   } else {
+      datasets.push({
+         type: 'line',
+         data: data,
+         borderColor: baseColor,
+         borderWidth: 2,
+         fill: false,
+         pointRadius: 0,
+         yAxisID: 'y'
+      });
+   }
+
+   if (volumes.length === data.length) {
+      datasets.push({
+         type: 'bar',
+         data: volumes,
+         backgroundColor: 'rgba(156, 163, 175, 0.3)',
+         yAxisID: 'yVol'
+      });
+   }
+
    const chartConfig: any = {
       type: 'bar',
       data: {
          labels: data.map((_, i) => i),
-         datasets: [
-            {
-               type: 'line',
-               data: data,
-               borderColor: color,
-               borderWidth: 2,
-               fill: false,
-               pointRadius: 0,
-               yAxisID: 'y'
-            },
-            ...(volumes.length === data.length ? [{
-               type: 'bar',
-               data: volumes,
-               backgroundColor: 'rgba(156, 163, 175, 0.3)',
-               yAxisID: 'yVol'
-            }] : [])
-         ]
+         datasets
       },
       options: {
          legend: { display: false },
@@ -725,14 +746,14 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       if (!res.ok) return null;
 
       const snapshot = await res.json();
-      let bars: Array<{ high?: number; low?: number; close?: number; volume?: number }> = Array.isArray(snapshot?.data?.prices)
+      let bars: Array<{ open?: number; high?: number; low?: number; close?: number; volume?: number }> = Array.isArray(snapshot?.data?.prices)
          ? snapshot.data.prices
          : [];
 
       if (bars.length < 180) {
          try {
             const recent = await fetchRecentBars(symbol, 180);
-            bars = recent.data.map((b) => ({ high: b.max, low: b.min, close: b.close, volume: b.Trading_Volume }));
+            bars = recent.data.map((b) => ({ open: b.open, high: b.max, low: b.min, close: b.close, volume: b.Trading_Volume }));
          } catch (error) {
             console.error(`[TelegramBot] bars fallback failed: ${symbol}`, error);
          }
