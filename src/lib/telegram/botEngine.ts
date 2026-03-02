@@ -816,7 +816,6 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.volume = volInfo.volume;
       card.volumeVs5dPct = volInfo.volumeVs5dPct;
 
-      // Prioritize key levels from snapshot API if available
       if (snapshot.keyLevels && typeof snapshot.keyLevels.support === 'number' && typeof snapshot.keyLevels.resistance === 'number') {
          card.support = snapshot.keyLevels.support;
          card.resistance = snapshot.keyLevels.resistance;
@@ -828,8 +827,10 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          card.resistance = key.resistance;
          card.bullTarget = key.bullTarget;
          card.bearTarget = key.bearTarget;
+      }
 
-         // Return a short URL from QuickChart to avoid length errors on bot platforms
+      // Ensure chart is ALWAYS generated if we have enough data
+      if (bars.length >= 2) {
          card.chartUrl = await buildChartUrl(bars.slice(-60), card.support, card.resistance);
       }
 
