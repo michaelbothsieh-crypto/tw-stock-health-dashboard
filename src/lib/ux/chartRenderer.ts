@@ -2,24 +2,8 @@ import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import path from 'path';
 import fs from 'fs';
 
-// 註冊本地字型 (解決 Vercel 環境缺少字型問題)
-try {
-  const regPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSans-Regular.ttf');
-  const boldPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSans-Bold.ttf');
-  
-  if (fs.existsSync(regPath)) {
-    GlobalFonts.registerFromPath(regPath, 'NotoSans');
-  }
-  if (fs.existsSync(boldPath)) {
-    GlobalFonts.registerFromPath(boldPath, 'NotoSansBold');
-  }
-} catch (e) {
-  console.warn('[Chart] Font registration error:', e);
-}
-
-// 包含大量 Linux 內建字型作為安全備援
-const FONT_SANS = 'bold 13px "NotoSansBold", "NotoSans", "Inter", "DejaVu Sans", "Liberation Sans", "Ubuntu", "Helvetica Neue", Arial, sans-serif, serif';
-const FONT_SANS_SMALL = '9px "NotoSans", "Inter", sans-serif, serif';
+// 預定義字型字串 (包含廣泛備援)
+const FONT_SANS = 'bold 13px "NotoSansBold", "NotoSans", "Inter", sans-serif';
 
 export interface ChartDataPoint {
   date: string;
@@ -30,6 +14,26 @@ export interface ChartDataPoint {
   volume: number;
 }
 
+let fontsRegistered = false;
+function ensureFonts() {
+  if (fontsRegistered) return;
+  try {
+    const cwd = process.cwd();
+    const regPath = path.join(cwd, 'public', 'fonts', 'NotoSans-Regular.ttf');
+    const boldPath = path.join(cwd, 'public', 'fonts', 'NotoSans-Bold.ttf');
+    
+    if (fs.existsSync(regPath)) {
+      GlobalFonts.register(fs.readFileSync(regPath), 'NotoSans');
+    }
+    if (fs.existsSync(boldPath)) {
+      GlobalFonts.register(fs.readFileSync(boldPath), 'NotoSansBold');
+    }
+    fontsRegistered = true;
+  } catch (e) {
+    console.error('[Chart] Font registration failed:', e);
+  }
+}
+
 export async function renderStockChart(
   allData: ChartDataPoint[],
   support: number | null,
@@ -37,6 +41,7 @@ export async function renderStockChart(
   symbol: string,
   visibleCount: number = 180
 ): Promise<Buffer> {
+  ensureFonts();
   const width = 1200;
   const height = 650;
   const padding = { top: 70, right: 120, bottom: 70, left: 60 };

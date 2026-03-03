@@ -387,10 +387,8 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       if (!snapRes.ok) return null;
       const snapshot = await snapRes.json();
 
-      // 根據市場類型決定 Yahoo 代碼 (.TW 或 .TWO)
-      const market = snapshot?.normalizedTicker?.market?.toLowerCase() || "otc";
-      const yahooSymbol = `${symbol}${market.includes("otc") || market.includes("two") ? ".TWO" : ".TW"}`;
-      
+      // 直接使用 snapshot 中已經標準化好的 yahoo 代碼 (如 8299.TWO 或 2330.TW)
+      const yahooSymbol = snapshot?.normalizedTicker?.yahoo || `${symbol}.TW`;
       const rtQuote = await yahooFinance.quote(yahooSymbol).catch(() => null);
       
       let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
@@ -420,7 +418,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          
          if (typeof rtQuote.regularMarketVolume === "number") {
             card.volume = rtQuote.regularMarketVolume;
-            // 計算 vs5D 比例
+            // 計算 vs5D 比例 (包含今日即時量)
             const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
             card.volumeVs5dPct = volInfo.volumeVs5dPct;
          }
