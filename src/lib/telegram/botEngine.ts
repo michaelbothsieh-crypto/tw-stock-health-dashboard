@@ -416,6 +416,13 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          card.close = rtQuote.regularMarketPrice;
          card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : null;
          card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : null;
+         
+         // 抓取即時成交量並重新計算量能 vs5D
+         if (typeof rtQuote.regularMarketVolume === "number") {
+            card.volume = rtQuote.regularMarketVolume;
+            const volInfo = calcVolumeVs5d([...bars.slice(0, -1), { volume: card.volume }]);
+            card.volumeVs5dPct = volInfo.volumeVs5dPct;
+         }
       } else if (bars.length >= 2) {
          // 備援：使用 K 線最後一根
          const latest = Number(bars[bars.length - 1].close);
@@ -423,12 +430,13 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          card.close = latest;
          card.chgPct = prev !== 0 ? ((latest - prev) / prev) * 100 : null;
          card.chgAbs = latest - prev;
+         
+         const volInfo = calcVolumeVs5d(bars);
+         card.volume = volInfo.volume;
+         card.volumeVs5dPct = volInfo.volumeVs5dPct;
       }
       
-      console.log(`[Bot] Realtime Quote for ${symbol}: Price=${card.close}, Chg=${card.chgPct}%`);
-      const volInfo = calcVolumeVs5d(bars);
-      card.volume = volInfo.volume;
-      card.volumeVs5dPct = volInfo.volumeVs5dPct;
+      console.log(`[Bot] Realtime Data for ${symbol}: Price=${card.close}, Vol=${card.volume}`);
       
       const key = calcSupportResistance(bars);
       card.support = snapshot?.keyLevels?.support || key.support;
