@@ -435,9 +435,18 @@ const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
          
          if (typeof rtQuote.regularMarketVolume === "number") {
             card.volume = rtQuote.regularMarketVolume;
-            // 計算 vs5D 比例 (包含今日即時量)
+            // 重新計算 vs5D 比例 (包含今日即時量)
             const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
             card.volumeVs5dPct = volInfo.volumeVs5dPct;
+         }
+
+         // 重大修正：將即時價注入線圖數據的最後一根
+         if (processedBars.length > 0) {
+            const lastBar = processedBars[processedBars.length - 1];
+            lastBar.close = card.close;
+            if (card.close > lastBar.high) lastBar.high = card.close;
+            if (card.close < lastBar.low) lastBar.low = card.close;
+            if (typeof rtQuote.regularMarketVolume === "number") lastBar.volume = rtQuote.regularMarketVolume;
          }
       } else if (processedBars.length >= 2) {
          const latest = processedBars[processedBars.length - 1];
@@ -454,7 +463,7 @@ const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
       card.support = snapshot?.keyLevels?.support || key.support;
       card.resistance = snapshot?.keyLevels?.resistance || key.resistance;
 
-      // 繪製專業線圖
+      // 繪製專業線圖 (此時 processedBars 已包含最新即時價)
       if (processedBars.length >= 2) {
          card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
       }

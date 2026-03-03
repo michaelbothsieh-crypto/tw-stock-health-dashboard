@@ -13,39 +13,23 @@ export interface ChartDataPoint {
 
 let fontsRegistered = false;
 
-function debugFonts() {
-  if (fontsRegistered) return;
-  console.log('[Chart Debug] Starting Font Diagnostics...');
+function registerFonts() {
+  if (fontsRegistered) return true;
   try {
-    const cwd = process.cwd();
-    const fontDir = path.join(cwd, 'public/fonts');
-    console.log(`[Chart Debug] CWD: ${cwd}`);
-    console.log(`[Chart Debug] Looking for fonts in: ${fontDir}`);
-
-    if (fs.existsSync(fontDir)) {
-      const files = fs.readdirSync(fontDir);
-      console.log(`[Chart Debug] Files found in public/fonts: ${files.join(', ')}`);
-      
-      const regPath = path.join(fontDir, 'NotoSans-Regular.ttf');
-      if (fs.existsSync(regPath)) {
-        console.log('[Chart Debug] Registering NotoSans...');
-        GlobalFonts.register(fs.readFileSync(regPath), 'NotoSansCustom');
-      }
-      const boldPath = path.join(fontDir, 'NotoSans-Bold.ttf');
-      if (fs.existsSync(boldPath)) {
-        console.log('[Chart Debug] Registering NotoSansBold...');
-        GlobalFonts.register(fs.readFileSync(boldPath), 'NotoSansBoldCustom');
-      }
-    } else {
-      console.error('[Chart Debug] ERROR: public/fonts directory NOT FOUND');
+    const fontPath = path.join(process.cwd(), 'public/fonts/NotoSans-Bold.ttf');
+    if (fs.existsSync(fontPath)) {
+      // 使用 registerFromPath 通常比 Buffer 註冊更穩定
+      const ok = GlobalFonts.registerFromPath(fontPath, 'CustomSans');
+      console.log(`[Chart Debug] Font registration result: ${ok}`);
+      const families = GlobalFonts.families;
+      console.log(`[Chart Debug] Registered families: ${JSON.stringify(families)}`);
+      fontsRegistered = families.length > 0;
+      return fontsRegistered;
     }
-
-    const families = GlobalFonts.families;
-    console.log(`[Chart Debug] Currently registered families: ${JSON.stringify(families)}`);
-    fontsRegistered = true;
   } catch (e) {
-    console.error('[Chart Debug] Critical error during font registration:', e);
+    console.error('[Chart Debug] Font error:', e);
   }
+  return false;
 }
 
 export async function renderStockChart(
@@ -55,7 +39,7 @@ export async function renderStockChart(
   symbol: string,
   visibleCount: number = 180
 ): Promise<Buffer> {
-  debugFonts();
+  const hasFont = registerFonts();
   
   const width = 1200;
   const height = 650;
@@ -63,12 +47,8 @@ export async function renderStockChart(
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
-  // 若自定義字型載入成功則優先使用，否則使用 sans-serif
-  const families = GlobalFonts.families;
-  const hasCustom = families.some(f => f.family === 'NotoSansBoldCustom');
-  const FONT_SANS = hasCustom ? 'bold 13px NotoSansBoldCustom' : 'bold 13px sans-serif';
-  
-  console.log(`[Chart Debug] Using Font Setting: ${FONT_SANS}`);
+  // 若自定義字型載入失敗，強制使用 Linux 內建可能存在的別名
+  const FONT_SANS = hasFont ? 'bold 13px CustomSans' : 'bold 13px sans-serif';
 
   const startIndex = Math.max(0, allData.length - visibleCount);
   const visibleData = allData.slice(startIndex);
@@ -214,6 +194,5 @@ export async function renderStockChart(
   ctx.textBaseline = 'middle';
   ctx.fillText(last.close.toFixed(2), tagX + 12, lastY);
 
-  console.log('[Chart Debug] Render Complete');
   return canvas.toBuffer('image/png');
 }
