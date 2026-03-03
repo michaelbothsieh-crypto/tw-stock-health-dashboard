@@ -59,21 +59,10 @@ export async function POST(req: NextRequest) {
                         .replace(/\*/g, "");
 
                     const messages: line.messagingApi.Message[] = [];
-
+                    
+                    // Note: LINE requires a URL for images. For now, we only support direct buffers for Telegram.
+                    // If we need LINE support, we'll need to upload the buffer to a public URL.
                     const isStockCmd = userText.startsWith("/stock") || userText.startsWith("/tw");
-                    // LINE has a strict 2000 character limit for image URLs.
-                    const safePhotoUrl = (reply.photoUrl && reply.photoUrl.length < 2000) ? reply.photoUrl : null;
-
-                    if (safePhotoUrl && isStockCmd) {
-                        console.log(`[LINE Webhook] Sending photo: ${safePhotoUrl}`);
-                        messages.push({
-                            type: "image",
-                            originalContentUrl: safePhotoUrl,
-                            previewImageUrl: safePhotoUrl,
-                        });
-                    } else if (reply.photoUrl && !safePhotoUrl) {
-                        console.warn(`[LINE Webhook] Photo URL too long for LINE: ${reply.photoUrl.length}`);
-                    }
 
                     messages.push({
                         type: "text",
