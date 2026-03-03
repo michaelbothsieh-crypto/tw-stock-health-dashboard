@@ -99,12 +99,12 @@ export function detectMajorNews(title: string): boolean {
 export function buildNewsLine(title?: string | null, maxLen = 90): string {
   if (!title || !title.trim()) return "—";
   const clipped = clampTextLength(title.trim(), maxLen);
-  return `${detectMajorNews(clipped) ? "⚠️" : "📰"} ${clipped}`;
+  return clipped;
 }
 
 export function buildNewsFlag(title?: string | null): string {
   if (!title || !title.trim()) return "—";
-  return detectMajorNews(title) ? "⚠️" : "📰";
+  return "";
 }
 
 export function calcSupportResistance(bars: BasicBar[]): {

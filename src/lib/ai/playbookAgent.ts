@@ -32,66 +32,30 @@ export interface ActionPlaybook {
   insiderComment?: string;
 }
 
-// Tier 3: Rule-based Fallback
+// Tier 3: Rule-based Fallback (深度優化版)
 export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook {
-  console.log('🤖 Current AI Tier: Rule-based');
+  console.log('🤖 Current AI Tier: Rule-based (Enhanced)');
 
   const fPrice = Number(ctx.price).toFixed(2);
   const fSupport = Number(ctx.support).toFixed(2);
   const fResistance = Number(ctx.resistance).toFixed(2);
+  const trend = ctx.technicalTrend || "區間震盪";
 
-  let insiderComment = "";
-  let shortSummary = "數據整理中";
-
-  if (ctx.insiderTransfers && ctx.insiderTransfers.length > 0) {
-    const totalLots = ctx.insiderTransfers.reduce((sum, item) => sum + item.lots, 0);
-    const selling = ctx.insiderTransfers.filter(t => t.type === "市場拋售");
-    if (selling.length > 0) {
-      insiderComment = `偵測到大股東大筆拋售共 ${totalLots.toLocaleString()} 張，壓力量大需謹慎。`;
-      shortSummary = "大股東申報賣出，警戒";
-    } else {
-      insiderComment = "內部人持股結構調整中，目前對市場影響中性。";
-      shortSummary = "內部人持股調整中";
-    }
+  // 根據不同盤勢產生更具深度的分析內容
+  let analysis = "";
+  if (trend.includes("多") || trend.includes("積極")) {
+    analysis = `近期股價表現強勢，目前維持在 ${fSupport} 之上的多頭結構。考量到市場對該產業的前景預期，若能放量站穩壓力位 ${fResistance}，則有望開啟新一輪攻勢，建議在支撐未破前維持偏多操作思維。`;
+  } else if (trend.includes("空") || trend.includes("防守")) {
+    analysis = `受限於近期市場利空因素干擾，股價走勢偏弱且在 ${fResistance} 附近遭遇明顯賣壓。當前應密切留意 ${fSupport} 支撐是否守住，若失守恐引發另一波價格修正，操作上建議提高現金水位並保守看待。`;
+  } else {
+    analysis = `股價目前處於 ${fSupport} 與 ${fResistance} 之間的盤整區間，市場多空力道呈現拉鋸，並在靜待下一個重大新聞時事帶動。在方向性未明確表態前，建議採取低買高賣的區間策略，並觀察近期走勢的突破跡象。`;
   }
 
-  if (ctx.insiderTransfers && ctx.insiderTransfers.some(t => t.type === "市場拋售")) {
-    return {
-      verdict: "內部人拋售",
-      verdictColor: "amber",
-      tacticalScript: `偵測到大額拋售，若跌破 ${fSupport} 則全面撤退，持股建議減碼。`,
-      shortSummary: shortSummary || "內部人大筆賣出",
-      insiderComment
-    };
-  }
-
-  if (ctx.macroRisk >= 80) {
-    return {
-      verdict: "避險觀望",
-      verdictColor: "green",
-      tacticalScript: `市場風險極高，現價 ${fPrice} 靠近壓力 ${fResistance}，建議空手觀望。`,
-      shortSummary: "市場系統風險極高"
-    };
-  }
-
-  if (ctx.flowVerdict === "散戶接刀 (籌碼凌亂)") {
-    return {
-      verdict: "籌碼警戒",
-      verdictColor: "amber",
-      tacticalScript: `法人拋售且籌碼凌亂，若跌破 ${fSupport} 則立即停損，空手者禁追。`,
-      shortSummary: "法人賣散戶接，籌碼亂"
-    };
-  }
-
-  const isBull = (ctx.flowScore >= 60 && ctx.technicalTrend.includes("多"));
   return {
-    verdict: isBull ? "多頭趨勢" : "震盪整理",
-    verdictColor: isBull ? "red" : "slate",
-    tacticalScript: isBull
-      ? `若守住 ${fSupport} 支撐則續抱，站穩 ${fResistance} 且法人續買可加碼。`
-      : `股價於 ${fSupport} 至 ${fResistance} 區間震盪，未破支撐前暫行觀望。`,
-    shortSummary: isBull ? "趨勢偏多，持股續抱" : "區間整理，靜待突破",
-    insiderComment: insiderComment || undefined
+    verdict: trend.includes("多") ? "偏多看待" : trend.includes("空") ? "偏空需防守" : "震盪整理",
+    verdictColor: trend.includes("多") ? "red" : trend.includes("空") ? "green" : "slate",
+    tacticalScript: analysis,
+    shortSummary: "區間整理中，靜待表態"
   };
 }
 
@@ -177,37 +141,30 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
   const fMacro = Number(ctx.macroRisk).toFixed(1);
 
   const prompt = `
-你是一位擁有 20 年實戰經驗的華爾街頂級量化與順勢交易員。現在請為客戶分析股票：${ctx.stockName} (${ctx.ticker})。
-你的語氣冷靜、客觀、犀利，不帶任何散戶恐慌情緒，展現機構操盤手「只看數據與價格行為」的專業感。
+你是一位擁有 20 年實戰經驗的台股分析師。現在請為客戶分析股票：${ctx.stockName} (${ctx.ticker})。
+請結合價格走勢與近期新聞時事進行精闢短評。
 
 當前盤勢數據：
 - 現價: ${fPrice}
 - 關鍵支撐: ${fSupport}
 - 關鍵壓力: ${fResistance}
-- 近期位階與走勢: ${ctx.recentTrend || "未提供"}
-- 籌碼熱度: ${fFlow}
-- 籌碼對抗結論: ${ctx.flowVerdict || "中性"}
-- 投信動向: ${ctx.trustLots || 0} 張
-- 融券變化: ${ctx.shortLots || 0} 張
-- 內部人申報轉讓: ${ctx.insiderTransfers?.length ? JSON.stringify(ctx.insiderTransfers) : "無重大轉讓"}
-- 系統風險: ${fMacro}
+- 近期走勢: ${ctx.recentTrend || "未提供"}
+- 籌碼對抗: ${ctx.flowVerdict || "中性"}
+- 內部人轉讓: ${ctx.insiderTransfers?.length ? JSON.stringify(ctx.insiderTransfers) : "無"}
 
-任務：放棄所有條列式分析，請依據上述數據，給出「一句話」的極簡實戰腳本。
+任務：撰寫一段專業分析內容。
 
-【一句話戰術腳本 (tacticalScript) 撰寫規則】(嚴格遵守)：
-1. 【絕對精簡】：必須控制在 40 個字以內的一段話。
-2. 【IF-THEN 結構】：必須將「價格數字 (${fSupport} 或 ${fResistance})」結合「籌碼/位階條件」，給出明確的動作。
-3. 【禁用模糊廢話】：嚴禁出現「觀察、留意、是否、可能、建議」等模稜兩可的字眼。
-4. 【動作指令化】：只能使用明確的交易動作，如「停損、減碼、試單、加碼、續抱、空手觀望」。
-   - ✅ 正確範例：「若帶量跌破 1795 即停損，站穩 2465 且外資轉買才進場試單。」
-   - ❌ 錯誤範例：「觀察股價是否能站穩 1795 支撐，並留意外資動向決定是否進場。」
+【分析師短評 (tacticalScript) 撰寫規則】：
+1. 【長度要求】：字數必須在 40 到 60 字之間，不要過於簡短。
+2. 【深度內容】：必須同時提到「近期價格走勢」與「市場時事或新聞影響」。
+3. 【嚴禁 Emoji】：輸出內容絕對不能包含任何 Emoji 表情符號。
+4. 【語氣】：冷靜、客觀，展现機構操盤手的專業感。
 
 {
   "verdict": "4字內精煉結論 (如: 強勢整理, 破線轉弱)",
   "verdictColor": "red|green|amber|slate",
-  "tacticalScript": "40字內的 IF-THEN 一句話實戰腳本",
-  "shortSummary": "15字內白話總結 (供戰情室首頁卡片使用)",
-  "insiderComment": "針對轉讓數據的犀利短評(選填，無異常則留白)"
+  "tacticalScript": "40-60字的深度分析短評，包含走勢與時事分析",
+  "shortSummary": "15字內白話總結"
 }
 `;
 

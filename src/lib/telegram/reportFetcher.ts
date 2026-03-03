@@ -47,7 +47,13 @@ export async function fetchLatestReport() {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const res = await fetch(apiUrl, { headers, next: { revalidate: 60 } }); // Next.js cache for 60s
+  const fetchOptions: any = { headers };
+  // Only add Next.js specific cache options if we are in a Next.js environment
+  if (typeof process !== 'undefined' && (process.env as any).NEXT_RUNTIME) {
+    fetchOptions.next = { revalidate: 60 };
+  }
+
+  const res = await fetch(apiUrl, fetchOptions); // Next.js cache for 60s
   if (!res.ok) {
     if (res.status === 404) {
       const local = readLatestLocalReport();
@@ -74,7 +80,7 @@ export async function fetchLatestReport() {
   const latestFile = jsonFiles[0];
 
   // Fetch the raw content
-  const rawRes = await fetch(latestFile.download_url, { headers, next: { revalidate: 60 } });
+  const rawRes = await fetch(latestFile.download_url, fetchOptions);
   if (!rawRes.ok) {
     const local = readLatestLocalReport();
     if (local) return local;

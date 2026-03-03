@@ -1,6 +1,6 @@
-import { subDays, format } from "date-fns";
+import { format, subDays } from "date-fns";
 
-export interface InsiderTransfer {
+export type InsiderTransfer = {
   date: string;
   declarer: string;
   role: string;
@@ -11,19 +11,24 @@ export interface InsiderTransfer {
   valueText: string;
   estimatedValue: number;
   currentHoldings: number;
-  transferRatio: number; // 轉讓佔持股比例 (0-1)
-}
+  transferRatio: number;
+};
 
 /**
- * 獲取並過濾重大內部人申報轉讓 (門檻 1000 萬)
+ * 抓取 TWSE 公開資料庫中 內部人申報轉讓 的最新動態
  * 修復：修正 TWSE OpenAPI 欄位 Key 值，擴大搜尋窗口至 60 天，並優化身分判斷
  */
 export async function getFilteredInsiderTransfers(ticker: string): Promise<InsiderTransfer[]> {
   try {
     // 1. 同步抓取最新報表與收盤價
+    const fetchOptions: any = {};
+    if (typeof process !== 'undefined' && (process.env as any).NEXT_RUNTIME) {
+      fetchOptions.next = { revalidate: 3600 };
+    }
+
     const [transfersRes, pricesRes] = await Promise.all([
-      fetch("https://openapi.twse.com.tw/v1/opendata/t187ap12_L", { next: { revalidate: 3600 } }),
-      fetch("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", { next: { revalidate: 3600 } })
+      fetch("https://openapi.twse.com.tw/v1/opendata/t187ap12_L", fetchOptions),
+      fetch("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", fetchOptions)
     ]);
 
     if (!transfersRes.ok || !pricesRes.ok) return [];

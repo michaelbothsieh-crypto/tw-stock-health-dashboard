@@ -87,16 +87,21 @@ async function doRequest(
 ): Promise<{ status: number; body: any; ok: boolean; message: string }> {
   const requestUrl = `${url}?${search.toString()}`;
 
-  const res = await fetch(requestUrl, {
-    next: {
-      revalidate: revalidateSeconds,
-      tags: [cacheKey],
-    },
+  const fetchOptions: any = {
     headers: {
       "Content-Type": "application/json",
       "X-Finmind-Cache-Key": cacheKey,
     },
-  });
+  };
+
+  if (typeof process !== 'undefined' && (process.env as any).NEXT_RUNTIME) {
+    fetchOptions.next = {
+      revalidate: revalidateSeconds,
+      tags: [cacheKey],
+    };
+  }
+
+  const res = await fetch(requestUrl, fetchOptions);
 
   let body: any = null;
   try {

@@ -6,7 +6,11 @@ export interface YahooBar {
 export async function fetchYahooFinanceBars(symbol: string, days: number = 100): Promise<YahooBar[]> {
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=${days}d`;
-    const res = await fetch(url, { next: { revalidate: 3600 } });
+    const fetchOptions: any = {};
+    if (typeof process !== 'undefined' && (process.env as any).NEXT_RUNTIME) {
+      fetchOptions.next = { revalidate: 3600 };
+    }
+    const res = await fetch(url, fetchOptions);
     if (!res.ok) return [];
     const data = await res.json();
     const result = data.chart?.result?.[0];

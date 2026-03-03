@@ -15,13 +15,16 @@ export async function fetchYahooQuote(symbol: string) {
 
         for (const url of urls) {
             try {
-                const res = await fetch(url, {
+                const fetchOptions: any = {
                     cache: 'no-store',
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36',
-                    },
-                    next: { revalidate: 0 }
-                });
+                    }
+                };
+                if (typeof process !== 'undefined' && (process.env as any).NEXT_RUNTIME) {
+                    fetchOptions.next = { revalidate: 0 };
+                }
+                const res = await fetch(url, fetchOptions);
                 if (!res.ok) continue;
                 const data = await res.json();
                 const result = data?.quoteResponse?.result?.[0];
