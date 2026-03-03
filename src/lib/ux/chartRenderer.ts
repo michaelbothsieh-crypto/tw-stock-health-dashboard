@@ -11,31 +11,41 @@ export interface ChartDataPoint {
   volume: number;
 }
 
-// 註冊字型：這是解決 Vercel 文字消失的關鍵
-function registerFonts() {
+let fontsRegistered = false;
+
+function debugFonts() {
+  if (fontsRegistered) return;
+  console.log('[Chart Debug] Starting Font Diagnostics...');
   try {
     const cwd = process.cwd();
-    // Vercel 可能的多種路徑路徑
-    const possiblePaths = [
-      path.join(cwd, 'public', 'fonts', 'NotoSans-Regular.ttf'),
-      path.join(cwd, '.next', 'server', 'chunks', 'public', 'fonts', 'NotoSans-Regular.ttf'),
-      '/var/task/public/fonts/NotoSans-Regular.ttf'
-    ];
-    
-    for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        GlobalFonts.register(fs.readFileSync(p), 'NotoSansCustom');
-        const boldP = p.replace('Regular', 'Bold');
-        if (fs.existsSync(boldP)) {
-          GlobalFonts.register(fs.readFileSync(boldP), 'NotoSansBoldCustom');
-        }
-        return true;
+    const fontDir = path.join(cwd, 'public/fonts');
+    console.log(`[Chart Debug] CWD: ${cwd}`);
+    console.log(`[Chart Debug] Looking for fonts in: ${fontDir}`);
+
+    if (fs.existsSync(fontDir)) {
+      const files = fs.readdirSync(fontDir);
+      console.log(`[Chart Debug] Files found in public/fonts: ${files.join(', ')}`);
+      
+      const regPath = path.join(fontDir, 'NotoSans-Regular.ttf');
+      if (fs.existsSync(regPath)) {
+        console.log('[Chart Debug] Registering NotoSans...');
+        GlobalFonts.register(fs.readFileSync(regPath), 'NotoSansCustom');
       }
+      const boldPath = path.join(fontDir, 'NotoSans-Bold.ttf');
+      if (fs.existsSync(boldPath)) {
+        console.log('[Chart Debug] Registering NotoSansBold...');
+        GlobalFonts.register(fs.readFileSync(boldPath), 'NotoSansBoldCustom');
+      }
+    } else {
+      console.error('[Chart Debug] ERROR: public/fonts directory NOT FOUND');
     }
+
+    const families = GlobalFonts.families;
+    console.log(`[Chart Debug] Currently registered families: ${JSON.stringify(families)}`);
+    fontsRegistered = true;
   } catch (e) {
-    console.error('[Chart] Font registration error:', e);
+    console.error('[Chart Debug] Critical error during font registration:', e);
   }
-  return false;
 }
 
 export async function renderStockChart(
@@ -45,8 +55,7 @@ export async function renderStockChart(
   symbol: string,
   visibleCount: number = 180
 ): Promise<Buffer> {
-  // 每次渲染前嘗試確保字型已註冊
-  const hasFont = registerFonts();
+  debugFonts();
   
   const width = 1200;
   const height = 650;
@@ -54,19 +63,21 @@ export async function renderStockChart(
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
-  // 設定字型 (若註冊成功用自定義，失敗則嘗試系統 sans-serif)
-  const FONT_SANS = hasFont ? 'bold 13px NotoSansBoldCustom' : 'bold 13px sans-serif';
+  // 若自定義字型載入成功則優先使用，否則使用 sans-serif
+  const families = GlobalFonts.families;
+  const hasCustom = families.some(f => f.family === 'NotoSansBoldCustom');
+  const FONT_SANS = hasCustom ? 'bold 13px NotoSansBoldCustom' : 'bold 13px sans-serif';
+  
+  console.log(`[Chart Debug] Using Font Setting: ${FONT_SANS}`);
 
   const startIndex = Math.max(0, allData.length - visibleCount);
   const visibleData = allData.slice(startIndex);
 
-  // 1. 背景
   ctx.fillStyle = '#121212';
   ctx.fillRect(0, 0, width, height);
 
   if (visibleData.length < 2) return canvas.toBuffer('image/png');
 
-  // 2. 計算比例
   const prices = visibleData.flatMap(d => [d.high, d.low]);
   const minPrice = Math.min(...prices) * 0.98;
   const maxPrice = Math.max(...prices) * 1.02;
@@ -76,7 +87,6 @@ export async function renderStockChart(
   const getX = (index: number) => padding.left + (index * (width - padding.left - padding.right) / (visibleData.length - 1));
   const getY = (price: number) => padding.top + (maxPrice - price) * (height - padding.top - padding.bottom) / priceRange;
 
-  // 3. 繪製圖例 (Legend)
   ctx.font = FONT_SANS;
   ctx.textBaseline = 'middle';
   
@@ -94,7 +104,6 @@ export async function renderStockChart(
   ctx.fillStyle = '#22c55e'; ctx.fillRect(curX + 20, 25, 8, 12);
   ctx.fillStyle = '#9ca3af'; ctx.fillText('Trend (Red Up / Green Down)', curX + 35, 32);
 
-  // 4. 繪製格線
   ctx.strokeStyle = '#262626';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 8; i++) {
@@ -106,7 +115,6 @@ export async function renderStockChart(
     ctx.fillText(p.toFixed(1), width - padding.right + 10, y + 4);
   }
 
-  // 時間軸
   const labelInterval = Math.ceil(visibleData.length / 6);
   visibleData.forEach((d, i) => {
     if (i % labelInterval === 0 || i === visibleData.length - 1) {
@@ -116,7 +124,6 @@ export async function renderStockChart(
     }
   });
 
-  // 5. 繪製成交量
   const volBaseY = height - padding.bottom;
   const barWidth = Math.max(1, (width - padding.left - padding.right) / visibleData.length * 0.6);
   visibleData.forEach((d, i) => {
@@ -126,7 +133,6 @@ export async function renderStockChart(
     ctx.fillRect(x - barWidth/2, volBaseY - vHeight, barWidth, vHeight);
   });
 
-  // 6. 繪製均線 MA5, MA20, MA60
   const drawMA = (period: number, color: string) => {
     ctx.strokeStyle = color; ctx.lineWidth = period === 5 ? 1 : 2; ctx.beginPath();
     let started = false;
@@ -142,7 +148,6 @@ export async function renderStockChart(
   };
   drawMA(5, '#ffffff'); drawMA(20, '#f59e0b'); drawMA(60, '#3b82f6');
 
-  // 8. 修正後的專業三角收斂趨勢線
   const drawRealTrendLines = () => {
     const mid = Math.floor(visibleData.length / 2);
     let p1 = { price: 0, i: 0 }, p2 = { price: 0, i: 0 };
@@ -174,7 +179,6 @@ export async function renderStockChart(
   };
   drawRealTrendLines();
 
-  // 8. 繪製 K 線
   visibleData.forEach((d, i) => {
     const x = getX(i);
     const color = d.close >= d.open ? '#ef4444' : '#22c55e';
@@ -185,7 +189,6 @@ export async function renderStockChart(
     ctx.fillRect(x - barWidth/2, bTop, barWidth, Math.max(Math.abs(bBot - bTop), 1));
   });
 
-  // 9. 專業級現價標籤 (TradingView 風格)
   const last = visibleData[visibleData.length - 1];
   const lastY = getY(last.close);
   const boxW = 75, boxH = 24;
@@ -211,5 +214,6 @@ export async function renderStockChart(
   ctx.textBaseline = 'middle';
   ctx.fillText(last.close.toFixed(2), tagX + 12, lastY);
 
+  console.log('[Chart Debug] Render Complete');
   return canvas.toBuffer('image/png');
 }

@@ -386,20 +386,26 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`);
       if (!snapRes.ok) return null;
       const snapshot = await snapRes.json();
+// 強化 Yahoo 代碼判定邏輯 (針對 8299 群聯等上櫃股票)
+let yahooSymbol = snapshot?.normalizedTicker?.yahoo;
+if (symbol === "8299") {
+   yahooSymbol = "8299.TWO";
+} else if (!yahooSymbol || yahooSymbol === symbol) {
+   if (symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5")) {
+      yahooSymbol = `${symbol}.TWO`;
+   } else {
+      yahooSymbol = `${symbol}.TW`;
+   }
+}
 
-      // 強化 Yahoo 代碼判定邏輯 (排除 API 可能回傳的錯誤代碼)
-      let yahooSymbol = snapshot?.normalizedTicker?.yahoo;
-      if (!yahooSymbol || yahooSymbol === symbol) {
-         if (symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5")) {
-            yahooSymbol = `${symbol}.TWO`;
-         } else {
-            yahooSymbol = `${symbol}.TW`;
-         }
-      }
-      
-      console.log(`[Bot] Requesting Yahoo: ${yahooSymbol}`);
-      const rtQuoteRaw = await yahooFinance.quote(yahooSymbol).catch(() => null);
-      const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
+console.log(`[Bot Debug] Fetching Realtime for: ${yahooSymbol}`);
+const rtQuoteRaw = await yahooFinance.quote(yahooSymbol).catch((err) => {
+   console.error(`[Bot Debug] Yahoo Finance Error for ${yahooSymbol}:`, err);
+   return null;
+});
+console.log(`[Bot Debug] Yahoo Response for ${yahooSymbol}: ${JSON.stringify(rtQuoteRaw)}`);
+
+const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
 
       let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
 
