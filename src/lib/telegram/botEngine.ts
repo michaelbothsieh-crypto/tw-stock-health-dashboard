@@ -403,7 +403,13 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "snapshot", insiderSells: [], 
          chartBuffer: null
       };
-      if (bars.length >= 2) {
+
+      // 優先使用實時報價 (Real-time Quote)
+      if (snapshot?.realTimeQuote && typeof snapshot.realTimeQuote.price === "number") {
+         card.close = snapshot.realTimeQuote.price;
+         card.chgPct = typeof snapshot.realTimeQuote.changePct === "number" ? snapshot.realTimeQuote.changePct : null;
+      } else if (bars.length >= 2) {
+         // 備援：使用 K 線最後一根
          const latest = Number(bars[bars.length - 1].close);
          const prev = Number(bars[bars.length - 2].close);
          card.close = latest;
