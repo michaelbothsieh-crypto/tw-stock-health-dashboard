@@ -1,11 +1,21 @@
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import path from 'path';
+import fs from 'fs';
 
 // 註冊本地字型 (解決 Vercel 環境缺少字型問題)
 try {
   const fontDir = path.join(process.cwd(), 'public/fonts');
-  GlobalFonts.registerFromPath(path.join(fontDir, 'NotoSans-Regular.ttf'), 'NotoSans');
-  GlobalFonts.registerFromPath(path.join(fontDir, 'NotoSans-Bold.ttf'), 'NotoSansBold');
+  const regPath = path.join(fontDir, 'NotoSans-Regular.ttf');
+  const boldPath = path.join(fontDir, 'NotoSans-Bold.ttf');
+  
+  if (fs.existsSync(regPath)) {
+    const regFont = fs.readFileSync(regPath);
+    GlobalFonts.register(regFont, 'NotoSans');
+  }
+  if (fs.existsSync(boldPath)) {
+    const boldFont = fs.readFileSync(boldPath);
+    GlobalFonts.register(boldFont, 'NotoSansBold');
+  }
 } catch (e) {
   console.warn('[Chart] Font registration failed, using system fallback');
 }

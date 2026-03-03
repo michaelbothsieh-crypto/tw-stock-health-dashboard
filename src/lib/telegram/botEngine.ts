@@ -6,6 +6,7 @@ import { twStockNames } from "../../data/twStockNames";
 import { fetchYahooFinanceBars } from "../global/yahooFinance";
 import { fetchRecentBars } from "../range";
 import { renderStockChart, ChartDataPoint } from "../ux/chartRenderer";
+import YahooFinance from 'yahoo-finance2';
 import {
    buildNewsLine,
    buildStanceText,
@@ -363,6 +364,8 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
    }
 }
 
+const yahooFinance = new YahooFinance();
+
 async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Promise<StockCard | null> {
    const resolved = resolveCodeFromInputLocal(query);
    const symbol = resolved || query.match(/^(\d{4,})(\.TW|\.TWO)?$/i)?.[1];
@@ -370,7 +373,11 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
    const baseUrl = getSnapshotBaseUrl(overrideBaseUrl);
    if (!baseUrl) return null;
    try {
-      const res = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`);
+      const yahooSymbol = symbol.length >= 4 ? `${symbol}.TW` : symbol;
+      const [res, rtQuote] = await Promise.all([
+         fetch(`${baseUrl}/api/stock/${symbol}/snapshot`),
+         yahooFinance.quote(yahooSymbol).catch(() => null)
+      ]);
       if (!res.ok) return null;
       const snapshot = await res.json();
       let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
@@ -404,11 +411,11 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          chartBuffer: null
       };
 
-      // 優先使用實時報價 (Real-time Quote)
-      if (snapshot?.realTimeQuote && typeof snapshot.realTimeQuote.price === "number") {
-         card.close = snapshot.realTimeQuote.price;
-         card.chgPct = typeof snapshot.realTimeQuote.changePct === "number" ? snapshot.realTimeQuote.changePct : null;
-         card.chgAbs = typeof snapshot.realTimeQuote.changeAbs === "number" ? snapshot.realTimeQuote.changeAbs : null;
+      // 優先使用 Yahoo Finance 的實時報價 (針對台股)
+      if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
+         card.close = rtQuote.regularMarketPrice;
+         card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : null;
+         card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : null;
       } else if (bars.length >= 2) {
          // 備援：使用 K 線最後一根
          const latest = Number(bars[bars.length - 1].close);
