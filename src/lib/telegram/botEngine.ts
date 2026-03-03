@@ -374,17 +374,19 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
 
          // 強制將今日數據塞入 Bars 陣列
          const lastBar = processedBars[processedBars.length - 1];
-         if (lastBar && lastBar.date === todayStr) {
-            lastBar.close = card.close;
-            if (card.close > lastBar.high) lastBar.high = card.close;
-            if (card.close < lastBar.low) lastBar.low = card.close;
-            lastBar.volume = card.volume || lastBar.volume;
-         } else {
-            // 新增今天的 K 線
-            processedBars.push({
-               date: todayStr,
-               open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0
-            });
+         if (card.close !== null) {
+            if (lastBar && lastBar.date === todayStr) {
+               lastBar.close = card.close;
+               if (card.close > lastBar.high) lastBar.high = card.close;
+               if (card.close < lastBar.low) lastBar.low = card.close;
+               lastBar.volume = card.volume || lastBar.volume;
+            } else {
+               // 新增今天的 K 線
+               processedBars.push({
+                  date: todayStr,
+                  open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0
+               });
+            }
          }
          
          const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
