@@ -351,6 +351,9 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          chartBuffer: null
       };
 
+      const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
+      
+      // 1. 先處理基礎數據
       if (processedBars.length >= 2) {
          const latest = processedBars[processedBars.length - 1];
          const prev = processedBars[processedBars.length - 2];
@@ -362,21 +365,33 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          card.volumeVs5dPct = volInfo.volumeVs5dPct;
       }
 
+      // 2. 注入 Yahoo 即時報價 (最高優先權)
       if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
          card.close = rtQuote.regularMarketPrice;
          card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : card.chgPct;
          card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : card.chgAbs;
          card.volume = rtQuote.regularMarketVolume || card.volume;
-         if (processedBars.length > 0 && card.close !== null) {
-            const lastBar = processedBars[processedBars.length - 1];
+
+         // 強制將今日數據塞入 Bars 陣列
+         const lastBar = processedBars[processedBars.length - 1];
+         if (lastBar && lastBar.date === todayStr) {
             lastBar.close = card.close;
             if (card.close > lastBar.high) lastBar.high = card.close;
             if (card.close < lastBar.low) lastBar.low = card.close;
-            if (card.volume !== null) lastBar.volume = card.volume;
+            lastBar.volume = card.volume || lastBar.volume;
+         } else {
+            // 新增今天的 K 線
+            processedBars.push({
+               date: todayStr,
+               open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0
+            });
          }
+         
          const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
          card.volumeVs5dPct = volInfo.volumeVs5dPct;
       }
+      
+      console.log(`[Bot Final] ${symbol} Price: ${card.close}, Date: ${todayStr}`);
       
       const key = calcSupportResistance(processedBars);
       card.support = snapshot?.keyLevels?.support || key.support;

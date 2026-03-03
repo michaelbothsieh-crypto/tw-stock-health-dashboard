@@ -11,26 +11,22 @@ export interface ChartDataPoint {
   volume: number;
 }
 
-// 註冊字型：確保在 Vercel 環境中可用
-const registerFonts = () => {
+// 註冊字型：解決 Vercel 文字消失的最強方案
+function ensureFonts() {
   try {
     const cwd = process.cwd();
-    const boldPath = path.join(cwd, 'public/fonts/NotoSans-Bold.ttf');
-    const regPath = path.join(cwd, 'public/fonts/NotoSans-Regular.ttf');
+    const fontPath = path.join(cwd, 'public/fonts/NotoSans-Bold.ttf');
     
-    // 優先使用 NotoSansBold 作為主要字型名
-    if (fs.existsSync(boldPath)) {
-      GlobalFonts.register(fs.readFileSync(boldPath), 'NotoSansBold');
-    }
-    if (fs.existsSync(regPath)) {
-      GlobalFonts.register(fs.readFileSync(regPath), 'NotoSans');
+    if (fs.existsSync(fontPath)) {
+      // 強行註冊為 'sans-serif'，這能確保所有調用處都能抓到
+      GlobalFonts.register(fs.readFileSync(fontPath), 'sans-serif');
+      GlobalFonts.register(fs.readFileSync(fontPath), 'Arial');
+      console.log('[Chart] Fonts registered as sans-serif/Arial successfully');
     }
   } catch (e) {
     console.error('[Chart] Font error:', e);
   }
-};
-
-registerFonts();
+}
 
 export async function renderStockChart(
   allData: ChartDataPoint[],
@@ -39,15 +35,16 @@ export async function renderStockChart(
   symbol: string,
   visibleCount: number = 180
 ): Promise<Buffer> {
+  ensureFonts();
+  
   const width = 1200;
   const height = 650;
   const padding = { top: 70, right: 120, bottom: 70, left: 60 };
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
-  // 重要：直接使用字型名，不加 bold 前綴以免引擎誤判
-  const FONT_MAIN = '13px NotoSansBold, sans-serif';
-  const FONT_LABEL = '12px NotoSans, sans-serif';
+  // 直接使用最保險的字型設定
+  const FONT_SANS = 'bold 13px sans-serif';
 
   const startIndex = Math.max(0, allData.length - visibleCount);
   const visibleData = allData.slice(startIndex);
@@ -68,8 +65,8 @@ export async function renderStockChart(
   const getX = (index: number) => padding.left + (index * (width - padding.left - padding.right) / (visibleData.length - 1));
   const getY = (price: number) => padding.top + (maxPrice - price) * (height - padding.top - padding.bottom) / priceRange;
 
-  // 3. 繪製圖例 (Legend)
-  ctx.font = FONT_MAIN;
+  // 3. 繪製圖例
+  ctx.font = FONT_SANS;
   ctx.textBaseline = 'middle';
   
   const drawLeg = (label: string, color: string, x: number) => {
@@ -89,7 +86,6 @@ export async function renderStockChart(
   // 4. 繪製格線
   ctx.strokeStyle = '#262626';
   ctx.lineWidth = 1;
-  ctx.font = FONT_LABEL;
   for (let i = 0; i <= 8; i++) {
     const y = padding.top + i * (height - padding.top - padding.bottom) / 8;
     ctx.beginPath(); ctx.setLineDash([5, 5]);
@@ -100,8 +96,9 @@ export async function renderStockChart(
   }
 
   // 時間軸
+  const labelInterval = Math.ceil(visibleData.length / 6);
   visibleData.forEach((d, i) => {
-    if (i % Math.ceil(visibleData.length / 6) === 0 || i === visibleData.length - 1) {
+    if (i % labelInterval === 0 || i === visibleData.length - 1) {
       const x = getX(i);
       ctx.fillStyle = '#6b7280'; ctx.textAlign = 'center';
       ctx.fillText(d.date?.substring(5) || '', x, height - padding.bottom + 20);
@@ -118,7 +115,7 @@ export async function renderStockChart(
     ctx.fillRect(x - barWidth/2, volBaseY - vHeight, barWidth, vHeight);
   });
 
-  // 6. 繪製均線
+  // 6. 均線
   const drawMA = (period: number, color: string) => {
     ctx.strokeStyle = color; ctx.lineWidth = period === 5 ? 1 : 2; ctx.beginPath();
     let started = false;
@@ -197,7 +194,7 @@ export async function renderStockChart(
   ctx.stroke();
   
   ctx.fillStyle = '#000'; 
-  ctx.font = FONT_MAIN; 
+  ctx.font = FONT_SANS; 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText(last.close.toFixed(2), tagX + 12, lastY);
