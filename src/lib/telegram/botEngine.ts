@@ -137,7 +137,6 @@ async function sendPhoto(chatId: string | number, imageBuffer: Buffer, caption: 
    if (!token) return null;
    const url = `https://api.telegram.org/bot${token}/sendPhoto`;
    try {
-      // Convert Buffer to Uint8Array for Blob compatibility
       const uint8Array = new Uint8Array(imageBuffer);
       const imageBlob = new Blob([uint8Array], { type: "image/png" });
       const formData = new FormData();
@@ -191,12 +190,9 @@ async function replyOrEdit(chatId: number, progressMessageId: number | null, tex
 async function replyWithCard(chatId: number, progressMessageId: number | null, text: string, imageBuffer: Buffer | null) {
    if (imageBuffer) {
       if (progressMessageId !== null) await deleteMessage(chatId, progressMessageId);
-      
-      // Telegram Caption 上限為 1024 字
       if (text.length <= 1024) {
          await sendPhoto(chatId, imageBuffer, text);
       } else {
-         // 若超過則發送圖片 + 標題，再發送完整內文
          const firstLine = (text.split('\n')[0] || "Stock Chart").replace(/<b>/g, "").replace(/<\/b>/g, "").trim();
          await sendPhoto(chatId, imageBuffer, firstLine);
          await sendMessage(chatId, text);
@@ -210,21 +206,10 @@ function escapeHtml(input: string): string {
    return input.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function toNumberPercent(value: unknown): number | null {
-   if (typeof value === "number" && Number.isFinite(value)) return value;
-   if (typeof value === "string") {
-      const parsed = Number(value.replace("%", "").trim());
-      if (Number.isFinite(parsed)) return parsed;
-   }
-   return null;
-}
-
 function getSnapshotBaseUrl(overrideBaseUrl?: string): string | null {
    if (overrideBaseUrl) return overrideBaseUrl.replace(/\/+$/, "");
    const explicit = process.env.BOT_BASE_URL || process.env.APP_BASE_URL;
    if (explicit) return explicit.replace(/\/+$/, "");
-   const vercelUrl = process.env.VERCEL_URL;
-   if (vercelUrl) return `https://${vercelUrl.replace(/\/+$/, "")}`;
    return null;
 }
 
@@ -232,9 +217,8 @@ async function ensureTelegramCommandsSynced() {
    if (commandsSynced) return;
    const token = process.env.TELEGRAM_BOT_TOKEN;
    if (!token || token === "TEST_TOKEN") return;
-   const base = `https://api.telegram.org/bot${token}`;
    try {
-      await fetch(`${base}/deleteMyCommands`, { method: "POST" });
+      const base = `https://api.telegram.org/bot${token}`;
       await fetch(`${base}/setMyCommands`, {
          method: "POST",
          headers: { "Content-Type": "application/json" },
@@ -277,57 +261,6 @@ function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
    return "—（近期無重大新聞）";
 }
 
-function buildOverseasCandidates(snapshot: SnapshotLike): OverseasCandidate[] {
-   const candidates: OverseasCandidate[] = [];
-   const sector = snapshot?.globalLinkage?.drivers?.sector;
-   if (sector?.id) candidates.push({ symbol: String(sector.id), corr60: typeof sector.corr60 === "number" ? sector.corr60 : null });
-   const peers = Array.isArray(snapshot?.globalLinkage?.drivers?.peers) ? snapshot.globalLinkage.drivers.peers : [];
-   for (const p of peers) { if (p?.symbol) candidates.push({ symbol: String(p.symbol), corr60: typeof p.corr60 === "number" ? p.corr60 : null }); }
-   const deduped = new Map<string, OverseasCandidate>();
-   for (const c of candidates) { if (!deduped.has(c.symbol)) deduped.set(c.symbol, c); }
-   const sorted = Array.from(deduped.values()).sort((a, b) => Math.abs(b.corr60 ?? 0) - Math.abs(a.corr60 ?? 0));
-   return sorted.slice(0, 4);
-}
-
-async function fetchOverseasQuotes(candidates: OverseasCandidate[]): Promise<OverseasLine[]> {
-   if (!candidates || candidates.length === 0) return [];
-   return Promise.all(candidates.map(async (c) => {
-      try {
-         const bars = await fetchYahooFinanceBars(c.symbol, 7);
-         if (!bars || bars.length < 2) return { symbol: c.symbol, price: null, chgPct: null, corr60: c.corr60 };
-         const latest = bars[bars.length - 1].close;
-         const prev = bars[bars.length - 2].close;
-         return { symbol: c.symbol, price: latest, chgPct: ((latest - prev) / prev) * 100, corr60: c.corr60 };
-      } catch { return { symbol: c.symbol, price: null, chgPct: null, corr60: c.corr60 }; }
-   }));
-}
-
-function buildSyncLevel(overseas: OverseasLine[]): string {
-   const corr = overseas.map((x) => x.corr60).filter((x): x is number => typeof x === "number");
-   if (corr.length === 0) return "—";
-   return syncLevel(corr.reduce((a, b) => a + Math.abs(b), 0) / corr.length);
-}
-
-function formatSignedHumanNumber(value: number | null): string {
-   if (value === null) return "—";
-   const absHuman = humanizeNumber(Math.abs(value));
-   return `${value >= 0 ? "+" : "-"}${absHuman}`;
-}
-
-function buildVolumeState(volume: number | null, volumeVs5dPct: number | null): string {
-   const volumeText = humanizeNumber(volume);
-   if (volumeVs5dPct === null) return `${volumeText}（平量）`;
-   if (volumeVs5dPct >= 80) return `${volumeText}（爆量）`;
-   if (volumeVs5dPct >= 15) return `${volumeText}（放量）`;
-   if (volumeVs5dPct <= -20) return `${volumeText}（縮量）`;
-   return `${volumeText}（平量）`;
-}
-
-function buildOverseasSummary(overseas: OverseasLine[]): string {
-   if (overseas.length === 0) return "N/A";
-   return overseas.slice(0, 4).map((item) => `${item.symbol} ${formatPrice(item.price, 2)}(${formatSignedPct(item.chgPct, 2)})`).join("｜");
-}
-
 function buildStockCardLines(card: StockCard, verdict: string = "數據整理中"): string {
    const stanceText = buildStanceText(card.shortDir, card.strategySignal, card.confidence);
    const volumeState = buildVolumeState(card.volume, card.volumeVs5dPct);
@@ -350,28 +283,22 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
       const playbook = await getTacticalPlaybook({
          ticker: card.symbol,
          stockName: card.nameZh,
-         price: card.close || 0, // 確保這是最新即時價
+         price: card.close || 0,
          support: card.support || 0,
          resistance: card.resistance || 0,
          macroRisk: 0,
          technicalTrend: card.shortDir,
          flowScore: 50,
          flowVerdict: card.shortDir,
-         recentTrend: `目前現價 ${card.close}，今日漲跌幅 ${card.chgPct?.toFixed(2)}%，成交量 ${card.volume}。`, // 強制傳入最新動態
+         recentTrend: `目前現價 ${card.close}，今日漲跌幅 ${card.chgPct?.toFixed(2)}%，成交量 ${card.volume}。`,
          trustLots: 0,
          shortLots: 0,
          insiderTransfers: card.insiderSells.map(s => ({ ...s, transferMode: "一般交易", estimatedValue: 0, currentHoldings: 0, type: "市場拋售" } as any)),
       });
-      
       const structuredPart = buildStockCardLines(card, playbook?.verdict || "觀察中");
-      
-      if (playbook) {
-         return `${structuredPart}\n\n分析師建議：\n${escapeHtml(playbook.tacticalScript)}`;
-      }
+      if (playbook) return `${structuredPart}\n\n分析師建議：\n${escapeHtml(playbook.tacticalScript)}`;
       return structuredPart;
-   } catch (e) {
-      return buildStockCardLines(card);
-   }
+   } catch (e) { return buildStockCardLines(card); }
 }
 
 const yahooFinance = new YahooFinance();
@@ -386,29 +313,17 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`);
       if (!snapRes.ok) return null;
       const snapshot = await snapRes.json();
-// 強化 Yahoo 代碼判定邏輯 (針對 8299 群聯等上櫃股票)
-let yahooSymbol = snapshot?.normalizedTicker?.yahoo;
-if (symbol === "8299") {
-   yahooSymbol = "8299.TWO";
-} else if (!yahooSymbol || yahooSymbol === symbol) {
-   if (symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5")) {
-      yahooSymbol = `${symbol}.TWO`;
-   } else {
-      yahooSymbol = `${symbol}.TW`;
-   }
-}
 
-console.log(`[Bot Debug] Fetching Realtime for: ${yahooSymbol}`);
-const rtQuoteRaw = await yahooFinance.quote(yahooSymbol).catch((err) => {
-   console.error(`[Bot Debug] Yahoo Finance Error for ${yahooSymbol}:`, err);
-   return null;
-});
-console.log(`[Bot Debug] Yahoo Response for ${yahooSymbol}: ${JSON.stringify(rtQuoteRaw)}`);
-
-const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
-
+      let yahooSymbol = snapshot?.normalizedTicker?.yahoo;
+      if (symbol === "8299") yahooSymbol = "8299.TWO";
+      if (!yahooSymbol || yahooSymbol === symbol) {
+         yahooSymbol = (symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5")) ? `${symbol}.TWO` : `${symbol}.TW`;
+      }
+      
+      const rtQuoteRaw = await yahooFinance.quote(yahooSymbol).catch(() => null);
+      const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
+      
       let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
-
       const processedBars = bars.map((b: any) => ({
          date: b.date || "",
          open: Number(b.open || b.close || 0),
@@ -427,27 +342,20 @@ const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
          chartBuffer: null
       };
 
-      // 優先使用 Yahoo Finance 的實時報價
       if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
          card.close = rtQuote.regularMarketPrice;
          card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : null;
          card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : null;
-         
-         if (typeof rtQuote.regularMarketVolume === "number") {
-            card.volume = rtQuote.regularMarketVolume;
-            // 重新計算 vs5D 比例 (包含今日即時量)
-            const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
-            card.volumeVs5dPct = volInfo.volumeVs5dPct;
-         }
-
-         // 重大修正：將即時價注入線圖數據的最後一根
+         card.volume = rtQuote.regularMarketVolume || 0;
          if (processedBars.length > 0) {
             const lastBar = processedBars[processedBars.length - 1];
             lastBar.close = card.close;
             if (card.close > lastBar.high) lastBar.high = card.close;
             if (card.close < lastBar.low) lastBar.low = card.close;
-            if (typeof rtQuote.regularMarketVolume === "number") lastBar.volume = rtQuote.regularMarketVolume;
+            lastBar.volume = card.volume;
          }
+         const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
+         card.volumeVs5dPct = volInfo.volumeVs5dPct;
       } else if (processedBars.length >= 2) {
          const latest = processedBars[processedBars.length - 1];
          const prev = processedBars[processedBars.length - 2];
@@ -463,7 +371,6 @@ const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
       card.support = snapshot?.keyLevels?.support || key.support;
       card.resistance = snapshot?.keyLevels?.resistance || key.resistance;
 
-      // 繪製專業線圖 (此時 processedBars 已包含最新即時價)
       if (processedBars.length >= 2) {
          card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
       }

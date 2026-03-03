@@ -11,26 +11,28 @@ export interface ChartDataPoint {
   volume: number;
 }
 
-let fontsRegistered = false;
-
-function registerFonts() {
-  if (fontsRegistered) return true;
+// 終極解決方案：在模組載入時立即、強制、同步註冊字型
+const registerAllFonts = () => {
   try {
-    const fontPath = path.join(process.cwd(), 'public/fonts/NotoSans-Bold.ttf');
-    if (fs.existsSync(fontPath)) {
-      // 使用 registerFromPath 通常比 Buffer 註冊更穩定
-      const ok = GlobalFonts.registerFromPath(fontPath, 'CustomSans');
-      console.log(`[Chart Debug] Font registration result: ${ok}`);
-      const families = GlobalFonts.families;
-      console.log(`[Chart Debug] Registered families: ${JSON.stringify(families)}`);
-      fontsRegistered = families.length > 0;
-      return fontsRegistered;
+    const cwd = process.cwd();
+    const paths = [
+      path.join(cwd, 'public/fonts/NotoSans-Bold.ttf'),
+      '/var/task/public/fonts/NotoSans-Bold.ttf'
+    ];
+    for (const p of paths) {
+      if (fs.existsSync(p)) {
+        // 使用 registerFromPath 是最官方推薦的方式
+        GlobalFonts.registerFromPath(p, 'NotoSansBold');
+        console.log(`[Chart] Successfully registered font from: ${p}`);
+        break;
+      }
     }
   } catch (e) {
-    console.error('[Chart Debug] Font error:', e);
+    console.error('[Chart] Global font registration failed:', e);
   }
-  return false;
-}
+};
+
+registerAllFonts();
 
 export async function renderStockChart(
   allData: ChartDataPoint[],
@@ -39,25 +41,27 @@ export async function renderStockChart(
   symbol: string,
   visibleCount: number = 180
 ): Promise<Buffer> {
-  const hasFont = registerFonts();
-  
   const width = 1200;
   const height = 650;
   const padding = { top: 70, right: 120, bottom: 70, left: 60 };
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
-  // 若自定義字型載入失敗，強制使用 Linux 內建可能存在的別名
-  const FONT_SANS = hasFont ? 'bold 13px CustomSans' : 'bold 13px sans-serif';
+  // 取得已註冊字型，若失敗則退回系統預設
+  const families = GlobalFonts.families;
+  const hasBold = families.some(f => f.family === 'NotoSansBold');
+  const FONT_SANS = hasBold ? 'bold 13px NotoSansBold' : 'bold 13px sans-serif';
 
   const startIndex = Math.max(0, allData.length - visibleCount);
   const visibleData = allData.slice(startIndex);
 
+  // 1. 背景
   ctx.fillStyle = '#121212';
   ctx.fillRect(0, 0, width, height);
 
   if (visibleData.length < 2) return canvas.toBuffer('image/png');
 
+  // 2. 計算比例
   const prices = visibleData.flatMap(d => [d.high, d.low]);
   const minPrice = Math.min(...prices) * 0.98;
   const maxPrice = Math.max(...prices) * 1.02;
@@ -67,6 +71,7 @@ export async function renderStockChart(
   const getX = (index: number) => padding.left + (index * (width - padding.left - padding.right) / (visibleData.length - 1));
   const getY = (price: number) => padding.top + (maxPrice - price) * (height - padding.top - padding.bottom) / priceRange;
 
+  // 3. 繪製圖例
   ctx.font = FONT_SANS;
   ctx.textBaseline = 'middle';
   
@@ -84,6 +89,7 @@ export async function renderStockChart(
   ctx.fillStyle = '#22c55e'; ctx.fillRect(curX + 20, 25, 8, 12);
   ctx.fillStyle = '#9ca3af'; ctx.fillText('Trend (Red Up / Green Down)', curX + 35, 32);
 
+  // 4. 繪製格線與價位
   ctx.strokeStyle = '#262626';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 8; i++) {
@@ -95,6 +101,7 @@ export async function renderStockChart(
     ctx.fillText(p.toFixed(1), width - padding.right + 10, y + 4);
   }
 
+  // 時間軸
   const labelInterval = Math.ceil(visibleData.length / 6);
   visibleData.forEach((d, i) => {
     if (i % labelInterval === 0 || i === visibleData.length - 1) {
@@ -104,6 +111,7 @@ export async function renderStockChart(
     }
   });
 
+  // 5. 繪製成交量
   const volBaseY = height - padding.bottom;
   const barWidth = Math.max(1, (width - padding.left - padding.right) / visibleData.length * 0.6);
   visibleData.forEach((d, i) => {
@@ -113,6 +121,7 @@ export async function renderStockChart(
     ctx.fillRect(x - barWidth/2, volBaseY - vHeight, barWidth, vHeight);
   });
 
+  // 6. 均線
   const drawMA = (period: number, color: string) => {
     ctx.strokeStyle = color; ctx.lineWidth = period === 5 ? 1 : 2; ctx.beginPath();
     let started = false;
@@ -128,6 +137,7 @@ export async function renderStockChart(
   };
   drawMA(5, '#ffffff'); drawMA(20, '#f59e0b'); drawMA(60, '#3b82f6');
 
+  // 7. 趨勢線
   const drawRealTrendLines = () => {
     const mid = Math.floor(visibleData.length / 2);
     let p1 = { price: 0, i: 0 }, p2 = { price: 0, i: 0 };
@@ -142,7 +152,6 @@ export async function renderStockChart(
       const endPrice = p1.price + slope * (visibleData.length - 1 - p1.i);
       ctx.lineTo(getX(visibleData.length - 1), getY(endPrice)); ctx.stroke();
     }
-
     let s1 = { price: Infinity, i: 0 }, s2 = { price: Infinity, i: 0 };
     visibleData.forEach((d, i) => {
       if (i < mid && d.low < s1.price) s1 = { price: d.low, i };
@@ -159,6 +168,7 @@ export async function renderStockChart(
   };
   drawRealTrendLines();
 
+  // 8. 繪製 K 線
   visibleData.forEach((d, i) => {
     const x = getX(i);
     const color = d.close >= d.open ? '#ef4444' : '#22c55e';
@@ -169,6 +179,7 @@ export async function renderStockChart(
     ctx.fillRect(x - barWidth/2, bTop, barWidth, Math.max(Math.abs(bBot - bTop), 1));
   });
 
+  // 9. 專業現價標籤
   const last = visibleData[visibleData.length - 1];
   const lastY = getY(last.close);
   const boxW = 75, boxH = 24;
