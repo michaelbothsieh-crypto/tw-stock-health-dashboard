@@ -408,13 +408,17 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       if (snapshot?.realTimeQuote && typeof snapshot.realTimeQuote.price === "number") {
          card.close = snapshot.realTimeQuote.price;
          card.chgPct = typeof snapshot.realTimeQuote.changePct === "number" ? snapshot.realTimeQuote.changePct : null;
+         card.chgAbs = typeof snapshot.realTimeQuote.changeAbs === "number" ? snapshot.realTimeQuote.changeAbs : null;
       } else if (bars.length >= 2) {
          // 備援：使用 K 線最後一根
          const latest = Number(bars[bars.length - 1].close);
          const prev = Number(bars[bars.length - 2].close);
          card.close = latest;
-         card.chgPct = ((latest - prev) / prev) * 100;
+         card.chgPct = prev !== 0 ? ((latest - prev) / prev) * 100 : null;
+         card.chgAbs = latest - prev;
       }
+      
+      console.log(`[Bot] Realtime Quote for ${symbol}: Price=${card.close}, Chg=${card.chgPct}%`);
       const volInfo = calcVolumeVs5d(bars);
       card.volume = volInfo.volume;
       card.volumeVs5dPct = volInfo.volumeVs5dPct;

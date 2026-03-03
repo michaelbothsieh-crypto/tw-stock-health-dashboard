@@ -1,7 +1,17 @@
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
+import path from 'path';
 
-// Vercel / Linux 系統常用字型備選名單 (嘗試多種可能性)
-const FONT_SANS = 'bold 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", Arial, sans-serif';
+// 註冊本地字型 (解決 Vercel 環境缺少字型問題)
+try {
+  const fontDir = path.join(process.cwd(), 'public/fonts');
+  GlobalFonts.registerFromPath(path.join(fontDir, 'NotoSans-Regular.ttf'), 'NotoSans');
+  GlobalFonts.registerFromPath(path.join(fontDir, 'NotoSans-Bold.ttf'), 'NotoSansBold');
+} catch (e) {
+  console.warn('[Chart] Font registration failed, using system fallback');
+}
+
+const FONT_SANS = 'bold 13px "NotoSansBold", "NotoSans", sans-serif';
+const FONT_SANS_SMALL = '9px "NotoSans", sans-serif';
 
 export interface ChartDataPoint {
   date: string;
