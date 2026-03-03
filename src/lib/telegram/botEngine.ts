@@ -348,8 +348,18 @@ function buildStockCardLines(card: StockCard, verdict: string = "數據整理中
 async function buildStockCardWithAI(card: StockCard): Promise<string> {
    try {
       const playbook = await getTacticalPlaybook({
-         ticker: card.symbol, stockName: card.nameZh, price: card.close || 0, support: card.support || 0, resistance: card.resistance || 0,
-         macroRisk: 0, technicalTrend: card.shortDir, flowScore: 50, flowVerdict: card.shortDir, trustLots: 0, shortLots: 0,
+         ticker: card.symbol,
+         stockName: card.nameZh,
+         price: card.close || 0, // 確保這是最新即時價
+         support: card.support || 0,
+         resistance: card.resistance || 0,
+         macroRisk: 0,
+         technicalTrend: card.shortDir,
+         flowScore: 50,
+         flowVerdict: card.shortDir,
+         recentTrend: `目前現價 ${card.close}，今日漲跌幅 ${card.chgPct?.toFixed(2)}%，成交量 ${card.volume}。`, // 強制傳入最新動態
+         trustLots: 0,
+         shortLots: 0,
          insiderTransfers: card.insiderSells.map(s => ({ ...s, transferMode: "一般交易", estimatedValue: 0, currentHoldings: 0, type: "市場拋售" } as any)),
       });
       
@@ -380,28 +390,18 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       ]);
       if (!res.ok) return null;
       const snapshot = await res.json();
-      let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
-      if (bars.length < 60) {
-         const recent = await fetchRecentBars(symbol, 180);
-         bars = recent.data.map((b: any) => ({ 
-            date: b.date,
-            open: Number(b.open), 
-            high: Number(b.max), 
-            low: Number(b.min), 
-            close: Number(b.close), 
-            volume: Number(b.Trading_Volume) 
-         }));
-      } else {
-         bars = bars.map((b: any) => ({
-            date: b.date || "",
-            open: Number(b.open),
-            high: Number(b.high),
-            low: Number(b.low),
-            close: Number(b.close),
-            volume: Number(b.volume)
-         }));
-      }
       
+      let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
+      // 統一處理 Bars 數據轉換
+      const processedBars = bars.map((b: any) => ({
+         date: b.date || "",
+         open: Number(b.open || b.Price || 0),
+         high: Number(b.high || b.max || 0),
+         low: Number(b.low || b.min || 0),
+         close: Number(b.close || b.Price || 0),
+         volume: Number(b.volume || b.Trading_Volume || 0)
+      }));
+
       const card: StockCard = {
          symbol: String(snapshot?.normalizedTicker?.symbol || symbol),
          nameZh: String(snapshot?.normalizedTicker?.companyNameZh || symbol),
@@ -411,40 +411,40 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          chartBuffer: null
       };
 
-      // 優先使用 Yahoo Finance 的實時報價 (針對台股)
-      if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
-         card.close = rtQuote.regularMarketPrice;
-         card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : null;
-         card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : null;
+      // 1. 先處理基礎數據 (Bars)
+      if (processedBars.length >= 2) {
+         const latest = processedBars[processedBars.length - 1];
+         const prev = processedBars[processedBars.length - 2];
+         card.close = latest.close;
+         card.chgAbs = latest.close - prev.close;
+         card.chgPct = prev.close !== 0 ? (card.chgAbs / prev.close) * 100 : 0;
          
-         // 抓取即時成交量並重新計算量能 vs5D
-         if (typeof rtQuote.regularMarketVolume === "number") {
-            card.volume = rtQuote.regularMarketVolume;
-            const volInfo = calcVolumeVs5d([...bars.slice(0, -1), { volume: card.volume }]);
-            card.volumeVs5dPct = volInfo.volumeVs5dPct;
-         }
-      } else if (bars.length >= 2) {
-         // 備援：使用 K 線最後一根
-         const latest = Number(bars[bars.length - 1].close);
-         const prev = Number(bars[bars.length - 2].close);
-         card.close = latest;
-         card.chgPct = prev !== 0 ? ((latest - prev) / prev) * 100 : null;
-         card.chgAbs = latest - prev;
-         
-         const volInfo = calcVolumeVs5d(bars);
+         const volInfo = calcVolumeVs5d(processedBars);
          card.volume = volInfo.volume;
          card.volumeVs5dPct = volInfo.volumeVs5dPct;
       }
+
+      // 2. 覆蓋為 Yahoo 實時數據 (如果可用)
+      if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
+         card.close = rtQuote.regularMarketPrice;
+         card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : card.chgPct;
+         card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : card.chgAbs;
+         
+         if (typeof rtQuote.regularMarketVolume === "number") {
+            card.volume = rtQuote.regularMarketVolume;
+            // 重新計算 vs5D (包含今日即時量)
+            const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
+            card.volumeVs5dPct = volInfo.volumeVs5dPct;
+         }
+      }
       
-      console.log(`[Bot] Realtime Data for ${symbol}: Price=${card.close}, Vol=${card.volume}`);
-      
-      const key = calcSupportResistance(bars);
+      const key = calcSupportResistance(processedBars);
       card.support = snapshot?.keyLevels?.support || key.support;
       card.resistance = snapshot?.keyLevels?.resistance || key.resistance;
 
-      // 繪製專業線圖 (純 Node.js)
-      if (bars.length >= 2) {
-         card.chartBuffer = await renderStockChart(bars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
+      // 繪製專業線圖
+      if (processedBars.length >= 2) {
+         card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
       }
       
       card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? Math.round(snapshot.signals.flow.foreign5D / 1000) : null;

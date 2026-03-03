@@ -4,23 +4,30 @@ import fs from 'fs';
 
 // 註冊本地字型 (解決 Vercel 環境缺少字型問題)
 try {
-  // 使用絕對路徑解析，這在 Vercel 環境中更穩定
-  const fontPath = path.resolve('./public/fonts/NotoSans-Regular.ttf');
-  const boldPath = path.resolve('./public/fonts/NotoSans-Bold.ttf');
+  // 嘗試多種路徑可能
+  const cwd = process.cwd();
+  const possiblePaths = [
+    path.join(cwd, 'public', 'fonts', 'NotoSans-Regular.ttf'),
+    path.join(cwd, '.next', 'server', 'chunks', 'public', 'fonts', 'NotoSans-Regular.ttf'),
+    '/var/task/public/fonts/NotoSans-Regular.ttf'
+  ];
   
-  if (fs.existsSync(fontPath)) {
-    GlobalFonts.registerFromPath(fontPath, 'NotoSans');
-  }
-  if (fs.existsSync(boldPath)) {
-    GlobalFonts.registerFromPath(boldPath, 'NotoSansBold');
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      GlobalFonts.registerFromPath(p, 'NotoSans');
+      const boldP = p.replace('Regular', 'Bold');
+      if (fs.existsSync(boldP)) GlobalFonts.registerFromPath(boldP, 'NotoSansBold');
+      console.log(`[Chart] Font registered successfully from: ${p}`);
+      break;
+    }
   }
 } catch (e) {
-  console.warn('[Chart] Font registration failed');
+  console.warn('[Chart] Font registration error:', e);
 }
 
-// 包含大量 Linux 內建字型作為安全備援 (如 DejaVu Sans, Liberation Sans)
-const FONT_SANS = 'bold 13px "NotoSansBold", "NotoSans", "Inter", "DejaVu Sans", "Liberation Sans", "Helvetica Neue", Arial, sans-serif';
-const FONT_SANS_SMALL = '9px "NotoSans", "Inter", sans-serif';
+// 包含大量 Linux 內建字型作為安全備援
+const FONT_SANS = 'bold 13px "NotoSansBold", "NotoSans", "Inter", "DejaVu Sans", "Liberation Sans", "Ubuntu", "Helvetica Neue", Arial, sans-serif, serif';
+const FONT_SANS_SMALL = '9px "NotoSans", "Inter", sans-serif, serif';
 
 export interface ChartDataPoint {
   date: string;
