@@ -1,7 +1,6 @@
-import { createCanvas } from '@napi-rs/canvas';
-
-// 使用 Vercel / Linux 系統 100% 支援的標準字型名
-const FONT_SANS = 'bold 13px sans-serif';
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
+import path from 'path';
+import fs from 'fs';
 
 export interface ChartDataPoint {
   date: string;
@@ -12,6 +11,33 @@ export interface ChartDataPoint {
   volume: number;
 }
 
+// 註冊字型：這是解決 Vercel 文字消失的關鍵
+function registerFonts() {
+  try {
+    const cwd = process.cwd();
+    // Vercel 可能的多種路徑路徑
+    const possiblePaths = [
+      path.join(cwd, 'public', 'fonts', 'NotoSans-Regular.ttf'),
+      path.join(cwd, '.next', 'server', 'chunks', 'public', 'fonts', 'NotoSans-Regular.ttf'),
+      '/var/task/public/fonts/NotoSans-Regular.ttf'
+    ];
+    
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        GlobalFonts.register(fs.readFileSync(p), 'NotoSansCustom');
+        const boldP = p.replace('Regular', 'Bold');
+        if (fs.existsSync(boldP)) {
+          GlobalFonts.register(fs.readFileSync(boldP), 'NotoSansBoldCustom');
+        }
+        return true;
+      }
+    }
+  } catch (e) {
+    console.error('[Chart] Font registration error:', e);
+  }
+  return false;
+}
+
 export async function renderStockChart(
   allData: ChartDataPoint[],
   support: number | null,
@@ -19,11 +45,17 @@ export async function renderStockChart(
   symbol: string,
   visibleCount: number = 180
 ): Promise<Buffer> {
+  // 每次渲染前嘗試確保字型已註冊
+  const hasFont = registerFonts();
+  
   const width = 1200;
   const height = 650;
   const padding = { top: 70, right: 120, bottom: 70, left: 60 };
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
+
+  // 設定字型 (若註冊成功用自定義，失敗則嘗試系統 sans-serif)
+  const FONT_SANS = hasFont ? 'bold 13px NotoSansBoldCustom' : 'bold 13px sans-serif';
 
   const startIndex = Math.max(0, allData.length - visibleCount);
   const visibleData = allData.slice(startIndex);
