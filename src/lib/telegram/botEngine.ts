@@ -351,12 +351,22 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          chartBuffer: null
       };
 
+      if (processedBars.length >= 2) {
+         const latest = processedBars[processedBars.length - 1];
+         const prev = processedBars[processedBars.length - 2];
+         card.close = latest.close;
+         card.chgAbs = latest.close - prev.close;
+         card.chgPct = prev.close !== 0 ? (card.chgAbs / prev.close) * 100 : 0;
+         const volInfo = calcVolumeVs5d(processedBars);
+         card.volume = volInfo.volume;
+         card.volumeVs5dPct = volInfo.volumeVs5dPct;
+      }
+
       if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
          card.close = rtQuote.regularMarketPrice;
-         card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : null;
-         card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : null;
-         card.volume = rtQuote.regularMarketVolume || 0;
-         // 強制注入線圖最後一根數據
+         card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : card.chgPct;
+         card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : card.chgAbs;
+         card.volume = rtQuote.regularMarketVolume || card.volume;
          if (processedBars.length > 0 && card.close !== null) {
             const lastBar = processedBars[processedBars.length - 1];
             lastBar.close = card.close;
@@ -365,15 +375,6 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
             if (card.volume !== null) lastBar.volume = card.volume;
          }
          const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
-         card.volumeVs5dPct = volInfo.volumeVs5dPct;
-      } else if (processedBars.length >= 2) {
-         const latest = processedBars[processedBars.length - 1];
-         const prev = processedBars[processedBars.length - 2];
-         card.close = latest.close;
-         card.chgAbs = latest.close - prev.close;
-         card.chgPct = prev.close !== 0 ? (card.chgAbs / prev.close) * 100 : 0;
-         const volInfo = calcVolumeVs5d(processedBars);
-         card.volume = volInfo.volume;
          card.volumeVs5dPct = volInfo.volumeVs5dPct;
       }
       
