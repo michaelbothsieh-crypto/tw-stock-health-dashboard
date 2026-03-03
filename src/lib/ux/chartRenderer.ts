@@ -1,9 +1,7 @@
-import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
-import path from 'path';
-import fs from 'fs';
+import { createCanvas } from '@napi-rs/canvas';
 
-// 預定義字型字串 (包含廣泛備援)
-const FONT_SANS = 'bold 13px "NotoSansBold", "NotoSans", "Inter", sans-serif';
+// 使用 Vercel / Linux 系統 100% 支援的標準字型名
+const FONT_SANS = 'bold 13px sans-serif';
 
 export interface ChartDataPoint {
   date: string;
@@ -14,26 +12,6 @@ export interface ChartDataPoint {
   volume: number;
 }
 
-let fontsRegistered = false;
-function ensureFonts() {
-  if (fontsRegistered) return;
-  try {
-    const cwd = process.cwd();
-    const regPath = path.join(cwd, 'public', 'fonts', 'NotoSans-Regular.ttf');
-    const boldPath = path.join(cwd, 'public', 'fonts', 'NotoSans-Bold.ttf');
-    
-    if (fs.existsSync(regPath)) {
-      GlobalFonts.register(fs.readFileSync(regPath), 'NotoSans');
-    }
-    if (fs.existsSync(boldPath)) {
-      GlobalFonts.register(fs.readFileSync(boldPath), 'NotoSansBold');
-    }
-    fontsRegistered = true;
-  } catch (e) {
-    console.error('[Chart] Font registration failed:', e);
-  }
-}
-
 export async function renderStockChart(
   allData: ChartDataPoint[],
   support: number | null,
@@ -41,7 +19,6 @@ export async function renderStockChart(
   symbol: string,
   visibleCount: number = 180
 ): Promise<Buffer> {
-  ensureFonts();
   const width = 1200;
   const height = 650;
   const padding = { top: 70, right: 120, bottom: 70, left: 60 };
@@ -135,7 +112,6 @@ export async function renderStockChart(
 
   // 8. 修正後的專業三角收斂趨勢線
   const drawRealTrendLines = () => {
-    // 壓力線：找出前半段最高與後半段最高點
     const mid = Math.floor(visibleData.length / 2);
     let p1 = { price: 0, i: 0 }, p2 = { price: 0, i: 0 };
     visibleData.forEach((d, i) => {
@@ -145,13 +121,11 @@ export async function renderStockChart(
     if (p1.price > 0 && p2.price > 0) {
       ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)'; ctx.setLineDash([3, 3]);
       ctx.beginPath(); ctx.moveTo(getX(p1.i), getY(p1.price)); 
-      // 延伸至末端
       const slope = (p2.price - p1.price) / (p2.i - p1.i);
       const endPrice = p1.price + slope * (visibleData.length - 1 - p1.i);
       ctx.lineTo(getX(visibleData.length - 1), getY(endPrice)); ctx.stroke();
     }
 
-    // 支撐線：找出前半段最低與後半段最低點
     let s1 = { price: Infinity, i: 0 }, s2 = { price: Infinity, i: 0 };
     visibleData.forEach((d, i) => {
       if (i < mid && d.low < s1.price) s1 = { price: d.low, i };
@@ -182,28 +156,23 @@ export async function renderStockChart(
   // 9. 專業級現價標籤 (TradingView 風格)
   const last = visibleData[visibleData.length - 1];
   const lastY = getY(last.close);
-  
   const boxW = 75, boxH = 24;
   const tagX = width - padding.right + 5;
-  const tagY = lastY - boxH / 2;
 
-  // 繪製帶箭頭的圓角標籤
   ctx.fillStyle = '#facc15';
   ctx.beginPath();
-  ctx.moveTo(tagX, lastY); // 箭頭尖端
-  ctx.lineTo(tagX + 8, lastY - boxH / 2); // 往右上
-  ctx.lineTo(tagX + boxW, lastY - boxH / 2); // 往右
-  ctx.lineTo(tagX + boxW, lastY + boxH / 2); // 往下
-  ctx.lineTo(tagX + 8, lastY + boxH / 2); // 往左
+  ctx.moveTo(tagX, lastY); 
+  ctx.lineTo(tagX + 8, lastY - boxH / 2);
+  ctx.lineTo(tagX + boxW, lastY - boxH / 2);
+  ctx.lineTo(tagX + boxW, lastY + boxH / 2);
+  ctx.lineTo(tagX + 8, lastY + boxH / 2);
   ctx.closePath();
   ctx.fill();
 
-  // 加上極細深色邊框增加立體感
   ctx.strokeStyle = 'rgba(0,0,0,0.1)';
   ctx.lineWidth = 1;
   ctx.stroke();
   
-  // 文字改為黑色並置中對齊
   ctx.fillStyle = '#000'; 
   ctx.font = FONT_SANS; 
   ctx.textAlign = 'left';

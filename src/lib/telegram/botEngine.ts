@@ -387,8 +387,17 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       if (!snapRes.ok) return null;
       const snapshot = await snapRes.json();
 
-      // 直接使用 snapshot 中已經標準化好的 yahoo 代碼 (如 8299.TWO 或 2330.TW)
-      const yahooSymbol = snapshot?.normalizedTicker?.yahoo || `${symbol}.TW`;
+      // 強化 Yahoo 代碼判定邏輯 (排除 API 可能回傳的錯誤代碼)
+      let yahooSymbol = snapshot?.normalizedTicker?.yahoo;
+      if (!yahooSymbol || yahooSymbol === symbol) {
+         if (symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5")) {
+            yahooSymbol = `${symbol}.TWO`;
+         } else {
+            yahooSymbol = `${symbol}.TW`;
+         }
+      }
+      
+      console.log(`[Bot] Querying Yahoo Finance for: ${yahooSymbol}`);
       const rtQuote = await yahooFinance.quote(yahooSymbol).catch(() => null);
       
       let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
