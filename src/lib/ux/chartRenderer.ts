@@ -4,22 +4,14 @@ import fs from 'fs';
 
 // 註冊本地字型 (解決 Vercel 環境缺少字型問題)
 try {
-  // 嘗試多種路徑可能
-  const cwd = process.cwd();
-  const possiblePaths = [
-    path.join(cwd, 'public', 'fonts', 'NotoSans-Regular.ttf'),
-    path.join(cwd, '.next', 'server', 'chunks', 'public', 'fonts', 'NotoSans-Regular.ttf'),
-    '/var/task/public/fonts/NotoSans-Regular.ttf'
-  ];
+  const regPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSans-Regular.ttf');
+  const boldPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSans-Bold.ttf');
   
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      GlobalFonts.registerFromPath(p, 'NotoSans');
-      const boldP = p.replace('Regular', 'Bold');
-      if (fs.existsSync(boldP)) GlobalFonts.registerFromPath(boldP, 'NotoSansBold');
-      console.log(`[Chart] Font registered successfully from: ${p}`);
-      break;
-    }
+  if (fs.existsSync(regPath)) {
+    GlobalFonts.registerFromPath(regPath, 'NotoSans');
+  }
+  if (fs.existsSync(boldPath)) {
+    GlobalFonts.registerFromPath(boldPath, 'NotoSansBold');
   }
 } catch (e) {
   console.warn('[Chart] Font registration error:', e);

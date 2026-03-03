@@ -383,22 +383,23 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
    const baseUrl = getSnapshotBaseUrl(overrideBaseUrl);
    if (!baseUrl) return null;
    try {
-      const yahooSymbol = symbol.length >= 4 ? `${symbol}.TW` : symbol;
-      const [res, rtQuote] = await Promise.all([
-         fetch(`${baseUrl}/api/stock/${symbol}/snapshot`),
-         yahooFinance.quote(yahooSymbol).catch(() => null)
-      ]);
-      if (!res.ok) return null;
-      const snapshot = await res.json();
+      const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`);
+      if (!snapRes.ok) return null;
+      const snapshot = await snapRes.json();
+
+      // 根據市場類型決定 Yahoo 代碼 (.TW 或 .TWO)
+      const market = snapshot?.normalizedTicker?.market?.toLowerCase() || "otc";
+      const yahooSymbol = `${symbol}${market.includes("otc") || market.includes("two") ? ".TWO" : ".TW"}`;
+      
+      const rtQuote = await yahooFinance.quote(yahooSymbol).catch(() => null);
       
       let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
-      // 統一處理 Bars 數據轉換
       const processedBars = bars.map((b: any) => ({
          date: b.date || "",
-         open: Number(b.open || b.Price || 0),
-         high: Number(b.high || b.max || 0),
-         low: Number(b.low || b.min || 0),
-         close: Number(b.close || b.Price || 0),
+         open: Number(b.open || b.close || 0),
+         high: Number(b.high || b.close || 0),
+         low: Number(b.low || b.close || 0),
+         close: Number(b.close || 0),
          volume: Number(b.volume || b.Trading_Volume || 0)
       }));
 
@@ -411,31 +412,27 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          chartBuffer: null
       };
 
-      // 1. 先處理基礎數據 (Bars)
-      if (processedBars.length >= 2) {
+      // 優先使用 Yahoo Finance 的實時報價
+      if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
+         card.close = rtQuote.regularMarketPrice;
+         card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : null;
+         card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : null;
+         
+         if (typeof rtQuote.regularMarketVolume === "number") {
+            card.volume = rtQuote.regularMarketVolume;
+            // 計算 vs5D 比例
+            const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
+            card.volumeVs5dPct = volInfo.volumeVs5dPct;
+         }
+      } else if (processedBars.length >= 2) {
          const latest = processedBars[processedBars.length - 1];
          const prev = processedBars[processedBars.length - 2];
          card.close = latest.close;
          card.chgAbs = latest.close - prev.close;
          card.chgPct = prev.close !== 0 ? (card.chgAbs / prev.close) * 100 : 0;
-         
          const volInfo = calcVolumeVs5d(processedBars);
          card.volume = volInfo.volume;
          card.volumeVs5dPct = volInfo.volumeVs5dPct;
-      }
-
-      // 2. 覆蓋為 Yahoo 實時數據 (如果可用)
-      if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
-         card.close = rtQuote.regularMarketPrice;
-         card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : card.chgPct;
-         card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : card.chgAbs;
-         
-         if (typeof rtQuote.regularMarketVolume === "number") {
-            card.volume = rtQuote.regularMarketVolume;
-            // 重新計算 vs5D (包含今日即時量)
-            const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
-            card.volumeVs5dPct = volInfo.volumeVs5dPct;
-         }
       }
       
       const key = calcSupportResistance(processedBars);
