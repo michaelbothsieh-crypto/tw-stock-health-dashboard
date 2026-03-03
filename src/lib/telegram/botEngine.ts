@@ -397,10 +397,12 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          }
       }
       
-      console.log(`[Bot] Querying Yahoo Finance for: ${yahooSymbol}`);
-      const rtQuote = await yahooFinance.quote(yahooSymbol).catch(() => null);
-      
+      console.log(`[Bot] Requesting Yahoo: ${yahooSymbol}`);
+      const rtQuoteRaw = await yahooFinance.quote(yahooSymbol).catch(() => null);
+      const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
+
       let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
+
       const processedBars = bars.map((b: any) => ({
          date: b.date || "",
          open: Number(b.open || b.close || 0),
