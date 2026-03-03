@@ -261,6 +261,15 @@ function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
    return "—（近期無重大新聞）";
 }
 
+function buildVolumeState(volume: number | null, volumeVs5dPct: number | null): string {
+   const volumeText = humanizeNumber(volume);
+   if (volumeVs5dPct === null) return `${volumeText}（平量）`;
+   if (volumeVs5dPct >= 80) return `${volumeText}（爆量）`;
+   if (volumeVs5dPct >= 15) return `${volumeText}（放量）`;
+   if (volumeVs5dPct <= -20) return `${volumeText}（縮量）`;
+   return `${volumeText}（平量）`;
+}
+
 function buildStockCardLines(card: StockCard, verdict: string = "數據整理中"): string {
    const stanceText = buildStanceText(card.shortDir, card.strategySignal, card.confidence);
    const volumeState = buildVolumeState(card.volume, card.volumeVs5dPct);
@@ -347,12 +356,13 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : null;
          card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : null;
          card.volume = rtQuote.regularMarketVolume || 0;
-         if (processedBars.length > 0) {
+         // 強制注入線圖最後一根數據
+         if (processedBars.length > 0 && card.close !== null) {
             const lastBar = processedBars[processedBars.length - 1];
             lastBar.close = card.close;
             if (card.close > lastBar.high) lastBar.high = card.close;
             if (card.close < lastBar.low) lastBar.low = card.close;
-            lastBar.volume = card.volume;
+            if (card.volume !== null) lastBar.volume = card.volume;
          }
          const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
          card.volumeVs5dPct = volInfo.volumeVs5dPct;
