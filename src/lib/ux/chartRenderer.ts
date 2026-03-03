@@ -1,4 +1,7 @@
-import { createCanvas } from '@napi-rs/canvas';
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
+
+// Vercel / Linux 系統常用字型備選名單 (嘗試多種可能性)
+const FONT_SANS = 'bold 13px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", Arial, sans-serif';
 
 export interface ChartDataPoint {
   date: string;
@@ -42,7 +45,7 @@ export async function renderStockChart(
   const getY = (price: number) => padding.top + (maxPrice - price) * (height - padding.top - padding.bottom) / priceRange;
 
   // 3. 繪製圖例 (Legend)
-  ctx.font = '13px sans-serif';
+  ctx.font = FONT_SANS;
   ctx.textBaseline = 'middle';
   
   const drawLeg = (label: string, color: string, x: number) => {
@@ -179,7 +182,7 @@ export async function renderStockChart(
   
   // 文字改為黑色並置中對齊
   ctx.fillStyle = '#000'; 
-  ctx.font = 'bold 13px sans-serif'; 
+  ctx.font = FONT_SANS; 
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText(last.close.toFixed(2), tagX + 12, lastY);
