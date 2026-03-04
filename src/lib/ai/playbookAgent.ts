@@ -150,41 +150,36 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
   const fMacro = Number(ctx.macroRisk).toFixed(1);
 
   const prompt = `
-你是一位擁有 20 年華爾街與台股實戰經驗的頂級避險基金操盤手。現在請為客戶分析股票：${ctx.stockName} (${ctx.ticker})。
-你的風格是「刁鑽、犀利、一針見血、不說廢話」。你討厭制式化的官腔，對於散戶的盲目樂觀或恐慌會直接點出盲點。
+你是一位擁有 20 年華爾街與台股實戰經驗的頂級避險基金操盤手。請為客戶深度分析股票：${ctx.stockName} (${ctx.ticker})。
+你的風格是「刁鑽、犀利、一針見血、不說廢話」。對於散戶的盲目樂觀或恐慌會直接點出盲點。
 
-當前盤勢與客觀數據：
-- 現價: ${fPrice}
-- 關鍵支撐: ${fSupport}
-- 關鍵壓力: ${fResistance}
+【客觀盤勢與價格數據】
+- 現價: ${fPrice} (關鍵支撐: ${fSupport} / 關鍵壓力: ${fResistance})
 - 近期走勢: ${ctx.recentTrend || "未提供"}
-- 籌碼對抗: ${ctx.flowVerdict || "中性"}
-- 內部人轉讓: ${ctx.insiderTransfers?.length ? JSON.stringify(ctx.insiderTransfers) : "無"}
-- 近期重大新聞:
-${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `  * ${n}`).join('\n') : "  * 無重大新聞或近期未更新"}
 
-任務：撰寫一段專業且具備強烈個人風格的實戰分析內容。
+【籌碼面數據】(極度重要，請納入主觀判斷邏輯)
+- 法人(外+投+自)近 5 日淨買賣: ${ctx.institutionalLots !== undefined ? `${ctx.institutionalLots} 張` : "無資料"}
+- 投信近 5 日淨買賣: ${ctx.trustLots !== undefined ? `${ctx.trustLots} 張` : "無資料"}
+- 融資變化 (散戶指標): ${ctx.marginLots !== undefined ? `${ctx.marginLots} 張` : "無資料"}
+- 融券變化: ${ctx.shortLots !== undefined ? `${ctx.shortLots} 張` : "無資料"}
+- 籌碼對抗結論: ${ctx.flowVerdict || "中立"}
+- 內部人申讓警訊: ${ctx.insiderTransfers?.length ? ctx.insiderTransfers.map(i => `${i.declarer}(${i.role}) ${i.type} ${i.lots}張`).join(', ') : "無"}
+- 系統環境風險: ${fMacro} (大於 80 時大盤崩盤風險極高，策略須極端保守)
 
-【兩個版本分別撰寫】：
+【新聞驅動與事件】(必須判斷新聞題材是否真實發酵，或者只是主力倒貨的利多出盡)
+- 判斷依據: 若有新聞且法人大買、股價漲，為「發酵中」；若新聞樂觀但法人賣超或跌破支撐，為「利多出盡/騙線」。
+- 近兩日重大新聞:
+${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `  * ${n}`).join('\n') : "  * (近兩日無重大催化劑新聞)"}
 
-tacticalScript（網站顯示用）：
-1. 字數 40-60 字，絕對不要講官腔廢話。
-2. 結合「價格走勢」、「籌碼面」與「最新新聞催化劑」給出最犀利的點評（例如：利多不漲就是出貨、散戶還在接刀等）。
-3. 嚴禁任何 Emoji。
-4. 語氣冷酷、客觀，帶點機構操盤手的傲氣與刁鑽。
+任務：融合「技術價格行為」、「籌碼散戶與法人對峙」以及「新聞驅動熱度」，提出最犀利、充滿洞見的實戰解析。嚴格遵守字數限制！
 
-telegramCaption（Telegram 推播用）：
-1. 字數 30-50 字，簡短有力，像是在 TG 群組對操盤團隊下的急件指令。
-2. 開頭用一個 Emoji 表達方向（📈偏多 / 📉偏空 / ⚠️震盪 / 💀危險）。
-3. 語氣口語化、具急迫感，直接給出最粗暴的操作建議（例如：破 xxx 就砍別留戀、站穩 xxx 再說）。
-
-請回傳 JSON 格式：
+【輸出要求】：請回傳 JSON 格式
 {
-  "verdict": "4字內精煉結論 (如: 散戶接刀, 假突破, 破線快逃)",
+  "verdict": "依據數據寫出戰略結論 (如: 利多出貨, 籌碼凌亂, 題材發酵 等)",
   "verdictColor": "red|green|amber|slate",
-  "tacticalScript": "40-60字刁鑽犀利的短評，無emoji",
-  "telegramCaption": "30-50字TG推播，含emoji與粗暴操作建議",
-  "shortSummary": "15字內極短白話總結"
+  "tacticalScript": "【網站用，約120~180字】：綜合「目前股價走勢」、「新聞面」與「法人散戶籌碼動向」這三個維度，分析其中的背離或共振。指出盲點，不要重複念數字，應具有獨特推論，最後依據支撐壓力給出防守停支點。語氣冷酷客觀。無 emoji。",
+  "telegramCaption": "【Telegram用，約80~120字】：開頭用一個 Emoji (📈📉⚠️💀)。語氣簡潔緊迫，直接點出主力與散戶的對峙戰況，結合今日利多/利空事件快速定調，告知操盤團隊接下來觸及什麼壓力與支撐該怎麼做動作。",
+  "shortSummary": "15字內極短戰術總結"
 }
 `;
 

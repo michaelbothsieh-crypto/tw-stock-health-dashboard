@@ -434,7 +434,16 @@ export async function GET(
       shortLots: flowSignals.shortLots,
       insiderTransfers,
       recentTrend,
-      recentNews: snapshotData.news.slice(0, 5).map(n => typeof n === 'string' ? n : n.title),
+      recentNews: snapshotData.news
+        .filter((n: any) => {
+          if (typeof n === 'string') return true;
+          if (!n.date) return true;
+          const newsDate = new Date(n.date);
+          const twoDaysAgo = subDays(new Date(), 2);
+          return newsDate >= twoDaysAgo;
+        })
+        .slice(0, 5)
+        .map((n: any) => typeof n === 'string' ? n : `[${n.date.split(' ')[0]}] ${n.title}`),
     });
 
     // Adjust strategy confidence based on crash score
