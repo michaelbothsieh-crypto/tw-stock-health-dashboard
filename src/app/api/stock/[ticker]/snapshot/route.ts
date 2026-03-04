@@ -1,4 +1,5 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
+import { getCache, setCache } from "@/lib/providers/redisCache";
 export const dynamic = "force-dynamic";
 import { format, subDays } from "date-fns";
 import {
@@ -67,6 +68,49 @@ export async function GET(
     norm.yahoo = marketInfo.yahoo;
     if (marketInfo.ambiguous) warnings.push("ambiguous_market");
     if (norm.market === "UNKNOWN") warnings.push("market_unknown");
+
+    // --- 1. 無論如何，先抓最新的即時報價 ---
+    let liveQuote: { price: number; changePct: number; previousClose: number; high?: number; low?: number } | null = null;
+    try {
+      const { yf } = await import("@/lib/providers/yahooFinanceClient");
+      const yahooSym = isTaiwanStock(norm.symbol)
+        ? (norm.yahoo || `${norm.symbol}.TW`)
+        : norm.symbol;
+      const rtRaw = await yf.quote(yahooSym);
+      const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;
+      if (rt && typeof rt.regularMarketPrice === "number") {
+        liveQuote = {
+          price: rt.regularMarketPrice,
+          previousClose: rt.regularMarketPreviousClose || 0, // Fallback updated later
+          changePct: typeof rt.regularMarketChangePercent === "number"
+            ? rt.regularMarketChangePercent
+            : rt.regularMarketPreviousClose ? ((rt.regularMarketPrice - rt.regularMarketPreviousClose) / rt.regularMarketPreviousClose) * 100 : 0,
+          high: rt.regularMarketDayHigh,
+          low: rt.regularMarketDayLow,
+        };
+      }
+    } catch (e) {
+      console.warn("[Snapshot] yahoo-finance2 live quote failed", e);
+    }
+
+    // --- 2. 檢查 Redis 快取 ---
+    const cacheKey = `snapshot:${norm.symbol}:v2`; // v2 區隔舊有快取
+    if (!debugMode) {
+      const cachedData = await getCache<any>(cacheKey);
+      if (cachedData) {
+        // 命中快取！覆蓋最新的即時報價
+        if (liveQuote) {
+          cachedData.realTimeQuote = {
+            price: liveQuote.price,
+            changePct: liveQuote.changePct,
+            isRealTime: true,
+            time: new Date().toISOString()
+          };
+        }
+        return NextResponse.json(cachedData);
+      }
+    }
+
 
     const snapshotData = await fetchStockSnapshot(norm);
     const displayName = snapshotData.displayName ? `${norm.symbol} ${snapshotData.displayName}` : norm.symbol;
@@ -173,28 +217,9 @@ export async function GET(
     // ── 即時報價（提前抓，讓 keyLevels 也能納入今日盤中 H/L）──────────
     const fLatestClose = prices[prices.length - 1].close;
     const fPrevClose = prices.length >= 2 ? prices[prices.length - 2].close : fLatestClose;
-    let liveQuote: { price: number; changePct: number; previousClose: number; high?: number; low?: number } | null = null;
-    try {
-      const { yf } = await import("@/lib/providers/yahooFinanceClient");
-      const yahooSym = isTaiwanStock(norm.symbol)
-        ? (norm.yahoo || `${norm.symbol}.TW`)
-        : norm.symbol;
-      const rtRaw = await yf.quote(yahooSym);
-      const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;
-      if (rt && typeof rt.regularMarketPrice === "number") {
-        const prevClose = rt.regularMarketPreviousClose ?? fPrevClose;
-        liveQuote = {
-          price: rt.regularMarketPrice,
-          previousClose: prevClose,
-          changePct: typeof rt.regularMarketChangePercent === "number"
-            ? rt.regularMarketChangePercent
-            : prevClose !== 0 ? ((rt.regularMarketPrice - prevClose) / prevClose) * 100 : 0,
-          high: rt.regularMarketDayHigh,
-          low: rt.regularMarketDayLow,
-        };
-      }
-    } catch (e) {
-      console.warn("[Snapshot] yahoo-finance2 quote failed, falling back to FinMind close", e);
+    if (liveQuote && !liveQuote.previousClose) {
+      liveQuote.previousClose = fPrevClose;
+      if (fPrevClose !== 0) liveQuote.changePct = ((liveQuote.price - fPrevClose) / fPrevClose) * 100;
     }
     const latestClose = liveQuote ? liveQuote.price : fLatestClose;
     const realTimeChangePct = liveQuote ? liveQuote.changePct : undefined;
@@ -390,7 +415,7 @@ export async function GET(
       strategy.confidence = Math.max(0, strategy.confidence * (1 - crashWarning.score / 150));
     }
 
-    return NextResponse.json({
+    const finalPayload = {
       // Watchlist specific fields (Single Source of Truth)
       stockName: companyNameZh || norm.symbol,
       score: Math.round(strategy.confidence),
@@ -480,7 +505,13 @@ export async function GET(
           ai: aiExplanation.debug,
         },
       }),
-    });
+    };
+
+    if (!debugMode) {
+      // 寫入快取 (10分鐘 = 600秒)
+      await setCache(cacheKey, finalPayload, 600);
+    }
+    return NextResponse.json(finalPayload);
   } catch (error: unknown) {
     console.error("Snapshot API Error:", error);
     const message = error instanceof Error ? error.message : "Internal Server Error";
