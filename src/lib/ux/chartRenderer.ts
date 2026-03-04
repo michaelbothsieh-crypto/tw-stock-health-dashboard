@@ -1,5 +1,6 @@
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import { NOTO_SANS_BOLD_B64 } from './fontData';
+import fs from 'fs';
 
 export interface ChartDataPoint {
   date: string;
@@ -11,14 +12,35 @@ export interface ChartDataPoint {
 }
 
 // 字型只需要註冊一次（module-level singleton）
-// 字型 base64 直接嵌入 bundle，無需 filesystem 或 HTTP — 保證 Vercel serverless 可用
 let _fontsRegistered = false;
 const FONT_FAMILY = 'NotoSans';
 
 function ensureFonts() {
   if (_fontsRegistered) return;
+
   const buf = Buffer.from(NOTO_SANS_BOLD_B64, 'base64');
-  GlobalFonts.register(buf, FONT_FAMILY);
+  console.log('[chart] font buf size:', buf.length);
+
+  // 方法 A: 直接從 buffer 註冊
+  try {
+    GlobalFonts.register(buf, FONT_FAMILY);
+    console.log('[chart] GlobalFonts.families after register:', JSON.stringify(GlobalFonts.families));
+  } catch (e) {
+    console.error('[chart] GlobalFonts.register error:', e);
+  }
+
+  // 方法 B: 寫到 /tmp 再用 registerFromPath（/tmp 在 Vercel Lambda 一定可寫）
+  if (!(GlobalFonts.families as unknown[]).some((f: any) => f?.family === FONT_FAMILY || f?.family?.includes('Noto'))) {
+    try {
+      const tmpPath = '/tmp/NotoSans-Bold.ttf';
+      fs.writeFileSync(tmpPath, buf);
+      GlobalFonts.registerFromPath(tmpPath, FONT_FAMILY);
+      console.log('[chart] registered via /tmp path. families:', JSON.stringify(GlobalFonts.families));
+    } catch (e) {
+      console.error('[chart] registerFromPath error:', e);
+    }
+  }
+
   _fontsRegistered = true;
 }
 
@@ -39,6 +61,7 @@ export async function renderStockChart(
 
   // 使用已明確註冊的字型家族名稱，而非通用族名
   const FONT_SANS = `bold 13px "${FONT_FAMILY}"`;
+  console.log('[chart] FONT_SANS:', FONT_SANS, '| families count:', (GlobalFonts.families as unknown[]).length);
 
   const startIndex = Math.max(0, allData.length - visibleCount);
   const visibleData = allData.slice(startIndex);
