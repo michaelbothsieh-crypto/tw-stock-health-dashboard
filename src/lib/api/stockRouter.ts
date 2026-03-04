@@ -9,7 +9,7 @@ import {
   FinmindProviderError,
 } from "@/lib/providers/finmind";
 import { getTvTechnicalIndicators } from "@/lib/providers/tradingViewFetch";
-import { getUSStockFundamentals } from "@/lib/providers/yahooFetch";
+import { getUSStockFundamentals, getTaiwanStockYahooNews } from "@/lib/providers/yahooFetch";
 import { fetchYahooFinanceBars } from "@/lib/global/yahooFinance";
 import { getCompanyNameZh } from "@/lib/companyName";
 import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
@@ -40,7 +40,7 @@ export async function fetchStockSnapshot(norm: { symbol: string; market: string;
     const fundamentalStartDate = format(subDays(latestDateObj, 540), "yyyy-MM-dd");
     const newsStartDate = format(subDays(latestDateObj, 7), "yyyy-MM-dd");
 
-    const [investorsResult, marginResult, revenueResult, newsResult, technicalsResult] = await Promise.all([
+    const [investorsResult, marginResult, revenueResult, newsResult, technicalsResult, yahooNewsTW] = await Promise.all([
       getInstitutionalInvestors(norm.symbol, flowStartDate, latestDate).catch((error) => {
         if (error instanceof FinmindProviderError) warnings.push(`investors_error:${error.errorCode}`);
         return { data: [], meta: { authUsed: "anon" as const, fallbackUsed: false } };
@@ -65,10 +65,17 @@ export async function fetchStockSnapshot(norm: { symbol: string; market: string;
           meta: { authUsed: "anon" as const, fallbackUsed: false, errorCode: "news_fetch_failed", message: String(error) },
         };
       }),
-      getTvTechnicalIndicators(norm.symbol)
+      getTvTechnicalIndicators(norm.symbol),
+      getTaiwanStockYahooNews(norm.symbol)
     ]);
 
     const fallbackUsed = Boolean(rangeResult.providerMeta?.fallbackUsed) || investorsResult.meta.fallbackUsed || marginResult.meta.fallbackUsed || revenueResult.meta.fallbackUsed;
+
+    // Merge FinMind and Yahoo news
+    const mergedNews = [...newsResult.data, ...yahooNewsTW];
+    // Deduplicate by title roughly
+    const uniqueNews = Array.from(new Map(mergedNews.map(item => [item.title.substring(0,10), item])).values());
+    uniqueNews.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
     return {
       displayName: companyName,
@@ -85,7 +92,7 @@ export async function fetchStockSnapshot(norm: { symbol: string; market: string;
         institutionalOwnership: null,
       },
       technicals: technicalsResult,
-      news: newsResult.data,
+      news: uniqueNews,
       meta: {
         providerAuthUsed: investorsResult.meta.authUsed,
         fallbackUsed,

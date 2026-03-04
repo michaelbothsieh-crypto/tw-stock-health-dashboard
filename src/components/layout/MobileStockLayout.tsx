@@ -146,6 +146,24 @@ export function MobileStockLayout({
                         <p>基本面分數：<span className="tabular-nums text-neutral-200">{snapshot.signals.fundamental.fundamentalScore?.toFixed(1) ?? '--'}%</span></p>
                         <p>新聞催化：<span className="tabular-nums text-neutral-200">{snapshot.newsMeta?.catalystScore ?? 0}</span> (多 {snapshot.newsMeta?.bullishCount ?? 0} / 空 {snapshot.newsMeta?.bearishCount ?? 0})</p>
                       </div>
+                      
+                      {/* 近期新聞列表 */}
+                      {snapshot.news?.timeline && snapshot.news.timeline.length > 0 && (
+                        <div className="mt-4 space-y-2.5">
+                          {snapshot.news.timeline.slice(0, 3).map((item, idx) => (
+                            <a 
+                              key={idx} 
+                              href={item.link || "#"} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="block p-3 rounded-xl bg-neutral-900/50 border border-neutral-800/80 hover:bg-neutral-800/80 transition-colors"
+                            >
+                              <div className="text-[13px] font-medium text-neutral-300 line-clamp-2 leading-snug">{item.title}</div>
+                              <div className="text-[11px] text-neutral-500 mt-1.5">{item.date}</div>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div>
                       <h3 className="text-[15px] font-semibold text-neutral-300 mb-3">波動狀態與機率</h3>

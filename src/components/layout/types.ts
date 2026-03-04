@@ -81,6 +81,12 @@ export type SnapshotResponse = {
   };
   shortTermVolatility: { volatilityScore: number };
   newsMeta?: { bullishCount: number; bearishCount: number; catalystScore: number };
+  news?: {
+    catalystScore: number;
+    bullishCount: number;
+    bearishCount: number;
+    timeline: Array<{ title: string; date: string; link?: string }>;
+  };
   consistency: {
     score: number;
     level: "高一致性" | "中一致性" | "低一致性";

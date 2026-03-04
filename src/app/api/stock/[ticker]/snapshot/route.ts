@@ -408,6 +408,7 @@ export async function GET(
       shortLots: flowSignals.shortLots,
       insiderTransfers,
       recentTrend,
+      recentNews: snapshotData.news.slice(0, 5).map(n => typeof n === 'string' ? n : n.title),
     });
 
     // Adjust strategy confidence based on crash score

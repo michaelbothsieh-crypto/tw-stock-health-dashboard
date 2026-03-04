@@ -133,6 +133,24 @@ export function DesktopStockLayout({
                           <p>基本面分數：<span className="tabular-nums text-neutral-200">{snapshot.signals.fundamental.fundamentalScore?.toFixed(1) ?? '--'}%</span></p>
                           <p>新聞催化：<span className="tabular-nums text-neutral-200">{snapshot.newsMeta?.catalystScore ?? 0}</span> (偏多 {snapshot.newsMeta?.bullishCount ?? 0} 則 / 偏空 {snapshot.newsMeta?.bearishCount ?? 0} 則)</p>
                         </div>
+                        
+                        {/* 近期新聞列表 */}
+                        {snapshot.news?.timeline && snapshot.news.timeline.length > 0 && (
+                          <div className="mt-4 grid grid-cols-1 gap-2.5">
+                            {snapshot.news.timeline.slice(0, 3).map((item, idx) => (
+                              <a 
+                                key={idx} 
+                                href={item.link || "#"} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="block p-3 rounded-xl bg-neutral-900/50 border border-neutral-800/80 hover:bg-neutral-800/80 transition-colors"
+                              >
+                                <div className="text-[14px] font-medium text-neutral-300 truncate">{item.title}</div>
+                                <div className="text-[12px] text-neutral-500 mt-1">{item.date}</div>
+                              </a>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="rounded-2xl border border-neutral-800 bg-neutral-900/40 p-6 transition-all duration-150 hover:bg-neutral-900/60">
                         <h3 className="text-[18px] font-semibold text-neutral-200 mb-4">波動狀態與機率</h3>

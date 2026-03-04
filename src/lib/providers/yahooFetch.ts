@@ -50,3 +50,30 @@ export async function getUSStockFundamentals(ticker: string): Promise<USStockFun
     };
   }
 }
+
+export async function getTaiwanStockYahooNews(ticker: string) {
+  try {
+    const url = `https://tw.stock.yahoo.com/rss?s=${ticker}`;
+    const res = await fetch(url, { next: { revalidate: 300 } });
+    if (!res.ok) return [];
+    const xml = await res.text();
+    // Simple Regex parser for RSS
+    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
+    const news = items.map(m => {
+      const block = m[1];
+      const titleMatch = block.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || block.match(/<title>(.*?)<\/title>/);
+      const linkMatch = block.match(/<link>(.*?)<\/link>/);
+      const dateMatch = block.match(/<pubDate>(.*?)<\/pubDate>/);
+      return {
+        title: titleMatch ? titleMatch[1] : "",
+        link: linkMatch ? linkMatch[1] : "",
+        date: dateMatch ? new Date(dateMatch[1]).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        source: "Yahoo Finance TW"
+      };
+    }).filter(n => n.title).slice(0, 10);
+    return news;
+  } catch (e) {
+    console.warn(`[Yahoo] RSS fetch failed for ${ticker}`, e);
+    return [];
+  }
+}
