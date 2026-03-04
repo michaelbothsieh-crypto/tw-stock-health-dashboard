@@ -11,20 +11,29 @@ export interface ChartDataPoint {
   volume: number;
 }
 
-// 註冊字型：解決 Vercel 文字消失的最強方案
+// 字型只需要註冊一次（module-level singleton）
+let _fontsRegistered = false;
+
 function ensureFonts() {
-  try {
-    const cwd = process.cwd();
-    const fontPath = path.join(cwd, 'public/fonts/NotoSans-Bold.ttf');
-    
-    if (fs.existsSync(fontPath)) {
-      // 強行註冊為 'sans-serif'，這能確保所有調用處都能抓到
-      GlobalFonts.register(fs.readFileSync(fontPath), 'sans-serif');
-      GlobalFonts.register(fs.readFileSync(fontPath), 'Arial');
-      console.log('[Chart] Fonts registered as sans-serif/Arial successfully');
+  if (_fontsRegistered) return;
+  // Vercel serverless 的工作目錄可能是 /var/task，試多個路徑
+  const candidates = [
+    path.join(process.cwd(), 'public/fonts/NotoSans-Bold.ttf'),
+    path.join(process.cwd(), '.next/server/public/fonts/NotoSans-Bold.ttf'),
+    '/var/task/public/fonts/NotoSans-Bold.ttf',
+  ];
+  for (const fontPath of candidates) {
+    try {
+      if (fs.existsSync(fontPath)) {
+        const buf = fs.readFileSync(fontPath);
+        GlobalFonts.register(buf, 'sans-serif');
+        GlobalFonts.register(buf, 'Arial');
+        _fontsRegistered = true;
+        return;
+      }
+    } catch {
+      // 繼續嘗試下一個路徑
     }
-  } catch (e) {
-    console.error('[Chart] Font error:', e);
   }
 }
 
