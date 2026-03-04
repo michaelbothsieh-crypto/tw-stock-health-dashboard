@@ -177,8 +177,8 @@ ${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `  * ${n
 {
   "verdict": "依據數據寫出戰略結論 (如: 利多出貨, 籌碼凌亂, 題材發酵 等)",
   "verdictColor": "red|green|amber|slate",
-  "tacticalScript": "【網站用，約120~180字】：綜合「目前股價走勢」、「新聞面」與「法人散戶籌碼動向」這三個維度，分析其中的背離或共振。指出盲點，不要重複念數字，應具有獨特推論，最後依據支撐壓力給出防守停支點。語氣冷酷客觀。無 emoji。",
-  "telegramCaption": "【Telegram用，約80~120字】：開頭用一個 Emoji (📈📉⚠️💀)。語氣簡潔緊迫，直接點出主力與散戶的對峙戰況，結合今日利多/利空事件快速定調，告知操盤團隊接下來觸及什麼壓力與支撐該怎麼做動作。",
+  "tacticalScript": "【網站用，約40~60字】：綜合股價、新聞與籌碼這三個維度分析背離或共振。不要重複念數字，應具備一針見血的獨特推論與防守點。無 emoji。",
+  "telegramCaption": "【Telegram用，約30~50字】：開頭用一個 Emoji (📈📉⚠️💀)。語氣簡潔緊迫，直接點破主力與散戶戰況，並給出最粗暴的操作建議。",
   "shortSummary": "15字內極短戰術總結"
 }
 `;
