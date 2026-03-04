@@ -3,8 +3,6 @@ import { getAllChatIds } from "./chatStore";
 import { getTacticalPlaybook } from "../ai/playbookAgent";
 import { getFilteredInsiderTransfers } from "../providers/twseInsiderFetch";
 import { twStockNames } from "../../data/twStockNames";
-import { fetchYahooFinanceBars } from "../global/yahooFinance";
-import { fetchRecentBars } from "../range";
 import { renderStockChart, ChartDataPoint } from "../ux/chartRenderer";
 import YahooFinance from 'yahoo-finance2';
 import {
@@ -333,7 +331,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
       
       let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
-      const processedBars = bars.map((b: any) => ({
+      let processedBars = bars.map((b: any) => ({
          date: b.date || "",
          open: Number(b.open || b.close || 0),
          high: Number(b.high || b.close || 0),
@@ -372,28 +370,28 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : card.chgAbs;
          card.volume = rtQuote.regularMarketVolume || card.volume;
 
-         // 強制將今日數據塞入 Bars 陣列
-         const lastBar = processedBars[processedBars.length - 1];
+         // 強制將今日數據塞入 Bars 陣列（immutable pattern）
          if (card.close !== null) {
+            const lastBar = processedBars[processedBars.length - 1];
             if (lastBar && lastBar.date === todayStr) {
-               lastBar.close = card.close;
-               if (card.close > lastBar.high) lastBar.high = card.close;
-               if (card.close < lastBar.low) lastBar.low = card.close;
-               lastBar.volume = card.volume || lastBar.volume;
+               processedBars[processedBars.length - 1] = {
+                  ...lastBar,
+                  close: card.close,
+                  high: Math.max(lastBar.high, card.close),
+                  low: Math.min(lastBar.low, card.close),
+                  volume: card.volume || lastBar.volume,
+               };
             } else {
-               // 新增今天的 K 線
-               processedBars.push({
-                  date: todayStr,
-                  open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0
-               });
+               processedBars = [
+                  ...processedBars,
+                  { date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 },
+               ];
             }
          }
          
          const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
          card.volumeVs5dPct = volInfo.volumeVs5dPct;
       }
-      
-      console.log(`[Bot Final] ${symbol} Price: ${card.close}, Date: ${todayStr}`);
       
       const key = calcSupportResistance(processedBars);
       card.support = snapshot?.keyLevels?.support || key.support;
