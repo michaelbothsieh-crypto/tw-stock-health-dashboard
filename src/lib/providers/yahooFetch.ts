@@ -1,5 +1,6 @@
 import { getCache, setCache } from "./redisCache";
 import { yf as yahooFinance } from "./yahooFinanceClient";
+import { XMLParser } from "fast-xml-parser";
 
 export interface USStockFundamentals {
   name: string | null;
@@ -14,12 +15,12 @@ export async function getUSStockFundamentals(ticker: string): Promise<USStockFun
   try {
     const cached = await getCache<USStockFundamentals>(cacheKey);
     if (cached) return cached;
-  } catch (e) {}
+  } catch (e) { }
 
   try {
     const quote = await yahooFinance.quote(ticker);
     const summaryDetail = await yahooFinance.quoteSummary(ticker, { modules: ["summaryDetail", "defaultKeyStatistics", "financialData"] }) as any;
-    
+
     const name = quote.longName || quote.shortName || null;
     const eps = summaryDetail.defaultKeyStatistics?.trailingEps ?? null;
     const peRatio = summaryDetail.summaryDetail?.trailingPE ?? null;
@@ -36,7 +37,7 @@ export async function getUSStockFundamentals(ticker: string): Promise<USStockFun
 
     try {
       await setCache(cacheKey, result, 43200); // 12 hours
-    } catch (e) {}
+    } catch (e) { }
 
     return result;
   } catch (error) {
@@ -57,20 +58,42 @@ export async function getTaiwanStockYahooNews(ticker: string) {
     const res = await fetch(url, { next: { revalidate: 300 } });
     if (!res.ok) return [];
     const xml = await res.text();
-    // Simple Regex parser for RSS
-    const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-    const news = items.map(m => {
-      const block = m[1];
-      const titleMatch = block.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || block.match(/<title>(.*?)<\/title>/);
-      const linkMatch = block.match(/<link>(.*?)<\/link>/);
-      const dateMatch = block.match(/<pubDate>(.*?)<\/pubDate>/);
+
+    // Parse RSS XML safely
+    const parser = new XMLParser({
+      ignoreAttributes: false,
+      cdataPropName: "__cdata" // if we needed it, but by default it strips cdata tags and gives the content
+    });
+    const parsed = parser.parse(xml);
+
+    let items = parsed?.rss?.channel?.item || [];
+    if (!Array.isArray(items)) {
+      items = [items]; // if there's only one item, it might be an object instead of array
+    }
+
+    const news = items.map((item: any) => {
+      // Handle edge cases where field might be wrapped or undefined
+      const title = typeof item.title === 'string' ? item.title : '';
+      const link = typeof item.link === 'string' ? item.link : '';
+      const rawDate = typeof item.pubDate === 'string' ? item.pubDate : '';
+
+      let dateIso = new Date().toISOString().split('T')[0];
+      if (rawDate) {
+        try {
+          dateIso = new Date(rawDate).toISOString().split('T')[0];
+        } catch (e) {
+          // Keep fallback date
+        }
+      }
+
       return {
-        title: titleMatch ? titleMatch[1] : "",
-        link: linkMatch ? linkMatch[1] : "",
-        date: dateMatch ? new Date(dateMatch[1]).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        title,
+        link,
+        date: dateIso,
         source: "Yahoo Finance TW"
       };
-    }).filter(n => n.title).slice(0, 10);
+    }).filter((n: any) => n.title).slice(0, 10);
+
     return news;
   } catch (e) {
     console.warn(`[Yahoo] RSS fetch failed for ${ticker}`, e);

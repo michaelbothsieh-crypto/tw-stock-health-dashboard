@@ -6,25 +6,25 @@ export interface FlowSignals {
     trust5D: number;
     trust20D: number;
     marginChange20D: number | null; // 融資 20 日變化率 (%)
-    
+
     // --- 籌碼對抗雷達 (2x2 滿血版) ---
     institutionalLots: number; // 三大法人近 5 日淨買賣張數
     trustLots: number;         // 投信近 5 日淨買賣張數
     marginLots: number;        // 融資近 5 日增減張數
     shortLots: number;         // 融券近 5 日增減張數
-    
+
     smartMoneyFlow: number; // 5D 法人淨買賣張數 (原邏輯保留，股數單位)
     retailSentiment: number; // 5D 融資張數變化 (原邏輯保留，股數單位)
     flowVerdict: "籌碼集中 (黃金背離)" | "散戶接刀 (籌碼凌亂)" | "中性震盪";
-    
+
     flowScore: number | null;
     reasons: string[];
     risks: string[];
 }
 
 export function calculateFlow(
-    tradingDates: string[], 
-    investors: InstitutionalInvestor[], 
+    tradingDates: string[],
+    investors: InstitutionalInvestor[],
     marginShort: MarginShort[]
 ): FlowSignals {
     const defaultReturn: FlowSignals = {
@@ -40,34 +40,37 @@ export function calculateFlow(
     const sortedInvestors = [...investors].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const sortedMargin = [...marginShort].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+    // 建立 Map 索引，將 O(n) 查找降至 O(1)
+    const foreignMap = new Map<string, number>();
+    const trustMap = new Map<string, number>();
+    const dealerMap = new Map<string, number>();
+
+    for (const record of sortedInvestors) {
+        const diff = record.buy - record.sell;
+        if (record.name.includes("Foreign_Investor") || record.name.includes("外資")) {
+            foreignMap.set(record.date, (foreignMap.get(record.date) || 0) + diff);
+        } else if (record.name.includes("Investment_Trust") || record.name.includes("投信")) {
+            trustMap.set(record.date, (trustMap.get(record.date) || 0) + diff);
+        } else if (record.name.includes("Dealer") || record.name.includes("自營商")) {
+            dealerMap.set(record.date, (dealerMap.get(record.date) || 0) + diff);
+        }
+    }
+
     const risks: string[] = [];
 
     // 計算特定投資人的特定天數買賣超
-    function getRecentNetBuyStats(days: number, typeIndicator: string) {
+    function getMapStats(days: number, map: Map<string, number>) {
         const targetDates = tradingDates.slice(-days);
         let netBuy = 0;
         let daysWithData = 0;
         let dailyAbsSum = 0;
 
         for (const date of targetDates) {
-            let found = false;
-            let dailyNet = 0;
-            for (const record of sortedInvestors) {
-                // FinMind 原始資料名稱處理
-                const isForeign = typeIndicator === "外資" && (record.name.includes("Foreign_Investor") || record.name.includes("外資"));
-                const isTrust = typeIndicator === "投信" && (record.name.includes("Investment_Trust") || record.name.includes("投信"));
-                const isDealer = typeIndicator === "自營商" && (record.name.includes("Dealer") || record.name.includes("自營商"));
-                
-                if (record.date === date && (isForeign || isTrust || isDealer)) {
-                    const diff = record.buy - record.sell;
-                    netBuy += diff;
-                    dailyNet += diff;
-                    found = true;
-                }
-            }
-            if (found) {
+            if (map.has(date)) {
+                const diff = map.get(date)!;
+                netBuy += diff;
+                dailyAbsSum += Math.abs(diff);
                 daysWithData++;
-                dailyAbsSum += Math.abs(dailyNet);
             }
         }
 
@@ -78,11 +81,11 @@ export function calculateFlow(
         };
     }
 
-    const foreignStats20 = getRecentNetBuyStats(20, "外資");
-    const foreignStats5 = getRecentNetBuyStats(5, "外資");
-    const trustStats20 = getRecentNetBuyStats(20, "投信");
-    const trustStats5 = getRecentNetBuyStats(5, "投信");
-    const dealerStats5 = getRecentNetBuyStats(5, "自營商");
+    const foreignStats20 = getMapStats(20, foreignMap);
+    const foreignStats5 = getMapStats(5, foreignMap);
+    const trustStats20 = getMapStats(20, trustMap);
+    const trustStats5 = getMapStats(5, trustMap);
+    const dealerStats5 = getMapStats(5, dealerMap);
 
     const foreign20D = foreignStats20.total;
     const foreign5D = foreignStats5.total;
@@ -214,7 +217,7 @@ export function calculateFlow(
     const finalReasons = Array.from(new Set(allReasons.sort((a, b) => a.priority - b.priority).map(r => r.text))).slice(0, 3);
 
     return {
-        foreign5D, foreign20D, trust5D, trust20D, 
+        foreign5D, foreign20D, trust5D, trust20D,
         marginChange20D: marginChange20D !== null ? marginChange20D * 100 : null,
         institutionalLots,
         trustLots,

@@ -125,16 +125,8 @@ export async function finmindFetch(args: FinmindFetchArgs): Promise<FinmindFetch
   const anonSearch = buildQueryString(args.params, "anon");
   const anonCacheKey = `v2:finmind:${args.cacheKeyBase}:auth=anon`;
 
-  // 1. Generate unique Redis key
-  // Sort params to ensure consistent key generation regardless of key order
-  const sortedParams = Object.keys(args.params)
-    .sort()
-    .reduce((acc, key) => {
-      acc[key] = args.params[key];
-      return acc;
-    }, {} as Record<string, any>);
-    
-  const redisKey = `finmind:${args.cacheKeyBase}:${JSON.stringify(sortedParams)}`;
+  // 1. Generate unique Redis key using unified format
+  const redisKey = `fmd:v1:${args.cacheKeyBase}`;
 
   try {
     // 2. Check Redis Cache

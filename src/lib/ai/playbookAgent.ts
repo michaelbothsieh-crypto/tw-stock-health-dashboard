@@ -56,8 +56,8 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
   const tgCaption = trend.includes("多")
     ? `📈 ${ctx.stockName} 走多！守穩支撐 ${fSupport} 可續抱，目標看 ${fResistance}，破底停損勿戀戰。`
     : trend.includes("空")
-    ? `📉 ${ctx.stockName} 偏空，壓力在 ${fResistance}，守不住 ${fSupport} 就跑，別接飛刀！`
-    : `⚠️ ${ctx.stockName} 整理中，${fSupport}-${fResistance} 區間操作，等方向明確再出手。`;
+      ? `📉 ${ctx.stockName} 偏空，壓力在 ${fResistance}，守不住 ${fSupport} 就跑，別接飛刀！`
+      : `⚠️ ${ctx.stockName} 整理中，${fSupport}-${fResistance} 區間操作，等方向明確再出手。`;
 
   return {
     verdict: trend.includes("多") ? "偏多看待" : trend.includes("空") ? "偏空需防守" : "震盪整理",
@@ -76,7 +76,7 @@ async function callGemini(prompt: string): Promise<ActionPlaybook> {
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
+    model: "gemini-2.0-flash",
     generationConfig: {
       temperature: 0,
       responseMimeType: "application/json",

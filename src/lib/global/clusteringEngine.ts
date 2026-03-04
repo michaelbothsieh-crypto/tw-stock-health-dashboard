@@ -1,6 +1,7 @@
 import { CLUSTER_STOCK_POOL } from "./stockPool";
 import { fetchYahooFinanceBars, YahooBar } from "./yahooFinance";
 import pLimit from "p-limit";
+import { getCache, setCache } from "../providers/redisCache";
 
 export interface ClusterMember {
   symbol: string;
@@ -8,14 +9,7 @@ export interface ClusterMember {
   returns: number[]; // 60-day returns
 }
 
-interface CacheData {
-  timestamp: number;
-  members: Map<string, ClusterMember>;
-  k: number;
-}
-
-const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
-let globalClusterCache: CacheData | null = null;
+const CACHE_TTL_SEC = 12 * 60 * 60; // 12 hours
 
 // Normalizing array to Z-score: (x - mean) / std.
 // In Z-score space, Euclidean distance squared = 2 * n * (1 - correlation)
@@ -54,11 +48,11 @@ function runKMeans(
 ) {
   if (dataPoints.length === 0) return [];
 
-  // Initialize centroids by randomly picking exactly k points
+  // Initialize centroids by taking the first k points of deterministically sorted data
   let centroids: number[][] = [];
-  const shuffled = [...dataPoints].sort(() => 0.5 - Math.random());
-  for (let i = 0; i < Math.min(k, shuffled.length); i++) {
-    centroids.push([...shuffled[i].features]);
+  const sortedBySymbol = [...dataPoints].sort((a, b) => a.symbol.localeCompare(b.symbol));
+  for (let i = 0; i < Math.min(k, sortedBySymbol.length); i++) {
+    centroids.push([...sortedBySymbol[i].features]);
   }
 
   const dimension = dataPoints[0].features.length;
@@ -131,23 +125,23 @@ export async function getOrComputeClusters(
   targetPrices: { date: string; close: number }[],
   k: number = 15
 ): Promise<{ members: Map<string, ClusterMember>; targetClusterId: number }> {
-  
-  // 1. Check cache validity
-  if (
-    globalClusterCache &&
-    globalClusterCache.k === k &&
-    Date.now() - globalClusterCache.timestamp < CACHE_TTL_MS
-  ) {
-    const cachedMembers = globalClusterCache.members;
-    if (cachedMembers.has(targetSymbol)) {
-      return {
-        members: cachedMembers,
-        targetClusterId: cachedMembers.get(targetSymbol)!.clusterId,
-      };
+
+  const redisKey = `cluster:v1:k${k}`;
+
+  // 1. Check Redis cache
+  try {
+    const cachedMembersArray = await getCache<[string, ClusterMember][]>(redisKey);
+    if (cachedMembersArray && Array.isArray(cachedMembersArray)) {
+      const cachedMembers = new Map<string, ClusterMember>(cachedMembersArray);
+      if (cachedMembers.has(targetSymbol)) {
+        return {
+          members: cachedMembers,
+          targetClusterId: cachedMembers.get(targetSymbol)!.clusterId,
+        };
+      }
     }
-    // If target is NOT in our cached cluster, we must compute its isolated distance to existing centroids,
-    // but in a more robust flow, we'll just include it in the returned map dynamically by measuring its correlation against members.
-    // For simplicity, if not present, we will inject it below.
+  } catch (error) {
+    console.warn(`[ClusteringEngine] Redis cache read failed:`, error);
   }
 
   console.log(`[ClusteringEngine] Computing dynamic K-Means clusters (K=${k}) for ${targetSymbol}...`);
@@ -183,12 +177,12 @@ export async function getOrComputeClusters(
     const map = new Map(item.bars.map((b) => [b.date, b.close]));
     const aligned: number[] = [];
     let lastVal = item.bars[0]?.close || 0;
-    
+
     for (const d of twDates) {
       if (map.has(d)) lastVal = map.get(d)!;
       aligned.push(lastVal);
     }
-    
+
     // We need 60 returns, so we aligned 61 dates.
     const rets = calcReturns(aligned).slice(-60);
     if (rets.length === 60) {
@@ -203,30 +197,31 @@ export async function getOrComputeClusters(
   // Ensure target Symbol is in dataPoints
   let targetExists = dataPoints.some(d => d.symbol === targetSymbol);
   if (!targetExists) {
-     const tRet = calcReturns(targetPrices.map(p => p.close)).slice(-60);
-     if (tRet.length === 60) {
-        dataPoints.push({
-            symbol: targetSymbol,
-            rawReturns: tRet,
-            features: normalizeToZScore(tRet)
-        });
-     }
+    const tRet = calcReturns(targetPrices.map(p => p.close)).slice(-60);
+    if (tRet.length === 60) {
+      dataPoints.push({
+        symbol: targetSymbol,
+        rawReturns: tRet,
+        features: normalizeToZScore(tRet)
+      });
+    }
   }
 
   // Run Clustering
   const clusteredArray = runKMeans(dataPoints, k);
   const memberMap = new Map<string, ClusterMember>();
-  
+
   for (const c of clusteredArray) {
     memberMap.set(c.symbol, c);
   }
 
-  // Cache the results
-  globalClusterCache = {
-    timestamp: Date.now(),
-    members: memberMap,
-    k,
-  };
+  // Save to Redis cache
+  try {
+    const membersArray = Array.from(memberMap.entries());
+    await setCache(redisKey, membersArray, CACHE_TTL_SEC);
+  } catch (error) {
+    console.warn(`[ClusteringEngine] Redis cache write failed:`, error);
+  }
 
   const targetId = memberMap.get(targetSymbol)?.clusterId ?? -1;
   return { members: memberMap, targetClusterId: targetId };
