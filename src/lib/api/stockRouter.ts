@@ -12,9 +12,7 @@ import { getTvTechnicalIndicators } from "@/lib/providers/tradingViewFetch";
 import { getUSStockFundamentals } from "@/lib/providers/yahooFetch";
 import { fetchYahooFinanceBars } from "@/lib/global/yahooFinance";
 import { getCompanyNameZh } from "@/lib/companyName";
-import YahooFinance from "yahoo-finance2";
-
-const yahooFinance = new YahooFinance();
+import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
 
 export async function fetchStockSnapshot(norm: { symbol: string; market: string; yahoo: string }): Promise<UnifiedStockSnapshot> {
   const isTaiwanStock = /^\d+$/.test(norm.symbol) || norm.symbol.endsWith(".TW") || norm.symbol.endsWith(".TWO");

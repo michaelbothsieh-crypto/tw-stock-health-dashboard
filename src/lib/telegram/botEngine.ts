@@ -4,7 +4,7 @@ import { getTacticalPlaybook } from "../ai/playbookAgent";
 import { getFilteredInsiderTransfers } from "../providers/twseInsiderFetch";
 import { twStockNames } from "../../data/twStockNames";
 import { renderStockChart, ChartDataPoint } from "../ux/chartRenderer";
-import YahooFinance from 'yahoo-finance2';
+import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
 import {
    buildNewsLine,
    buildStanceText,
@@ -311,7 +311,6 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
    } catch (e) { return buildStockCardLines(card); }
 }
 
-const yahooFinance = new YahooFinance();
 
 async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Promise<StockCard | null> {
    const resolved = resolveCodeFromInputLocal(query);

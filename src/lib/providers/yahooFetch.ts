@@ -1,7 +1,5 @@
-import YahooFinance from "yahoo-finance2";
 import { getCache, setCache } from "./redisCache";
-
-const yahooFinance = new YahooFinance();
+import { yf as yahooFinance } from "./yahooFinanceClient";
 
 export interface USStockFundamentals {
   name: string | null;

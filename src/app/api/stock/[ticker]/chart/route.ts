@@ -46,8 +46,7 @@ export async function GET(
 
     // Inject today's real-time bar if available
     try {
-      const YahooFinance = (await import("yahoo-finance2")).default;
-      const yf = new YahooFinance();
+      const { yf } = await import("@/lib/providers/yahooFinanceClient");
       const yahooSym = norm.yahoo || `${norm.symbol}.TW`;
       const rtRaw = await yf.quote(yahooSym);
       const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;

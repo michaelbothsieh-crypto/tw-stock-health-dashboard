@@ -175,8 +175,7 @@ export async function GET(
     const fPrevClose = prices.length >= 2 ? prices[prices.length - 2].close : fLatestClose;
     let liveQuote: { price: number; changePct: number; previousClose: number; high?: number; low?: number } | null = null;
     try {
-      const YahooFinance = (await import("yahoo-finance2")).default;
-      const yf = new YahooFinance();
+      const { yf } = await import("@/lib/providers/yahooFinanceClient");
       const yahooSym = isTaiwanStock(norm.symbol)
         ? (norm.yahoo || `${norm.symbol}.TW`)
         : norm.symbol;
