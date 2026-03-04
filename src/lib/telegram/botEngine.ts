@@ -303,7 +303,10 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
          insiderTransfers: card.insiderSells.map(s => ({ ...s, transferMode: "一般交易", estimatedValue: 0, currentHoldings: 0, type: "市場拋售" } as any)),
       });
       const structuredPart = buildStockCardLines(card, playbook?.verdict || "觀察中");
-      if (playbook) return `${structuredPart}\n\n分析師建議：\n${escapeHtml(playbook.tacticalScript)}`;
+      if (playbook) {
+        const tgText = playbook.telegramCaption || playbook.tacticalScript;
+        return `${structuredPart}\n\n💬 ${escapeHtml(tgText)}`;
+      }
       return structuredPart;
    } catch (e) { return buildStockCardLines(card); }
 }

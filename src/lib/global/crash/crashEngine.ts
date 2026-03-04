@@ -146,6 +146,7 @@ export function evaluateCrashWarning(marketData: MarketIndicatorResult): CrashWa
           meta.calcTrace.volatility.inputs.push(vixSeries.symbol);
           if (vixStats.current >= 35) { volFact.score += 40; volFact.triggers.push("VIX 高於 35（恐慌水位）"); }
           else if (vixStats.current >= 25) { volFact.score += 25; volFact.triggers.push("VIX 高於 25（波動升溫）"); }
+          else if (vixStats.current >= 20) { volFact.score += 12; volFact.triggers.push("VIX 高於 20（市場情緒偏緊）"); }
           if (vixStats.delta >= 0.20) { volFact.score += 15; volFact.triggers.push("VIX 顯著高於月均（快速升溫）"); }
       }
   }
@@ -317,7 +318,7 @@ export function evaluateCrashWarning(marketData: MarketIndicatorResult): CrashWa
   let finalScore: number | null = null;
   let level: CrashWarningOutput["level"] = "正常";
   let headline = "市場風險偏低";
-  let summary = "整體環境相對平穩，可維持正常操作。";
+  let summary = "整體環境相對平穩，可維持正常操作。本系統為純量化評估，不含地緣政治事件判讀。";
   let triggersTop: string[] = ["總經與市場指標平穩，無極端警示"];
 
   if (availableWeight > 0) {
@@ -399,7 +400,7 @@ export function evaluateCrashWarning(marketData: MarketIndicatorResult): CrashWa
   const macroIndicators = {
     vix: {
       value: vixStats?.current ?? 0,
-      status: vixStats ? (vixStats.current >= 30 ? "恐慌升溫" : vixStats.current >= 20 ? "波動偏高" : "情緒平穩") : "資料不足",
+      status: vixStats ? (vixStats.current >= 30 ? "恐慌升溫" : vixStats.current >= 25 ? "波動偏高" : vixStats.current >= 20 ? "情緒偏緊" : "情緒平穩") : "資料不足",
       variant: (vixStats ? (vixStats.current >= 30 ? "negative" : vixStats.current >= 20 ? "neutral" : "positive") : "neutral") as 'positive' | 'neutral' | 'negative'
     },
     soxx: {

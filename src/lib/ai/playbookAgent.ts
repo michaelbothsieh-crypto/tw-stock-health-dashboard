@@ -27,7 +27,8 @@ export interface PlaybookContext {
 export interface ActionPlaybook {
   verdict: string;
   verdictColor: "red" | "green" | "amber" | "slate";
-  tacticalScript: string;
+  tacticalScript: string;  // 網站用：機構語氣，40-60字，無 emoji
+  telegramCaption: string; // TG用：操盤手口吻，emoji，明確操作建議
   shortSummary: string;
   insiderComment?: string;
 }
@@ -51,10 +52,17 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
     analysis = `股價目前處於 ${fSupport} 與 ${fResistance} 之間的盤整區間，市場多空力道呈現拉鋸，並在靜待下一個重大新聞時事帶動。在方向性未明確表態前，建議採取低買高賣的區間策略，並觀察近期走勢的突破跡象。`;
   }
 
+  const tgCaption = trend.includes("多")
+    ? `📈 ${ctx.stockName} 走多！守穩支撐 ${fSupport} 可續抱，目標看 ${fResistance}，破底停損勿戀戰。`
+    : trend.includes("空")
+    ? `📉 ${ctx.stockName} 偏空，壓力在 ${fResistance}，守不住 ${fSupport} 就跑，別接飛刀！`
+    : `⚠️ ${ctx.stockName} 整理中，${fSupport}-${fResistance} 區間操作，等方向明確再出手。`;
+
   return {
     verdict: trend.includes("多") ? "偏多看待" : trend.includes("空") ? "偏空需防守" : "震盪整理",
     verdictColor: trend.includes("多") ? "red" : trend.includes("空") ? "green" : "slate",
     tacticalScript: analysis,
+    telegramCaption: tgCaption,
     shortSummary: "區間整理中，靜待表態"
   };
 }
@@ -154,16 +162,25 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
 
 任務：撰寫一段專業分析內容。
 
-【分析師短評 (tacticalScript) 撰寫規則】：
-1. 【長度要求】：字數必須在 40 到 60 字之間，不要過於簡短。
-2. 【深度內容】：必須同時提到「近期價格走勢」與「市場時事或新聞影響」。
-3. 【嚴禁 Emoji】：輸出內容絕對不能包含任何 Emoji 表情符號。
-4. 【語氣】：冷靜、客觀，展现機構操盤手的專業感。
+【兩個版本分別撰寫】：
+
+tacticalScript（網站顯示）：
+1. 字數 40-60 字，不要過於簡短。
+2. 必須同時提到「近期價格走勢」與「市場時事或新聞影響」。
+3. 嚴禁任何 Emoji。
+4. 語氣冷靜客觀，展現機構操盤手的專業感。
+
+telegramCaption（Telegram 推播）：
+1. 字數 30-50 字，簡短有力。
+2. 開頭用一個 Emoji 表達方向（📈偏多 / 📉偏空 / ⚠️震盪）。
+3. 語氣像是老手給群組朋友的快速提示，口語化且有急迫感。
+4. 必須包含一個明確的操作建議（如：守 xxx 可抱、破 xxx 快跑）。
 
 {
   "verdict": "4字內精煉結論 (如: 強勢整理, 破線轉弱)",
   "verdictColor": "red|green|amber|slate",
-  "tacticalScript": "40-60字的深度分析短評，包含走勢與時事分析",
+  "tacticalScript": "40-60字機構語氣分析，無emoji",
+  "telegramCaption": "30-50字TG推播，含emoji和明確操作建議",
   "shortSummary": "15字內白話總結"
 }
 `;
