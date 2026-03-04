@@ -91,9 +91,17 @@ export async function getFilteredInsiderTransfers(ticker: string): Promise<Insid
         } else if (mode.includes("鉅額")) {
           type = "市場拋售";
           humanMode = "盤後大筆轉讓 (賣出)";
-        } else if (mode.includes("信託") || mode.includes("贈與")) {
+        } else if (mode.includes("贈與")) {
           type = "持股調整";
-          humanMode = "持股結構調整 (中性)";
+          humanMode = "🎁 贈與轉讓 (非市場交易)";
+        } else if (mode.includes("信託")) {
+          type = "持股調整";
+          humanMode = "🏦 信託轉讓 (持股調整)";
+        } else if (mode.includes("特定人")) {
+          type = "持股調整";
+          humanMode = "🤝 洽特定人 (持股調整)";
+        } else if (mode) {
+          humanMode = `${mode} (內部調整)`;
         }
 
         let valueText = "";
