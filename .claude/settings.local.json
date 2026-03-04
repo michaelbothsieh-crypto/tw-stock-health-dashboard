@@ -3,7 +3,8 @@
     "allow": [
       "Bash(xargs:*)",
       "Bash(ls 目錄不存在:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(grep:*)"
     ]
   }
 }
