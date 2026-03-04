@@ -1,0 +1,25 @@
+# Build outputs
+.next/
+out/
+build/
+coverage/
+
+# Dependencies
+node_modules/
+
+# Static assets (SVG icons, no code value)
+public/
+
+# Environment & secrets
+.env*
+*.pem
+
+# TypeScript build artifacts
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel/
+
+# OS
+.DS_Store
