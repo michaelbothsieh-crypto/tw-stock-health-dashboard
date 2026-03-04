@@ -1,6 +1,5 @@
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
-import path from 'path';
-import fs from 'fs';
+import { NOTO_SANS_BOLD_B64 } from './fontData';
 
 export interface ChartDataPoint {
   date: string;
@@ -12,57 +11,15 @@ export interface ChartDataPoint {
 }
 
 // 字型只需要註冊一次（module-level singleton）
+// 字型 base64 直接嵌入 bundle，無需 filesystem 或 HTTP — 保證 Vercel serverless 可用
 let _fontsRegistered = false;
-let _fontLoadPromise: Promise<void> | null = null;
-
-// 使用明確的自訂名稱，避免 Skia 把 'sans-serif' 當系統通用族名解析
-// Vercel Linux 環境沒有系統字型，通用族名解析會失敗導致文字完全不顯示
 const FONT_FAMILY = 'NotoSans';
 
-async function ensureFonts(): Promise<void> {
+function ensureFonts() {
   if (_fontsRegistered) return;
-  if (_fontLoadPromise) { await _fontLoadPromise; return; }
-
-  _fontLoadPromise = (async () => {
-    // 1. 先試 filesystem（本地開發 + 若 outputFileTracingIncludes 正確時的 Vercel）
-    const candidates = [
-      path.join(process.cwd(), 'public/fonts/NotoSans-Bold.ttf'),
-      '/var/task/public/fonts/NotoSans-Bold.ttf',
-      path.join(process.cwd(), '.next/server/public/fonts/NotoSans-Bold.ttf'),
-      path.join(__dirname, '../../../../../public/fonts/NotoSans-Bold.ttf'),
-      path.join(__dirname, '../../../../../../public/fonts/NotoSans-Bold.ttf'),
-    ];
-    for (const fontPath of candidates) {
-      try {
-        if (fs.existsSync(fontPath)) {
-          const buf = fs.readFileSync(fontPath);
-          GlobalFonts.register(buf, FONT_FAMILY);
-          _fontsRegistered = true;
-          return;
-        }
-      } catch { /* 繼續嘗試下一個路徑 */ }
-    }
-
-    // 2. Fallback: 直接 HTTP fetch 自己的 public URL
-    // public/ 資料夾在 Vercel 一定可以透過 HTTP 存取，filesystem 找不到時的保底方案
-    const baseUrl =
-      process.env.BOT_BASE_URL ||
-      process.env.APP_BASE_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
-
-    if (baseUrl) {
-      try {
-        const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/fonts/NotoSans-Bold.ttf`);
-        if (res.ok) {
-          const buf = Buffer.from(await res.arrayBuffer());
-          GlobalFonts.register(buf, FONT_FAMILY);
-          _fontsRegistered = true;
-        }
-      } catch { /* HTTP fallback 失敗，繼續不含字型繪圖 */ }
-    }
-  })();
-
-  await _fontLoadPromise;
+  const buf = Buffer.from(NOTO_SANS_BOLD_B64, 'base64');
+  GlobalFonts.register(buf, FONT_FAMILY);
+  _fontsRegistered = true;
 }
 
 export async function renderStockChart(
@@ -72,7 +29,7 @@ export async function renderStockChart(
   symbol: string,
   visibleCount: number = 180
 ): Promise<Buffer> {
-  await ensureFonts();
+  ensureFonts();
 
   const width = 1200;
   const height = 650;
