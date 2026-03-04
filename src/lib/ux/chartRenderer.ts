@@ -14,20 +14,27 @@ export interface ChartDataPoint {
 // 字型只需要註冊一次（module-level singleton）
 let _fontsRegistered = false;
 
+// 使用明確的自訂名稱，避免 Skia 把 'sans-serif' 當系統通用族名解析
+// Vercel Linux 環境沒有系統字型，通用族名解析會失敗導致文字完全不顯示
+const FONT_FAMILY = 'NotoSans';
+
 function ensureFonts() {
   if (_fontsRegistered) return;
   // Vercel serverless 的工作目錄可能是 /var/task，試多個路徑
   const candidates = [
     path.join(process.cwd(), 'public/fonts/NotoSans-Bold.ttf'),
-    path.join(process.cwd(), '.next/server/public/fonts/NotoSans-Bold.ttf'),
     '/var/task/public/fonts/NotoSans-Bold.ttf',
+    path.join(process.cwd(), '.next/server/public/fonts/NotoSans-Bold.ttf'),
+    path.join(__dirname, '../../../../../public/fonts/NotoSans-Bold.ttf'),
+    path.join(__dirname, '../../../../../../public/fonts/NotoSans-Bold.ttf'),
   ];
   for (const fontPath of candidates) {
     try {
       if (fs.existsSync(fontPath)) {
         const buf = fs.readFileSync(fontPath);
-        GlobalFonts.register(buf, 'sans-serif');
-        GlobalFonts.register(buf, 'Arial');
+        // 用明確的自訂名稱註冊，讓 @napi-rs/canvas 從自己的 GlobalFonts 表查找
+        // 而不是走 Skia 的系統字型解析（Linux 上無系統字型會失敗）
+        GlobalFonts.register(buf, FONT_FAMILY);
         _fontsRegistered = true;
         return;
       }
@@ -52,8 +59,8 @@ export async function renderStockChart(
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
-  // 直接使用最保險的字型設定
-  const FONT_SANS = 'bold 13px sans-serif';
+  // 使用已明確註冊的字型家族名稱，而非通用族名
+  const FONT_SANS = `bold 13px "${FONT_FAMILY}"`;
 
   const startIndex = Math.max(0, allData.length - visibleCount);
   const visibleData = allData.slice(startIndex);
