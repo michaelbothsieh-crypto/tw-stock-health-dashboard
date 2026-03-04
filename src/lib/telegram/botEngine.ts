@@ -370,21 +370,27 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : card.chgAbs;
          card.volume = rtQuote.regularMarketVolume || card.volume;
 
-         // 強制將今日數據塞入 Bars 陣列（immutable pattern）
+         // 將今日即時報價合併進 Bars 陣列
          if (card.close !== null) {
             const lastBar = processedBars[processedBars.length - 1];
+            const rtHigh = typeof rtQuote.regularMarketDayHigh === "number" ? rtQuote.regularMarketDayHigh : card.close;
+            const rtLow  = typeof rtQuote.regularMarketDayLow  === "number" ? rtQuote.regularMarketDayLow  : card.close;
+            const rtOpen = typeof rtQuote.regularMarketOpen     === "number" ? rtQuote.regularMarketOpen     : card.close;
+
             if (lastBar && lastBar.date === todayStr) {
+               // 歷史資料已有今日 bar：用 Yahoo 即時 high/low 更新，保留歷史 open
                processedBars[processedBars.length - 1] = {
                   ...lastBar,
                   close: card.close,
-                  high: Math.max(lastBar.high, card.close),
-                  low: Math.min(lastBar.low, card.close),
+                  high: Math.max(lastBar.high, rtHigh),
+                  low:  Math.min(lastBar.low,  rtLow),
                   volume: card.volume || lastBar.volume,
                };
             } else {
+               // 歷史資料尚未包含今日：用 Yahoo 的 open/high/low 補上完整 bar
                processedBars = [
                   ...processedBars,
-                  { date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 },
+                  { date: todayStr, open: rtOpen, high: rtHigh, low: rtLow, close: card.close, volume: card.volume || 0 },
                ];
             }
          }
