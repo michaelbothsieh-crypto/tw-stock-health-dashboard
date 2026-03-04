@@ -59,8 +59,8 @@ export async function getFilteredInsiderTransfers(ticker: string): Promise<Insid
         const declarer = item["姓名"] || item["申報人姓名"] || "未知";
         const role = item["申報人身分"] || item["身分"] || item["申報人身份"] || "內部人";
         const mode = item["預定轉讓方式及股數-轉讓方式"] || item["轉讓方式"] || "";
-        const sharesStr = item["預定轉讓方式及股數-轉讓股數"] || item["申報股數"] || "0";
-        const holdingsStr = item["目前持股"] || "0";
+        const sharesStr = item["預定轉讓方式及股數-轉讓股數"] || item["預定轉讓總股數-自有持股"] || item["申報股數"] || "0";
+        const holdingsStr = item["目前持有股數-自有持股"] || item["目前持股"] || "0";
         const dateRaw = item["出表日期"] || item["申報日期"] || "";
 
         // 日期轉換
@@ -82,7 +82,7 @@ export async function getFilteredInsiderTransfers(ticker: string): Promise<Insid
         const holdings = parseInt(holdingsStr.replace(/,/g, ""));
         const lots = Math.round(shares / 1000);
         const estimatedValue = shares * currentPrice;
-        
+
         let type: "市場拋售" | "持股調整" | "其他" = "其他";
         let humanMode = mode;
         if (mode.includes("一般交易")) {
