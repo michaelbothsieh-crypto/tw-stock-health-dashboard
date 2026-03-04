@@ -169,7 +169,39 @@ export async function GET(
       ...fundamentalSignals.risks,
       ...shortTerm.breakdown.riskFlags,
     ];
-    const mappedPrices = prices.map(p => ({
+
+    // ── 即時報價（提前抓，讓 keyLevels 也能納入今日盤中 H/L）──────────
+    const fLatestClose = prices[prices.length - 1].close;
+    const fPrevClose = prices.length >= 2 ? prices[prices.length - 2].close : fLatestClose;
+    let liveQuote: { price: number; changePct: number; previousClose: number; high?: number; low?: number } | null = null;
+    try {
+      const YahooFinance = (await import("yahoo-finance2")).default;
+      const yf = new YahooFinance();
+      const yahooSym = isTaiwanStock(norm.symbol)
+        ? (norm.yahoo || `${norm.symbol}.TW`)
+        : norm.symbol;
+      const rtRaw = await yf.quote(yahooSym);
+      const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;
+      if (rt && typeof rt.regularMarketPrice === "number") {
+        const prevClose = rt.regularMarketPreviousClose ?? fPrevClose;
+        liveQuote = {
+          price: rt.regularMarketPrice,
+          previousClose: prevClose,
+          changePct: typeof rt.regularMarketChangePercent === "number"
+            ? rt.regularMarketChangePercent
+            : prevClose !== 0 ? ((rt.regularMarketPrice - prevClose) / prevClose) * 100 : 0,
+          high: rt.regularMarketDayHigh,
+          low: rt.regularMarketDayLow,
+        };
+      }
+    } catch (e) {
+      console.warn("[Snapshot] yahoo-finance2 quote failed, falling back to FinMind close", e);
+    }
+    const latestClose = liveQuote ? liveQuote.price : fLatestClose;
+    const realTimeChangePct = liveQuote ? liveQuote.changePct : undefined;
+
+    // 建立含今日即時 bar 的 mappedPrices（供 keyLevels 計算）
+    const baseMappedPrices = prices.map(p => ({
       date: p.date,
       open: p.open,
       high: p.high,
@@ -177,6 +209,23 @@ export async function GET(
       close: p.close,
       volume: p.volume
     }));
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const mappedPrices = [...baseMappedPrices];
+    if (liveQuote) {
+      const lastBar = mappedPrices[mappedPrices.length - 1];
+      const rtHigh = liveQuote.high ?? latestClose;
+      const rtLow  = liveQuote.low  ?? latestClose;
+      if (lastBar.date === todayStr) {
+        mappedPrices[mappedPrices.length - 1] = {
+          ...lastBar,
+          close: latestClose,
+          high: Math.max(lastBar.high, rtHigh),
+          low:  Math.min(lastBar.low,  rtLow),
+        };
+      } else {
+        mappedPrices.push({ date: todayStr, open: latestClose, high: rtHigh, low: rtLow, close: latestClose, volume: 0 });
+      }
+    }
     const keyLevels = calculateKeyLevels(mappedPrices);
 
     const strategy = generateStrategy({
@@ -196,35 +245,6 @@ export async function GET(
       riskFlags,
     });
 
-    const fLatestClose = prices[prices.length - 1].close;
-    const fPrevClose = prices.length >= 2 ? prices[prices.length - 2].close : fLatestClose;
-
-    // 即時報價：優先 yahoo-finance2（Vercel 相容性佳），fallback 至 FinMind 昨收
-    let liveQuote: { price: number; changePct: number; previousClose: number } | null = null;
-    try {
-      const YahooFinance = (await import("yahoo-finance2")).default;
-      const yf = new YahooFinance();
-      const yahooSym = isTaiwanStock(norm.symbol)
-        ? (norm.yahoo || `${norm.symbol}.TW`)
-        : norm.symbol;
-      const rtRaw = await yf.quote(yahooSym);
-      const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;
-      if (rt && typeof rt.regularMarketPrice === "number") {
-        const prevClose = rt.regularMarketPreviousClose ?? fPrevClose;
-        liveQuote = {
-          price: rt.regularMarketPrice,
-          previousClose: prevClose,
-          changePct: typeof rt.regularMarketChangePercent === "number"
-            ? rt.regularMarketChangePercent
-            : prevClose !== 0 ? ((rt.regularMarketPrice - prevClose) / prevClose) * 100 : 0,
-        };
-      }
-    } catch (e) {
-      console.warn("[Snapshot] yahoo-finance2 quote failed, falling back to FinMind close", e);
-    }
-
-    const latestClose = liveQuote ? liveQuote.price : fLatestClose;
-    const realTimeChangePct = liveQuote ? liveQuote.changePct : undefined;
     const explainBreakdown = buildExplainBreakdown({
       trend: trendSignals,
       flow: flowSignals,
@@ -327,20 +347,24 @@ export async function GET(
         console.warn("[Snapshot] Failed to fetch insider transfers", e);
       }
     }
-    // Calculate Recent Trend String for AI Context
+    // Calculate Recent Trend String for AI Context（含即時價格數字）
     let recentTrend = "區間震盪 / 橫盤整理";
     const sma20 = trendSignals.sma20;
     const sma60 = trendSignals.sma60;
     if (sma20 && sma60) {
       if (latestClose > sma20 && sma20 > sma60) {
-        recentTrend = "多頭排列 / 強勢續航";
-        if (shortTerm.breakoutScore > 70) recentTrend = "多頭排列 / 突破創高";
+        recentTrend = shortTerm.breakoutScore > 70 ? "多頭排列 / 突破創高" : "多頭排列 / 強勢續航";
       } else if (latestClose < sma20 && sma20 < sma60) {
         recentTrend = "空頭排列 / 弱勢整理";
       } else if (latestClose > sma20 && latestClose > sma60) {
         recentTrend = "均線糾結 / 股價轉強";
       }
     }
+    // 加入即時價格上下文，讓 LLM 能做精確判斷
+    const rtLabel = liveQuote ? "即時" : "昨收";
+    recentTrend += `；${rtLabel}價 ${latestClose.toFixed(1)}`;
+    if (sma20) recentTrend += `，SMA20 ${sma20.toFixed(1)}`;
+    if (sma60) recentTrend += `，SMA60 ${sma60.toFixed(1)}`;
 
     const playbook = await getTacticalPlaybook({
       ticker: norm.symbol,

@@ -49,20 +49,31 @@ export async function POST(req: NextRequest) {
                 }
 
                 // Generate reply using the extracted botEngine logic
-                // Pass origin as baseUrl to ensure chart URLs are resolved if using local assets
                 const reply = await generateBotReply(userText, { baseUrl: origin });
 
                 if (reply) {
-                    // Strip HTML tags and markdown asterisks for LINE text format
+                    // Strip HTML tags for LINE plain text format
                     const cleanReply = reply.text
                         .replace(/<[^>]*>?/gm, "")
                         .replace(/\*/g, "");
 
                     const messages: line.messagingApi.Message[] = [];
-                    
-                    // Note: LINE requires a URL for images. For now, we only support direct buffers for Telegram.
-                    // If we need LINE support, we'll need to upload the buffer to a public URL.
+
+                    // LINE 需要公開 HTTPS URL 才能傳圖，使用 /api/stock/{ticker}/chart 端點
                     const isStockCmd = userText.startsWith("/stock") || userText.startsWith("/tw");
+                    if (isStockCmd && reply.chartBuffer) {
+                        // 從指令解析 ticker，例如 "/tw 2330" → "2330"
+                        const parts = userText.trim().split(/\s+/);
+                        const rawTicker = parts[1]?.toUpperCase();
+                        if (rawTicker) {
+                            const chartUrl = `${origin}/api/stock/${rawTicker}/chart`;
+                            messages.push({
+                                type: "image",
+                                originalContentUrl: chartUrl,
+                                previewImageUrl: chartUrl,
+                            } as line.messagingApi.ImageMessage);
+                        }
+                    }
 
                     messages.push({
                         type: "text",
