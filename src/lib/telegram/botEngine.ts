@@ -79,7 +79,11 @@ type StockCard = {
    syncLevel: string;
    newsLine: string;
    sourceLabel: string;
-   insiderSells: Array<{ date: string; declarer: string; role: string; humanMode: string; lots: number; valueText: string; transferRatio: number }>;
+   insiderSells: any[];
+   trustLots?: number;
+   marginLots?: number;
+   shortLots?: number;
+   institutionalLots?: number;
    chartBuffer: Buffer | null;
 };
 
@@ -225,7 +229,7 @@ async function ensureTelegramCommandsSynced() {
          }),
       });
       commandsSynced = true;
-   } catch (error) {}
+   } catch (error) { }
 }
 
 function resolveCodeFromInputLocal(input: string): string | null {
@@ -282,6 +286,16 @@ function buildStockCardLines(card: StockCard, verdict: string = "數據整理中
       "",
       `【新聞】 ${card.newsLine || "—"}`,
    ];
+
+   if (card.insiderSells && card.insiderSells.length > 0) {
+      lines.push("");
+      lines.push(`🚨 【內部人警訊】 近期高層申讓 ${card.insiderSells.length} 筆：`);
+      card.insiderSells.slice(0, 2).forEach(sell => {
+         const modeStr = sell.humanMode || "拋售";
+         lines.push(`  - ${sell.declarer}(${sell.role}) ${modeStr} ${sell.lots}張`);
+      });
+   }
+
    return lines.map((line) => escapeHtml(line)).join("\n");
 }
 
@@ -298,14 +312,16 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
          flowScore: 50,
          flowVerdict: card.shortDir,
          recentTrend: `目前現價 ${card.close}，今日漲跌幅 ${card.chgPct?.toFixed(2)}%，成交量 ${card.volume}。`,
-         trustLots: 0,
-         shortLots: 0,
-         insiderTransfers: card.insiderSells.map(s => ({ ...s, transferMode: "一般交易", estimatedValue: 0, currentHoldings: 0, type: "市場拋售" } as any)),
+         trustLots: card.trustLots || 0,
+         shortLots: card.shortLots || 0,
+         marginLots: card.marginLots || 0,
+         institutionalLots: card.institutionalLots || 0,
+         insiderTransfers: card.insiderSells,
       });
       const structuredPart = buildStockCardLines(card, playbook?.verdict || "觀察中");
       if (playbook) {
-        const tgText = playbook.telegramCaption || playbook.tacticalScript;
-        return `${structuredPart}\n\n💬 ${escapeHtml(tgText)}`;
+         const tgText = playbook.telegramCaption || playbook.tacticalScript;
+         return `${structuredPart}\n\n💬 ${escapeHtml(tgText)}`;
       }
       return structuredPart;
    } catch (e) { return buildStockCardLines(card); }
@@ -328,10 +344,10 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       if (!yahooSymbol || yahooSymbol === symbol) {
          yahooSymbol = (symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5")) ? `${symbol}.TWO` : `${symbol}.TW`;
       }
-      
+
       const rtQuoteRaw = await yahooFinance.quote(yahooSymbol).catch(() => null);
       const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
-      
+
       let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
       let processedBars = bars.map((b: any) => ({
          date: b.date || "",
@@ -347,12 +363,12 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          nameZh: String(snapshot?.normalizedTicker?.companyNameZh || symbol),
          close: null, chgPct: null, chgAbs: null, volume: null, volumeVs5dPct: null, flowNet: null, flowUnit: "張",
          shortDir: "中立", strategySignal: "觀察", confidence: null, p1d: null, p3d: null, p5d: null,
-         support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "snapshot", insiderSells: [], 
+         support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "snapshot", insiderSells: [],
          chartBuffer: null
       };
 
       const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
-      
+
       // 1. 先處理基礎數據
       if (processedBars.length >= 2) {
          const latest = processedBars[processedBars.length - 1];
@@ -376,8 +392,8 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          if (card.close !== null) {
             const lastBar = processedBars[processedBars.length - 1];
             const rtHigh = typeof rtQuote.regularMarketDayHigh === "number" ? rtQuote.regularMarketDayHigh : card.close;
-            const rtLow  = typeof rtQuote.regularMarketDayLow  === "number" ? rtQuote.regularMarketDayLow  : card.close;
-            const rtOpen = typeof rtQuote.regularMarketOpen     === "number" ? rtQuote.regularMarketOpen     : card.close;
+            const rtLow = typeof rtQuote.regularMarketDayLow === "number" ? rtQuote.regularMarketDayLow : card.close;
+            const rtOpen = typeof rtQuote.regularMarketOpen === "number" ? rtQuote.regularMarketOpen : card.close;
 
             if (lastBar && lastBar.date === todayStr) {
                // 歷史資料已有今日 bar：用 Yahoo 即時 high/low 更新，保留歷史 open
@@ -385,7 +401,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
                   ...lastBar,
                   close: card.close,
                   high: Math.max(lastBar.high, rtHigh),
-                  low:  Math.min(lastBar.low,  rtLow),
+                  low: Math.min(lastBar.low, rtLow),
                   volume: card.volume || lastBar.volume,
                };
             } else {
@@ -396,11 +412,11 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
                ];
             }
          }
-         
+
          const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
          card.volumeVs5dPct = volInfo.volumeVs5dPct;
       }
-      
+
       const key = calcSupportResistance(processedBars);
       card.support = snapshot?.keyLevels?.support || key.support;
       card.resistance = snapshot?.keyLevels?.resistance || key.resistance;
@@ -408,13 +424,19 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       if (processedBars.length >= 2) {
          card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
       }
-      
+
       card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? Math.round(snapshot.signals.flow.foreign5D / 1000) : null;
       card.p1d = snapshot?.predictions?.upProb1D;
       card.shortDir = buildTrendByProb(card.p1d);
       card.strategySignal = snapshot?.strategy?.signal || "觀察";
       card.confidence = snapshot?.strategy?.confidence;
       card.newsLine = extractNewsLineFromSnapshot(snapshot);
+      card.insiderSells = Array.isArray(snapshot?.insiderTransfers) ? snapshot.insiderTransfers : [];
+      card.trustLots = snapshot?.signals?.flow?.trustLots || 0;
+      card.shortLots = snapshot?.signals?.flow?.shortLots || 0;
+      card.marginLots = snapshot?.signals?.flow?.marginLots || 0;
+      card.institutionalLots = snapshot?.signals?.flow?.institutionalLots || 0;
+
       return card;
    } catch (error) { return null; }
 }
