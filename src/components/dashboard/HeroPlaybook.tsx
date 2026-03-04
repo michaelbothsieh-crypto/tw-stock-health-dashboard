@@ -93,15 +93,33 @@ function PriceTicker({
     const prices = snapshot.data.prices;
     if (!prices || prices.length < 2) return null;
 
-    // Fallback to previous day's close for calculation basis
-    const prev = prices[prices.length - 2];
-
     const rt = snapshot.realTimeQuote;
-    const currentPrice = rt ? rt.price : prices[prices.length - 1].close;
     const isRealTime = rt?.isRealTime ?? false;
-
-    const change = currentPrice - prev.close;
-    const changePct = (change / prev.close) * 100;
+    const currentPrice = rt ? rt.price : prices[prices.length - 1].close;
+    
+    // 如果有 rt.changePct，直接推算 change 絕對值，不依賴 prices array 抓 prev
+    // 因為如果今天收盤了，Finmind 的最後一根是今天，那 prev 就會變成昨天，導致今天跟昨天比，但是 rt 已經是今天了。
+    let change = 0;
+    let changePct = 0;
+    
+    if (rt && typeof rt.changePct === "number") {
+      changePct = rt.changePct;
+      // Reverse engineer the absolute change based on price and percentage
+      // changePct = (change / prevClose) * 100 => change = (changePct / 100) * prevClose
+      // prevClose = currentPrice - change
+      // changePct/100 = change / (currentPrice - change)
+      // changePct/100 * currentPrice - changePct/100 * change = change
+      // changePct/100 * currentPrice = change * (1 + changePct/100)
+      // change = (changePct/100 * currentPrice) / (1 + changePct/100)
+      
+      const prevCloseFromRt = currentPrice / (1 + (changePct / 100));
+      change = currentPrice - prevCloseFromRt;
+    } else {
+      // Fallback
+      const prev = prices.length >= 2 ? prices[prices.length - 2].close : prices[prices.length - 1].close;
+      change = currentPrice - prev;
+      changePct = prev !== 0 ? (change / prev) * 100 : 0;
+    }
 
     const colorClass = getTwseColor(change, 'text');
     const bgColorClass = getTwseColor(change, 'bg');
