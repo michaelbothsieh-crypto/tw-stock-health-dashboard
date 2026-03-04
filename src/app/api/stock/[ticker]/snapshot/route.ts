@@ -197,8 +197,32 @@ export async function GET(
     });
 
     const fLatestClose = prices[prices.length - 1].close;
-    // Attempt Real-time Fetch
-    const liveQuote = await import("@/lib/providers/yahooFinance").then(m => m.fetchYahooQuote(norm.symbol));
+    const fPrevClose = prices.length >= 2 ? prices[prices.length - 2].close : fLatestClose;
+
+    // 即時報價：優先 yahoo-finance2（Vercel 相容性佳），fallback 至 FinMind 昨收
+    let liveQuote: { price: number; changePct: number; previousClose: number } | null = null;
+    try {
+      const YahooFinance = (await import("yahoo-finance2")).default;
+      const yf = new YahooFinance();
+      const yahooSym = isTaiwanStock(norm.symbol)
+        ? (norm.yahoo || `${norm.symbol}.TW`)
+        : norm.symbol;
+      const rtRaw = await yf.quote(yahooSym);
+      const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;
+      if (rt && typeof rt.regularMarketPrice === "number") {
+        const prevClose = rt.regularMarketPreviousClose ?? fPrevClose;
+        liveQuote = {
+          price: rt.regularMarketPrice,
+          previousClose: prevClose,
+          changePct: typeof rt.regularMarketChangePercent === "number"
+            ? rt.regularMarketChangePercent
+            : prevClose !== 0 ? ((rt.regularMarketPrice - prevClose) / prevClose) * 100 : 0,
+        };
+      }
+    } catch (e) {
+      console.warn("[Snapshot] yahoo-finance2 quote failed, falling back to FinMind close", e);
+    }
+
     const latestClose = liveQuote ? liveQuote.price : fLatestClose;
     const realTimeChangePct = liveQuote ? liveQuote.changePct : undefined;
     const explainBreakdown = buildExplainBreakdown({
@@ -402,11 +426,12 @@ export async function GET(
       globalLinkage,
       crashWarning,
       keyLevels,
-      realTimeQuote: liveQuote ? {
+      realTimeQuote: {
         price: latestClose,
         changePct: realTimeChangePct,
+        isRealTime: !!liveQuote,
         time: new Date().toISOString()
-      } : undefined,
+      },
       uxSummary,
       aiSummary: {
         stance: aiExplanation.stance,

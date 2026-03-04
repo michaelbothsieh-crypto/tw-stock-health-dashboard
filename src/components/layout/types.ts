@@ -98,6 +98,7 @@ export type SnapshotResponse = {
   realTimeQuote?: {
     price: number;
     changePct?: number;
+    isRealTime?: boolean;
     time: string;
   };
 };

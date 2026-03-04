@@ -98,6 +98,7 @@ function PriceTicker({
 
     const rt = snapshot.realTimeQuote;
     const currentPrice = rt ? rt.price : prices[prices.length - 1].close;
+    const isRealTime = rt?.isRealTime ?? false;
 
     const change = currentPrice - prev.close;
     const changePct = (change / prev.close) * 100;
@@ -108,8 +109,8 @@ function PriceTicker({
     return (
         <div className="flex flex-col gap-1.5 mt-4">
             <div className="flex items-center gap-2 text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-widest opacity-80">
-                {rt ? "即時價格" : "最新收盤"}
-                {rt && (
+                {isRealTime ? "即時價格" : "昨日收盤"}
+                {isRealTime && (
                     <span className="relative flex h-1.5 w-1.5">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
