@@ -16,5 +16,7 @@ export function useStockSnapshot(ticker: string) {
       return body;
     },
     enabled: !!ticker,
+    refetchInterval: 30_000,
+    staleTime: 25_000,
   });
 }

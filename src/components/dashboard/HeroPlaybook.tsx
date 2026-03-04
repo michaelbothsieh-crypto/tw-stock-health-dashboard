@@ -117,7 +117,7 @@ function PriceTicker({
                 )}
             </div>
             <div className="flex items-center gap-3 md:gap-4">
-                <span className="text-4xl md:text-5xl font-black tracking-tighter text-slate-900 dark:text-neutral-100 tabular-nums leading-none">
+                <span className={`text-4xl md:text-5xl font-black tracking-tighter tabular-nums leading-none ${colorClass}`}>
                     {currentPrice.toFixed(1)}
                 </span>
                 <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] md:text-sm font-black ${colorClass} ${bgColorClass} border border-current/10 whitespace-nowrap`}>
