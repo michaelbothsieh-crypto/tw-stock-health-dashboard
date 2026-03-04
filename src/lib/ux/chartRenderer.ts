@@ -1,4 +1,4 @@
-import { Resvg } from '@resvg/resvg-js';
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import { NOTO_SANS_BOLD_B64 } from './fontData';
 
 export interface ChartDataPoint {
@@ -10,15 +10,16 @@ export interface ChartDataPoint {
   volume: number;
 }
 
-function e(n: number, d = 1): string {
-  return n.toFixed(d);
-}
+// 字型只需要註冊一次（module-level singleton）
+// fontData.ts 內嵌真正的 NotoSans-Bold.otf base64，無需 filesystem 或 HTTP
+let _fontsRegistered = false;
+const FONT_FAMILY = 'NotoSans';
 
-function calcMA(allData: ChartDataPoint[], startIndex: number, i: number, period: number): number | null {
-  const realIdx = startIndex + i;
-  const slice = allData.slice(Math.max(0, realIdx - period + 1), realIdx + 1);
-  if (slice.length < period) return null;
-  return slice.reduce((sum, d) => sum + d.close, 0) / period;
+function ensureFonts() {
+  if (_fontsRegistered) return;
+  const buf = Buffer.from(NOTO_SANS_BOLD_B64, 'base64');
+  GlobalFonts.register(buf, FONT_FAMILY);
+  _fontsRegistered = true;
 }
 
 export async function renderStockChart(
@@ -28,160 +29,164 @@ export async function renderStockChart(
   symbol: string,
   visibleCount: number = 180
 ): Promise<Buffer> {
+  ensureFonts();
+
   const width = 1200;
   const height = 650;
-  const pad = { top: 70, right: 120, bottom: 70, left: 60 };
+  const padding = { top: 70, right: 120, bottom: 70, left: 60 };
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+
+  const FONT_SANS = `bold 13px ${FONT_FAMILY}`;
 
   const startIndex = Math.max(0, allData.length - visibleCount);
   const visibleData = allData.slice(startIndex);
 
-  if (visibleData.length < 2) {
-    // Return a minimal blank image
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="${width}" height="${height}" fill="#121212"/></svg>`;
-    const resvg = new Resvg(svg, { font: { fontBuffers: [Buffer.from(NOTO_SANS_BOLD_B64, 'base64')] } });
-    return Buffer.from(resvg.render().asPng());
-  }
+  // 1. 背景
+  ctx.fillStyle = '#121212';
+  ctx.fillRect(0, 0, width, height);
 
+  if (visibleData.length < 2) return canvas.toBuffer('image/png');
+
+  // 2. 計算比例
   const prices = visibleData.flatMap(d => [d.high, d.low]);
   const minPrice = Math.min(...prices) * 0.98;
   const maxPrice = Math.max(...prices) * 1.02;
   const priceRange = maxPrice - minPrice;
   const maxVol = Math.max(...visibleData.map(d => d.volume), 1);
-  const chartW = width - pad.left - pad.right;
-  const chartH = height - pad.top - pad.bottom;
 
-  const getX = (i: number) => pad.left + (i * chartW / (visibleData.length - 1));
-  const getY = (price: number) => pad.top + (maxPrice - price) * chartH / priceRange;
-  const barWidth = Math.max(1.5, chartW / visibleData.length * 0.6);
+  const getX = (index: number) => padding.left + (index * (width - padding.left - padding.right) / (visibleData.length - 1));
+  const getY = (price: number) => padding.top + (maxPrice - price) * (height - padding.top - padding.bottom) / priceRange;
 
-  const parts: string[] = [];
+  // 3. 繪製圖例
+  ctx.font = FONT_SANS;
+  ctx.textBaseline = 'middle';
 
-  // ── 1. Background ──────────────────────────────────────────────────────────
-  parts.push(`<rect width="${width}" height="${height}" fill="#121212"/>`);
+  const drawLeg = (label: string, color: string, x: number) => {
+    ctx.fillStyle = color; ctx.fillRect(x, 30, 15, 3);
+    ctx.fillStyle = '#9ca3af'; ctx.fillText(label, x + 20, 32);
+    return x + 75;
+  };
+  let curX = padding.left;
+  curX = drawLeg('MA5', '#ffffff', curX);
+  curX = drawLeg('MA20', '#f59e0b', curX);
+  curX = drawLeg('MA60', '#3b82f6', curX);
 
-  // ── 2. Grid lines + Y-axis labels ─────────────────────────────────────────
+  ctx.fillStyle = '#ef4444'; ctx.fillRect(curX + 10, 25, 8, 12);
+  ctx.fillStyle = '#22c55e'; ctx.fillRect(curX + 20, 25, 8, 12);
+  ctx.fillStyle = '#9ca3af'; ctx.fillText('Trend (Red Up / Green Down)', curX + 35, 32);
+
+  // 4. 繪製格線
+  ctx.strokeStyle = '#262626';
+  ctx.lineWidth = 1;
   for (let i = 0; i <= 8; i++) {
-    const y = pad.top + i * chartH / 8;
+    const y = padding.top + i * (height - padding.top - padding.bottom) / 8;
+    ctx.beginPath(); ctx.setLineDash([5, 5]);
+    ctx.moveTo(padding.left, y); ctx.lineTo(width - padding.right, y); ctx.stroke();
+    ctx.setLineDash([]); ctx.fillStyle = '#6b7280';
     const p = maxPrice - i * priceRange / 8;
-    parts.push(`<line x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}" stroke="#262626" stroke-width="1" stroke-dasharray="5,5"/>`);
-    parts.push(`<text x="${width - pad.right + 10}" y="${y + 4}" fill="#6b7280" font-family="NotoSans" font-size="12" font-weight="bold">${e(p, 1)}</text>`);
+    ctx.fillText(p.toFixed(1), width - padding.right + 10, y + 4);
   }
 
-  // ── 3. X-axis date labels ──────────────────────────────────────────────────
+  // 時間軸
   const labelInterval = Math.ceil(visibleData.length / 6);
   visibleData.forEach((d, i) => {
     if (i % labelInterval === 0 || i === visibleData.length - 1) {
       const x = getX(i);
-      const label = d.date?.substring(5) || '';
-      parts.push(`<text x="${x}" y="${height - pad.bottom + 20}" fill="#6b7280" font-family="NotoSans" font-size="12" font-weight="bold" text-anchor="middle">${label}</text>`);
+      ctx.fillStyle = '#6b7280'; ctx.textAlign = 'center';
+      ctx.fillText(d.date?.substring(5) || '', x, height - padding.bottom + 20);
     }
   });
 
-  // ── 4. Volume bars ─────────────────────────────────────────────────────────
-  const volBaseY = height - pad.bottom;
+  // 5. 繪製成交量
+  const volBaseY = height - padding.bottom;
+  const barWidth = Math.max(1, (width - padding.left - padding.right) / visibleData.length * 0.6);
   visibleData.forEach((d, i) => {
     const x = getX(i);
     const vHeight = (d.volume / maxVol) * (height * 0.12);
-    const color = d.close >= d.open ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)';
-    parts.push(`<rect x="${x - barWidth / 2}" y="${volBaseY - vHeight}" width="${barWidth}" height="${vHeight}" fill="${color}"/>`);
+    ctx.fillStyle = d.close >= d.open ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.2)';
+    ctx.fillRect(x - barWidth/2, volBaseY - vHeight, barWidth, vHeight);
   });
 
-  // ── 5. MA lines ────────────────────────────────────────────────────────────
-  const drawMA = (period: number, color: string, strokeWidth: number) => {
-    const pts: string[] = [];
+  // 6. 均線
+  const drawMA = (period: number, color: string) => {
+    ctx.strokeStyle = color; ctx.lineWidth = period === 5 ? 1 : 2; ctx.beginPath();
+    let started = false;
     for (let i = 0; i < visibleData.length; i++) {
-      const avg = calcMA(allData, startIndex, i, period);
-      if (avg === null) continue;
-      const x = getX(i);
-      const y = getY(avg);
-      pts.push(pts.length === 0 ? `M${e(x, 2)},${e(y, 2)}` : `L${e(x, 2)},${e(y, 2)}`);
+      const realIdx = startIndex + i;
+      const slice = allData.slice(Math.max(0, realIdx - period + 1), realIdx + 1);
+      if (slice.length < period) continue;
+      const avg = slice.reduce((sum, d) => sum + d.close, 0) / period;
+      const x = getX(i); const y = getY(avg);
+      if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
     }
-    if (pts.length > 1) {
-      parts.push(`<path d="${pts.join(' ')}" fill="none" stroke="${color}" stroke-width="${strokeWidth}"/>`);
-    }
+    ctx.stroke();
   };
-  drawMA(5, '#ffffff', 1);
-  drawMA(20, '#f59e0b', 2);
-  drawMA(60, '#3b82f6', 2);
+  drawMA(5, '#ffffff'); drawMA(20, '#f59e0b'); drawMA(60, '#3b82f6');
 
-  // ── 6. Trend lines ─────────────────────────────────────────────────────────
-  const mid = Math.floor(visibleData.length / 2);
-  let p1 = { price: 0, i: 0 }, p2 = { price: 0, i: 0 };
-  visibleData.forEach((d, i) => {
-    if (i < mid && d.high > p1.price) p1 = { price: d.high, i };
-    if (i >= mid && d.high > p2.price) p2 = { price: d.high, i };
-  });
-  if (p1.price > 0 && p2.price > 0) {
-    const slope = (p2.price - p1.price) / (p2.i - p1.i);
-    const endPrice = p1.price + slope * (visibleData.length - 1 - p1.i);
-    parts.push(`<line x1="${e(getX(p1.i), 2)}" y1="${e(getY(p1.price), 2)}" x2="${e(getX(visibleData.length - 1), 2)}" y2="${e(getY(endPrice), 2)}" stroke="rgba(239,68,68,0.5)" stroke-width="1.5" stroke-dasharray="3,3"/>`);
-  }
-  let s1 = { price: Infinity, i: 0 }, s2 = { price: Infinity, i: 0 };
-  visibleData.forEach((d, i) => {
-    if (i < mid && d.low < s1.price) s1 = { price: d.low, i };
-    if (i >= mid && d.low < s2.price) s2 = { price: d.low, i };
-  });
-  if (s1.price < Infinity && s2.price < Infinity) {
-    const slope = (s2.price - s1.price) / (s2.i - s1.i);
-    const endPrice = s1.price + slope * (visibleData.length - 1 - s1.i);
-    parts.push(`<line x1="${e(getX(s1.i), 2)}" y1="${e(getY(s1.price), 2)}" x2="${e(getX(visibleData.length - 1), 2)}" y2="${e(getY(endPrice), 2)}" stroke="rgba(34,197,94,0.5)" stroke-width="1.5" stroke-dasharray="3,3"/>`);
-  }
+  // 7. 趨勢線
+  const drawRealTrendLines = () => {
+    const mid = Math.floor(visibleData.length / 2);
+    let p1 = { price: 0, i: 0 }, p2 = { price: 0, i: 0 };
+    visibleData.forEach((d, i) => {
+      if (i < mid && d.high > p1.price) p1 = { price: d.high, i };
+      if (i >= mid && d.high > p2.price) p2 = { price: d.high, i };
+    });
+    if (p1.price > 0 && p2.price > 0) {
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)'; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.moveTo(getX(p1.i), getY(p1.price));
+      const slope = (p2.price - p1.price) / (p2.i - p1.i);
+      const endPrice = p1.price + slope * (visibleData.length - 1 - p1.i);
+      ctx.lineTo(getX(visibleData.length - 1), getY(endPrice)); ctx.stroke();
+    }
+    let s1 = { price: Infinity, i: 0 }, s2 = { price: Infinity, i: 0 };
+    visibleData.forEach((d, i) => {
+      if (i < mid && d.low < s1.price) s1 = { price: d.low, i };
+      if (i >= mid && d.low < s2.price) s2 = { price: d.low, i };
+    });
+    if (s1.price < Infinity && s2.price < Infinity) {
+      ctx.strokeStyle = 'rgba(34, 197, 94, 0.5)';
+      ctx.beginPath(); ctx.moveTo(getX(s1.i), getY(s1.price));
+      const slope = (s2.price - s1.price) / (s2.i - s1.i);
+      const endPrice = s1.price + slope * (visibleData.length - 1 - s1.i);
+      ctx.lineTo(getX(visibleData.length - 1), getY(endPrice)); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  };
+  drawRealTrendLines();
 
-  // ── 7. Candlesticks ────────────────────────────────────────────────────────
+  // 8. 繪製 K 線
   visibleData.forEach((d, i) => {
     const x = getX(i);
     const color = d.close >= d.open ? '#ef4444' : '#22c55e';
-    const yHigh = getY(d.high);
-    const yLow = getY(d.low);
-    const yTop = getY(Math.max(d.open, d.close));
-    const yBot = getY(Math.min(d.open, d.close));
-    const bodyH = Math.max(Math.abs(yBot - yTop), 1);
-    parts.push(`<line x1="${e(x, 2)}" y1="${e(yHigh, 2)}" x2="${e(x, 2)}" y2="${e(yLow, 2)}" stroke="${color}" stroke-width="1"/>`);
-    parts.push(`<rect x="${e(x - barWidth / 2, 2)}" y="${e(yTop, 2)}" width="${e(barWidth, 2)}" height="${e(bodyH, 2)}" fill="${color}"/>`);
+    ctx.strokeStyle = color; ctx.fillStyle = color;
+    ctx.beginPath(); ctx.moveTo(x, getY(d.high)); ctx.lineTo(x, getY(d.low)); ctx.stroke();
+    const bTop = getY(Math.max(d.open, d.close));
+    const bBot = getY(Math.min(d.open, d.close));
+    ctx.fillRect(x - barWidth/2, bTop, barWidth, Math.max(Math.abs(bBot - bTop), 1));
   });
 
-  // ── 8. Price tag (last close) ──────────────────────────────────────────────
+  // 9. 現價標籤
   const last = visibleData[visibleData.length - 1];
   const lastY = getY(last.close);
-  const tagX = width - pad.right + 5;
-  const boxW = 80;
-  const boxH = 24;
-  const arrowPts = `${tagX},${e(lastY, 2)} ${tagX + 8},${e(lastY - boxH / 2, 2)} ${tagX + boxW},${e(lastY - boxH / 2, 2)} ${tagX + boxW},${e(lastY + boxH / 2, 2)} ${tagX + 8},${e(lastY + boxH / 2, 2)}`;
-  parts.push(`<polygon points="${arrowPts}" fill="#facc15"/>`);
-  parts.push(`<text x="${tagX + 12}" y="${e(lastY + 4.5, 2)}" fill="#000" font-family="NotoSans" font-size="13" font-weight="bold">${last.close.toFixed(2)}</text>`);
+  const boxW = 75, boxH = 24;
+  const tagX = width - padding.right + 5;
 
-  // ── 9. Legend ──────────────────────────────────────────────────────────────
-  const legendItems: Array<{ color: string; label: string; isRect?: boolean }> = [
-    { color: '#ffffff', label: 'MA5' },
-    { color: '#f59e0b', label: 'MA20' },
-    { color: '#3b82f6', label: 'MA60' },
-  ];
-  let lx = pad.left;
-  legendItems.forEach(({ color, label }) => {
-    parts.push(`<rect x="${lx}" y="29" width="15" height="3" fill="${color}"/>`);
-    parts.push(`<text x="${lx + 20}" y="33" fill="#9ca3af" font-family="NotoSans" font-size="12" font-weight="bold" dominant-baseline="middle">${label}</text>`);
-    lx += 75;
-  });
-  parts.push(`<rect x="${lx + 10}" y="25" width="8" height="12" fill="#ef4444"/>`);
-  parts.push(`<rect x="${lx + 20}" y="25" width="8" height="12" fill="#22c55e"/>`);
-  parts.push(`<text x="${lx + 35}" y="33" fill="#9ca3af" font-family="NotoSans" font-size="12" font-weight="bold" dominant-baseline="middle">Trend (Red Up / Green Down)</text>`);
+  ctx.fillStyle = '#facc15';
+  ctx.beginPath();
+  ctx.moveTo(tagX, lastY);
+  ctx.lineTo(tagX + 8, lastY - boxH / 2);
+  ctx.lineTo(tagX + boxW, lastY - boxH / 2);
+  ctx.lineTo(tagX + boxW, lastY + boxH / 2);
+  ctx.lineTo(tagX + 8, lastY + boxH / 2);
+  ctx.closePath();
+  ctx.fill();
 
-  // ── Assemble SVG ───────────────────────────────────────────────────────────
-  const fontFace = `@font-face { font-family: 'NotoSans'; src: url('data:font/ttf;base64,${NOTO_SANS_BOLD_B64}'); font-weight: bold; }`;
-  const svg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">`,
-    `<defs><style>${fontFace}</style></defs>`,
-    ...parts,
-    `</svg>`,
-  ].join('');
+  ctx.fillStyle = '#000';
+  ctx.font = FONT_SANS;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(last.close.toFixed(2), tagX + 12, lastY);
 
-  const resvg = new Resvg(svg, {
-    font: {
-      fontBuffers: [Buffer.from(NOTO_SANS_BOLD_B64, 'base64')],
-      defaultFontFamily: 'NotoSans',
-      defaultFontSize: 13,
-    },
-  });
-  const rendered = resvg.render();
-  return Buffer.from(rendered.asPng());
+  return canvas.toBuffer('image/png');
 }

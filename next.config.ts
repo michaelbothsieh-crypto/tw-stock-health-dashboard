@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@napi-rs/canvas", "@resvg/resvg-js"],
+  serverExternalPackages: ["@napi-rs/canvas"],
 };
 
 export default nextConfig;
