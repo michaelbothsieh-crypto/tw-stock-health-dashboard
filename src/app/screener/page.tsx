@@ -95,7 +95,8 @@ export default function ScreenerPage() {
       slowEma,
       trendEma,
     ],
-    queryFn: async () => {
+    queryFn: async ({ queryKey }) => {
+      // 這裡判斷是否為手動觸發 (或是透過 refetch 傳入參數)
       const query = new URLSearchParams({
         limit: "80",
         turnoverYi,
@@ -106,13 +107,45 @@ export default function ScreenerPage() {
         slowEma,
         trendEma,
       });
+      
+      // 如果是透過 refetch() 呼叫，我們可以選擇在這裡加入強制重新整理的標記
+      // 但更直覺的方式是在點擊按鈕時直接修改 query
       const response = await fetch(`/api/screener/breakout?${query.toString()}`);
       if (!response.ok) {
         throw new Error("取得突破選股資料失敗");
       }
       return response.json();
     },
+    staleTime: 1000 * 60 * 60, // 1 小時內不自動刷新 (除非參數變動)
+    refetchOnWindowFocus: false, // 視窗切換回來時不自動刷新
   });
+
+  // 手動強制重新掃描的函數
+  const handleManualRefresh = async () => {
+    const query = new URLSearchParams({
+      limit: "80",
+      turnoverYi,
+      rsi: minRsi,
+      crossDays,
+      relativeVolumeMultiplier,
+      fastEma,
+      slowEma,
+      trendEma,
+      refresh: "true", // 傳送強制刷新指令給後端
+    });
+    
+    // 直接呼叫 API 並讓 React Query 更新快取
+    try {
+      const res = await fetch(`/api/screener/breakout?${query.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        // 這裡我們不呼叫 refetch()，而是直接更新客戶端資料，或者呼叫 refetch 讓它去抓剛更新好的快取
+        refetch();
+      }
+    } catch (e) {
+      console.error("Manual refresh failed", e);
+    }
+  };
 
   return (
     <div className="mx-auto w-full max-w-[1600px] px-4 pb-12 pt-6 lg:px-8 lg:pt-10">
@@ -131,7 +164,7 @@ export default function ScreenerPage() {
           </p>
         </div>
         <Button
-          onClick={() => refetch()}
+          onClick={handleManualRefresh}
           variant="outline"
           className="w-fit rounded-xl border-neutral-800 bg-neutral-900/50 backdrop-blur-sm text-neutral-200 hover:bg-neutral-800 transition-all px-6"
           disabled={isFetching}

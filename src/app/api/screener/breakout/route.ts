@@ -199,9 +199,13 @@ export async function GET(req: NextRequest) {
   }
 
   const cacheKey = `screener:breakout:v5:${limit}:turnover=${minTurnover}:rsi=${minRsi}:crossDays=${maxCrossAgeDays}:rv=${minRelativeVolumeMultiplier}:f=${fastEma}:s=${slowEma}:t=${trendEma}`;
-  const cached = await getCache<unknown>(cacheKey);
-  if (cached) {
-    return NextResponse.json(cached);
+  const isForceRefresh = req.nextUrl.searchParams.get("refresh") === "true";
+
+  if (!isForceRefresh) {
+    const cached = await getCache<unknown>(cacheKey);
+    if (cached) {
+      return NextResponse.json(cached);
+    }
   }
 
   try {
@@ -273,7 +277,7 @@ export async function GET(req: NextRequest) {
       },
     };
 
-    await setCache(cacheKey, result, 300);
+    await setCache(cacheKey, result, 600);
     return NextResponse.json(result);
   } catch (error: unknown) {
     console.error("[Screener] breakout scan failed:", error);
