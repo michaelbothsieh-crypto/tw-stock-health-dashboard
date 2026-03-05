@@ -54,6 +54,8 @@ export async function GET(
   try {
     const { ticker } = await params;
     const debugMode = req.nextUrl.searchParams.get("debug") === "1";
+    const mode = req.nextUrl.searchParams.get("mode") || "full";
+    const isLite = mode === "lite";
     const warnings: string[] = [];
 
     let norm;
@@ -95,7 +97,7 @@ export async function GET(
     }
 
     // --- 2. 檢查 Redis 快取 ---
-    const cacheKey = `snapshot:${norm.symbol}:v2`; // v2 區隔舊有快取
+    const cacheKey = `snapshot:${norm.symbol}:v3:${mode}`; // v3 區隔舊有快取與 mode
     if (!debugMode) {
       const cachedData = await getCache<any>(cacheKey);
       if (cachedData) {
@@ -452,11 +454,75 @@ export async function GET(
       strategy.confidence = Math.max(0, strategy.confidence * (1 - crashWarning.score / 150));
     }
 
+    // --- Lite Mode Logic: Skip heavy computations if requested ---
+    let playbookResult = { shortSummary: "數據整理中", tacticalScript: "", telegramCaption: "" };
+    let globalLinkageResultData = null;
+    let insiderTransfersResultData: any[] = [];
+
+    if (isLite) {
+      // 在精簡模式下，我們只回傳基礎分數與數據，不進行 AI 與複雜運算
+      playbookResult.shortSummary = explainBreakdown.trend.reasons[0]?.replace('。', '') || "趨勢分析中";
+    } else {
+      // Parallelize Global Linkage, Crash Warning, and Insider Transfers (Full Mode Only)
+      const [glRes, marketData, itRes] = await Promise.all([
+        (async () => {
+          const stockProfile = await resolveStockProfile(norm.symbol, displayName);
+          const { members: allMembers, targetClusterId } = await getOrComputeClusters(norm.symbol, mappedPricesTw, 15);
+          const clusterMembers = Array.from(allMembers.values()).filter(m => m.clusterId === targetClusterId);
+          const themeName = stockProfile.sectorZh;
+          const usMapping = mapThemeToUS(themeName, norm.symbol);
+          const twPeerLinkage = await selectTwPeers(norm.symbol, clusterMembers, themeName, allMembers);
+          const allUsSymbols = Array.from(new Set([usMapping.sector.id, ...usMapping.hints]));
+          const globalDataMap: Record<string, any[]> = {};
+          let globalFetchSuccess = true;
+          try {
+            const globalBars = await Promise.all(allUsSymbols.map(async (sym) => ({ symbol: sym, bars: await fetchYahooFinanceBars(sym, 120) })));
+            for (const res of globalBars) { if (res.bars.length === 0) globalFetchSuccess = false; globalDataMap[res.symbol] = res.bars; }
+          } catch (e) { globalFetchSuccess = false; }
+          let selectedDrivers = selectDrivers(mappedPricesTw, usMapping, globalDataMap);
+          let relativeStrength = calculateRelativeStrength(mappedPricesTw, selectedDrivers.sector, globalDataMap);
+          return { linkage: { profile: stockProfile, drivers: selectedDrivers, relativeStrength, twPeerLinkage }, warning: null };
+        })(),
+        getMarketIndicators({
+          symbols: ["^VIX", "^MOVE", "SOXX", "QQQ", "^DXY", "DX-Y.NYB", "UUP", "USDJPY=X", "JPY=X"],
+          rangeDays: 65
+        }),
+        (async () => {
+          if (!isTaiwanStock(norm.symbol)) return [];
+          try { return await getFilteredInsiderTransfers(norm.symbol); } catch (e) { return []; }
+        })()
+      ]);
+
+      globalLinkageResultData = glRes.linkage;
+      insiderTransfersResultData = itRes;
+      
+      playbookResult = await getTacticalPlaybook({
+        ticker: norm.symbol,
+        stockName: companyNameZh || norm.symbol,
+        price: latestClose,
+        support: keyLevels.supportLevel || (technicalTactics?.levels.support ?? 0),
+        resistance: keyLevels.breakoutLevel || (technicalTactics?.levels.resistance ?? 0),
+        macroRisk: evaluateCrashWarning(marketData).score ?? 0,
+        technicalTrend: technicalTactics?.signals[0]?.status || "趨勢不明",
+        flowScore: flowSignals.flowScore ?? 50,
+        smartMoneyFlow: flowSignals.smartMoneyFlow,
+        retailSentiment: flowSignals.retailSentiment,
+        flowVerdict: flowSignals.flowVerdict,
+        institutionalLots: flowSignals.institutionalLots,
+        trustLots: flowSignals.trustLots,
+        marginLots: flowSignals.marginLots,
+        shortLots: flowSignals.shortLots,
+        insiderTransfers: insiderTransfersResultData,
+        recentTrend,
+        recentNews: snapshotData.news.slice(0, 5).map((n: any) => typeof n === 'string' ? n : `[${n.date?.split(' ')[0]}] ${n.title}`),
+      });
+    }
+
     const finalPayload = {
       // Watchlist specific fields (Single Source of Truth)
       stockName: companyNameZh || norm.symbol,
       score: Math.round(strategy.confidence),
-      shortSummary: playbook.shortSummary || "數據整理中",
+      shortSummary: playbookResult.shortSummary || "數據整理中",
 
       overallHealthScore: Math.round(strategy.confidence), // Maintain backward compatibility if used elsewhere
       normalizedTicker: {
@@ -495,8 +561,8 @@ export async function GET(
       },
       technicals,
       technicalTactics,
-      playbook,
-      insiderTransfers,
+      playbook: playbookResult,
+      insiderTransfers: insiderTransfersResultData,
       signals: {
         trend: trendSignals,
         flow: flowSignals,
@@ -508,7 +574,7 @@ export async function GET(
       consistency,
       strategy,
       institutionCorrelation,
-      globalLinkage,
+      globalLinkage: globalLinkageResultData,
       crashWarning,
       keyLevels,
       realTimeQuote: {

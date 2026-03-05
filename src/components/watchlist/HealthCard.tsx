@@ -23,7 +23,7 @@ export function HealthCard({ ticker, onRemove }: HealthCardProps) {
   useEffect(() => {
     async function fetchData() {
       try {
-        const res = await fetch(`/api/stock/${ticker}/snapshot`);
+        const res = await fetch(`/api/stock/${ticker}/snapshot?mode=lite`);
         if (!res.ok) throw new Error("Failed to fetch");
         const json = await res.json();
         setData(json);

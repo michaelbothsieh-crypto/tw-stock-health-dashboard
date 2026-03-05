@@ -5,6 +5,17 @@ import { registerChatId } from "@/lib/telegram/chatStore";
 export async function POST(req: Request) {
   try {
     const origin = new URL(req.url).origin;
+
+    // Security check: Validate secret token if configured
+    const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (secret) {
+      const token = req.headers.get("x-telegram-bot-api-secret-token");
+      if (token !== secret) {
+        console.warn("[TelegramWebhook] Unauthorized access attempt blocked.");
+        return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+      }
+    }
+
     const body = await req.json();
 
     // Validate the typical Telegram Webhook shape
