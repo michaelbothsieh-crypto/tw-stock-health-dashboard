@@ -1,6 +1,7 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { getCache, setCache } from "@/lib/providers/redisCache";
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 import { format, subDays } from "date-fns";
 import {
   FinmindProviderError,
