@@ -3,18 +3,18 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Loader2, AlertCircle } from "lucide-react";
-import { SnapshotResponse } from "@/components/layout/types";
 import { getSharedScoreStyle } from "@/lib/ux/scoreStyles";
 
 interface HealthCardProps {
   ticker: string;
   onRemove: (ticker: string) => void;
+  onDataLoaded?: (score: number) => void;
 }
 
 /**
- * Watchlist Health Card - 深層對齊主頁面狀態與 AI 短評
+ * Watchlist Health Card - 重新內斂版 (核心語意摘要)
  */
-export function HealthCard({ ticker, onRemove }: HealthCardProps) {
+export function HealthCard({ ticker, onRemove, onDataLoaded }: HealthCardProps) {
   const router = useRouter();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -27,6 +27,10 @@ export function HealthCard({ ticker, onRemove }: HealthCardProps) {
         if (!res.ok) throw new Error("Failed to fetch");
         const json = await res.json();
         setData(json);
+        
+        // 分數對齊與回傳
+        const score = json?.score !== undefined ? Math.round(json.score) : 0;
+        if (onDataLoaded) onDataLoaded(score);
       } catch (e) {
         console.error(`[HealthCard] Error fetching ${ticker}`, e);
         setError(true);
@@ -39,7 +43,7 @@ export function HealthCard({ ticker, onRemove }: HealthCardProps) {
 
   if (loading) {
     return (
-      <div className="bg-card rounded-2xl border border-neutral-800 p-6 flex flex-col items-center justify-center min-h-[220px] animate-pulse">
+      <div className="bg-card rounded-2xl border border-neutral-800 p-6 flex flex-col items-center justify-center min-h-[210px] animate-pulse">
         <Loader2 className="h-6 w-6 animate-spin text-neutral-600 mb-2" />
         <span className="text-xs text-neutral-600 font-bold uppercase tracking-widest">{ticker}</span>
       </div>
@@ -48,7 +52,7 @@ export function HealthCard({ ticker, onRemove }: HealthCardProps) {
 
   if (error || !data) {
     return (
-      <div className="bg-card rounded-2xl border border-rose-500/20 p-6 flex flex-col items-center justify-center min-h-[220px] relative group overflow-hidden">
+      <div className="bg-card rounded-2xl border border-rose-500/20 p-6 flex flex-col items-center justify-center min-h-[210px] relative group overflow-hidden">
         <div className="absolute left-0 top-0 bottom-0 w-1 bg-rose-500" />
         <button 
           onClick={(e) => { e.stopPropagation(); onRemove(ticker); }}
@@ -63,37 +67,45 @@ export function HealthCard({ ticker, onRemove }: HealthCardProps) {
     );
   }
 
-  // 讀取即時報價 (來自 snapshot API 內部)
-  const price = data?.price !== undefined ? data.price : data?.data?.prices?.[data.data.prices.length - 1]?.close;
-  const changePct = data?.changePct !== undefined ? data.changePct : 0;
-  const isUp = changePct > 0;
-  const isDown = changePct < 0;
+  const rt = data?.realTimeQuote;
+  const prices = data?.data?.prices || [];
+  const latestPrice = rt?.price !== undefined ? rt.price : (prices.length > 0 ? prices[prices.length - 1].close : null);
+  
+  let changePct = 0;
+  if (rt?.changePct !== undefined && rt?.changePct !== null) {
+    changePct = rt.changePct;
+  } else if (prices.length >= 2) {
+    const last = prices[prices.length - 1].close;
+    const prev = prices[prices.length - 2].close;
+    changePct = prev !== 0 ? ((last - prev) / prev) * 100 : 0;
+  }
 
-  // 資料清洗邏輯
+  const isUp = changePct > 0.001;
+  const isDown = changePct < -0.001;
+
   const rawName = data?.normalizedTicker?.companyNameZh || data?.stockName || '';
   const cleanName = rawName.replace(ticker, '').trim() || rawName || ticker;
-  
-  // 讀取與主控台 100% 同步的分數
   const realScore = data?.score !== undefined && data?.score !== null ? Math.round(data.score) : null;
   
-  // 讀取專屬短評
-  const aiSummary = data?.shortSummary || data?.strategy?.verdict || 'AI 深度分析中...';
+  // 重新內斂：移除 AI 語助詞，僅保留核心結論，不使用省略號
+  let aiSummary = data?.shortSummary || '趨勢分析中';
+  aiSummary = aiSummary
+    .replace('目前', '')
+    .replace('建議', '')
+    .replace('AI 深度分析中...', '正在診斷趨勢');
 
-  // 套用與主頁面完全相同的顏色邏輯
   const config = getSharedScoreStyle(realScore);
 
   return (
     <div 
       onClick={() => router.push(`/stock/${ticker}`)}
-      className={`group relative flex flex-col overflow-hidden rounded-2xl border p-5 min-h-[220px] cursor-pointer transition-all duration-500 hover:z-10 hover:scale-[1.02] ${config.container}`}
+      className={`group relative flex flex-col overflow-hidden rounded-2xl border p-5 min-h-[210px] cursor-pointer transition-all duration-500 hover:z-10 hover:scale-[1.02] ${config.container}`}
     >
-      {/* Side color bar */}
       <div className={`absolute left-0 top-0 bottom-0 w-1.5 opacity-80 ${config.dot}`} />
 
-      {/* Header: Name and Ticker */}
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between mb-3">
         <div className="flex flex-col min-w-0">
-          <span className="text-base font-black text-slate-100 truncate leading-tight">
+          <span className="text-[15px] font-black text-slate-100 truncate leading-tight">
             {cleanName}
           </span>
           <span className="text-[10px] font-bold text-neutral-500 tabular-nums">
@@ -108,32 +120,29 @@ export function HealthCard({ ticker, onRemove }: HealthCardProps) {
         </button>
       </div>
 
-      {/* Main Content: Price and Change */}
       <div className="flex flex-col mb-4">
         <div className="flex items-baseline gap-2">
-          <span className="text-2xl font-black text-neutral-100 tabular-nums">
-            {price?.toFixed(2) || '—'}
+          <span className="text-2xl font-black text-neutral-100 tabular-nums tracking-tighter">
+            {latestPrice !== null ? latestPrice.toFixed(2) : '—'}
           </span>
-          <span className={`text-xs font-bold tabular-nums ${isUp ? 'text-rose-500' : isDown ? 'text-emerald-500' : 'text-neutral-500'}`}>
+          <span className={`text-[13px] font-bold tabular-nums ${isUp ? 'text-rose-500' : isDown ? 'text-emerald-500' : 'text-neutral-500'}`}>
             {isUp ? '+' : ''}{changePct.toFixed(2)}%
           </span>
         </div>
       </div>
 
-      {/* Health Score Badge */}
       <div className="flex items-center gap-2 mb-4">
-        <div className={`flex items-center justify-center h-8 w-8 rounded-full border-2 text-[13px] font-black ${config.text} ${config.dot.replace('bg-', 'border-').replace('500', '500/30')}`}>
+        <div className={`flex items-center justify-center h-7 w-7 rounded-full border-2 text-[11px] font-black ${config.text} ${config.dot.replace('bg-', 'border-').replace('500', '500/30')}`}>
           {realScore ?? '-'}
         </div>
-        <div className={`text-[11px] font-bold uppercase tracking-wider ${config.text}`}>
+        <div className={`text-[10px] font-black uppercase tracking-wider ${config.text}`}>
           {config.weather}
         </div>
       </div>
 
-      {/* Bottom: AI Summary */}
-      <div className="mt-auto pt-4 border-t border-white/5">
-        <p className="text-[11px] font-medium text-slate-400 line-clamp-2 leading-relaxed group-hover:text-slate-200 transition-colors italic">
-          "{aiSummary}"
+      <div className="mt-auto pt-3 border-t border-white/5">
+        <p className="text-[11px] font-bold text-slate-400 line-clamp-2 leading-relaxed group-hover:text-slate-200 transition-colors italic">
+          {aiSummary}
         </p>
       </div>
     </div>
