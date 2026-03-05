@@ -63,15 +63,21 @@ export function HealthCard({ ticker, onRemove }: HealthCardProps) {
     );
   }
 
-  // 資料清洗邏輯 (確保股名防呆)
-  const rawName = data?.stockName || '';
+  // 讀取即時報價 (來自 snapshot API 內部)
+  const price = data?.price !== undefined ? data.price : data?.data?.prices?.[data.data.prices.length - 1]?.close;
+  const changePct = data?.changePct !== undefined ? data.changePct : 0;
+  const isUp = changePct > 0;
+  const isDown = changePct < 0;
+
+  // 資料清洗邏輯
+  const rawName = data?.normalizedTicker?.companyNameZh || data?.stockName || '';
   const cleanName = rawName.replace(ticker, '').trim() || rawName || ticker;
   
-  // 讀取與主控台 100% 同步的分數 (Data.score 已經在 API 中對齊 strategy.confidence)
+  // 讀取與主控台 100% 同步的分數
   const realScore = data?.score !== undefined && data?.score !== null ? Math.round(data.score) : null;
   
-  // 讀取專屬短評 (若 API 未回傳或抓取失敗，給予預設提示)
-  const aiSummary = data?.shortSummary || 'AI 深度分析中...';
+  // 讀取專屬短評
+  const aiSummary = data?.shortSummary || data?.strategy?.verdict || 'AI 深度分析中...';
 
   // 套用與主頁面完全相同的顏色邏輯
   const config = getSharedScoreStyle(realScore);
@@ -79,43 +85,55 @@ export function HealthCard({ ticker, onRemove }: HealthCardProps) {
   return (
     <div 
       onClick={() => router.push(`/stock/${ticker}`)}
-      className={`group relative flex flex-col items-center justify-center overflow-hidden rounded-2xl border p-6 min-h-[220px] cursor-pointer transition-all duration-500 ${config.container}`}
+      className={`group relative flex flex-col overflow-hidden rounded-2xl border p-5 min-h-[220px] cursor-pointer transition-all duration-500 hover:z-10 hover:scale-[1.02] ${config.container}`}
     >
       {/* Side color bar */}
-      <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${config.dot}`} />
+      <div className={`absolute left-0 top-0 bottom-0 w-1.5 opacity-80 ${config.dot}`} />
 
-      {/* 左上角：名稱與膠囊代號 */}
-      <div className="absolute top-4 left-5 flex items-center min-w-0 max-w-[85%]">
-        <span className="text-base font-black text-slate-100 truncate">
-          {cleanName}
-        </span>
-        <span className="ml-2 px-1.5 py-0.5 rounded border border-white/10 bg-white/5 text-[9px] font-bold text-muted-foreground uppercase tracking-wider tabular-nums shrink-0">
-          {ticker}
-        </span>
+      {/* Header: Name and Ticker */}
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex flex-col min-w-0">
+          <span className="text-base font-black text-slate-100 truncate leading-tight">
+            {cleanName}
+          </span>
+          <span className="text-[10px] font-bold text-neutral-500 tabular-nums">
+            {ticker}
+          </span>
+        </div>
+        <button 
+          onClick={(e) => { e.stopPropagation(); onRemove(ticker); }}
+          className="p-1.5 rounded-lg text-neutral-600 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
-      
-      {/* 右上角：移除按鈕 */}
-      <button 
-        onClick={(e) => { e.stopPropagation(); onRemove(ticker); }}
-        className="absolute top-3 right-3 p-2 rounded-lg text-neutral-600 hover:text-rose-500 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100 md:opacity-100 z-10"
-      >
-        <X className="h-4 w-4" />
-      </button>
 
-      {/* 正中央：真實共用分數 */}
-      <div className="flex flex-col items-center justify-center mt-6">
-        <span className={`text-6xl font-black tabular-nums tracking-tighter transition-transform duration-500 group-hover:scale-110 ${config.text}`}>
-          {realScore !== null ? realScore : '-'}
-        </span>
-        <div className={`mt-2 text-[11px] font-bold opacity-80 flex items-center gap-1 ${config.text}`}>
+      {/* Main Content: Price and Change */}
+      <div className="flex flex-col mb-4">
+        <div className="flex items-baseline gap-2">
+          <span className="text-2xl font-black text-neutral-100 tabular-nums">
+            {price?.toFixed(2) || '—'}
+          </span>
+          <span className={`text-xs font-bold tabular-nums ${isUp ? 'text-rose-500' : isDown ? 'text-emerald-500' : 'text-neutral-500'}`}>
+            {isUp ? '+' : ''}{changePct.toFixed(2)}%
+          </span>
+        </div>
+      </div>
+
+      {/* Health Score Badge */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className={`flex items-center justify-center h-8 w-8 rounded-full border-2 text-[13px] font-black ${config.text} ${config.dot.replace('bg-', 'border-').replace('500', '500/30')}`}>
+          {realScore ?? '-'}
+        </div>
+        <div className={`text-[11px] font-bold uppercase tracking-wider ${config.text}`}>
           {config.weather}
         </div>
       </div>
 
-      {/* 底部：LLM 真實短評 */}
-      <div className="mt-4 px-2 text-center w-full">
-        <p className="text-[11px] font-medium text-slate-300 dark:text-neutral-300 line-clamp-2 leading-relaxed">
-          {aiSummary}
+      {/* Bottom: AI Summary */}
+      <div className="mt-auto pt-4 border-t border-white/5">
+        <p className="text-[11px] font-medium text-slate-400 line-clamp-2 leading-relaxed group-hover:text-slate-200 transition-colors italic">
+          "{aiSummary}"
         </p>
       </div>
     </div>

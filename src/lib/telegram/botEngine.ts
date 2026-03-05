@@ -442,10 +442,14 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
 }
 
 export async function generateBotReply(text: string, options?: TelegramHandleOptions): Promise<{ text: string, chartBuffer?: Buffer | null } | null> {
-   const [commandRaw, ...argParts] = text.trim().split(/\s+/);
+   const trimmedText = text.trim();
+   if (!trimmedText.startsWith("/")) return null;
+
+   const [commandRaw, ...argParts] = trimmedText.split(/\s+/);
    const command = commandRaw.toLowerCase().split("@")[0];
    const query = argParts.join(" ").trim();
-   if (command === "/tw" || command === "/stock") {
+
+   if (command === "/tw") {
       if (!query) return { text: "請輸入股票代號，例如: /tw 2330" };
       const liveCard = await fetchLiveStockCard(query, options?.baseUrl);
       if (liveCard) {
@@ -454,20 +458,30 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       }
       return { text: "找不到該股票資料。" };
    }
-   return { text: "請使用 /tw 指令。" };
+
+   // 如果不是正確指令，回傳 null 以保持沉默
+   return null;
 }
 
 export async function handleTelegramMessage(chatId: number, text: string, isBackgroundPush = false, options?: TelegramHandleOptions) {
    if (isBackgroundPush) return;
-   if (!text.startsWith("/")) return;
+
+   const reply = await generateBotReply(text, options);
+   if (!reply) return; // 如果沒有回覆內容（指令不正確），直接結束
+
    await ensureTelegramCommandsSynced();
    const [commandRaw] = text.trim().split(/\s+/);
    const command = commandRaw.toLowerCase().split("@")[0];
+
    let progressMessageId: number | null = null;
-   if (command === "/tw" || command === "/stock") progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
-   const reply = await generateBotReply(text, options);
-   if (reply) {
-      if (reply.chartBuffer) await replyWithCard(chatId, progressMessageId, reply.text, reply.chartBuffer);
-      else await replyOrEdit(chatId, progressMessageId, reply.text);
+   // 只有在確定要處理指令時才顯示 "搜尋中"
+   if (command === "/tw") {
+      progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
+   }
+
+   if (reply.chartBuffer) {
+      await replyWithCard(chatId, progressMessageId, reply.text, reply.chartBuffer);
+   } else {
+      await replyOrEdit(chatId, progressMessageId, reply.text);
    }
 }

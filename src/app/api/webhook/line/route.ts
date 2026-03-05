@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
                     const messages: line.messagingApi.Message[] = [];
 
                     // LINE 需要公開 HTTPS URL 才能傳圖，使用 /api/stock/{ticker}/chart 端點
-                    const isStockCmd = userText.startsWith("/stock") || userText.startsWith("/tw");
+                    const isStockCmd = userText.startsWith("/tw");
                     if (isStockCmd && reply.chartBuffer) {
                         // 從指令解析 ticker，例如 "/tw 2330" → "2330"
                         const parts = userText.trim().split(/\s+/);
