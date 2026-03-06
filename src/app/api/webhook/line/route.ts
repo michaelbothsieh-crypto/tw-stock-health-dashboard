@@ -36,6 +36,18 @@ export async function POST(req: NextRequest) {
         // 4. Process each event
         for (const event of events) {
             try {
+                // --- [ 處理加入好友事件 ] ---
+                if (event.type === "follow") {
+                    await client.replyMessage({
+                        replyToken: event.replyToken,
+                        messages: [{
+                            type: "text",
+                            text: "👋 歡迎使用 LazyTube & Stock 助手！\n\n您可以透過以下指令與我互動：\n\n📊 股票查詢：\n輸入 /tw <代號> (例：/tw 2330)\n\n🎥 影片摘要：\n輸入 /nlm <YouTube網址>\n\n輸入 /help 可隨時查看此說明。"
+                        }]
+                    });
+                    continue;
+                }
+
                 if (event.type !== "message" || event.message.type !== "text") {
                     continue;
                 }
@@ -48,6 +60,18 @@ export async function POST(req: NextRequest) {
                 }
 
                 console.log(`[LINE Webhook] Command detected: ${userText}`);
+
+                // --- [ 處理 /help 指令 ] ---
+                if (userText === "/help" || userText.toLowerCase() === "help") {
+                    await client.replyMessage({
+                        replyToken: event.replyToken,
+                        messages: [{
+                            type: "text",
+                            text: "🤖 助手指令手冊\n\n1️⃣ 查詢台股資訊\n格式：/tw <股票代號>\n範例：/tw 2330\n\n2️⃣ AI 影片摘要 (NotebookLM)\n格式：/nlm <YouTube網址> [額外指令]\n範例：/nlm https://youtu.be/... 給我一句話總結\n\n💡 提示：隨選摘要通常需要 1-2 分鐘處理時間。"
+                        }]
+                    });
+                    continue;
+                }
 
                 // --- [ 新增：LazyTube 整合邏輯 - 僅限 /nlm 指令 ] ---
                 if (userText.startsWith("/nlm")) {
