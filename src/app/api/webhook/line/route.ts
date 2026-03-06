@@ -57,16 +57,28 @@ export async function POST(req: NextRequest) {
                     const chat_id = event.source.userId || "";
 
                     if (videoUrl && (videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be"))) {
-                        // 1. 立即回覆 LINE 使用者
+                        // 1. 啟動 LINE 讀取中動畫 (最長 60 秒)
+                        try {
+                            await fetch(`https://api.line.me/v2/bot/chat/loading/start`, {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    "Authorization": `Bearer ${config.channelAccessToken}`
+                                },
+                                body: JSON.stringify({ chat_id: chat_id, loadingSeconds: 60 })
+                            });
+                        } catch (e) { console.error("Loading animation failed", e); }
+
+                        // 2. 立即回覆極簡狀態
                         await client.replyMessage({
                             replyToken: event.replyToken,
                             messages: [{
                                 type: "text",
-                                text: `⏳ 已收到 YouTube 任務，正在透過 NotebookLM 進行分析...\n\n🔗 URL: ${videoUrl}\n\n完成後將自動在此回傳結果。`
+                                text: `⏳ 摘要處理中... (約 1-2 分鐘)`
                             }]
                         });
 
-                        // 2. 轉發至 LazyTube Vercel API
+                        // 3. 轉發至 LazyTube Vercel API
                         const LAZYTUBE_URL = "https://lazy-tube-assistant.vercel.app/api/external-dispatch";
                         const SECRET = process.env.TG_WEBHOOK_SECRET || "G8jadcqb";
 
