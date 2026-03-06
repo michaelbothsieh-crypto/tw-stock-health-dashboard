@@ -136,7 +136,18 @@ export async function POST(req: NextRequest) {
                             const resData = await response.json();
                             console.log("[LINE] LazyTube Response:", response.status, resData);
                             
-                            if (response.status !== 200) {
+                            // 修正：處理白名單被拒絕的情況
+                            if (response.status === 403) {
+                                await client.pushMessage({
+                                    to: chat_id,
+                                    messages: [{
+                                        type: "text",
+                                        text: "⚠️ <b>權限不足</b>\n您尚未被授權使用 AI 摘要功能。請聯繫管理員提供您的 ID：\n" + chat_id
+                                    }]
+                                });
+                            }
+                            
+                            if (response.status !== 200 && response.status !== 403) {
                                 console.error("[LINE] Forwarding failed with status:", response.status);
                             }
                         } catch (forwardErr) {
