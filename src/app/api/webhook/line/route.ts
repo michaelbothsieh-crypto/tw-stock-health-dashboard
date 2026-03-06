@@ -62,16 +62,19 @@ export async function POST(req: NextRequest) {
                     else if (event.source.type === 'user') chat_id = event.source.userId;
 
                     if (videoUrl && (videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be"))) {
-                        // 1. 啟動 LINE 讀取中動畫 (僅提供動態回饋，不發送文字氣泡以達成零殘留)
+                        // 1. 啟動 LINE 讀取中動畫 (注意：此 API 僅支援 userId，不支援 groupId)
                         try {
-                            await fetch(`https://api.line.me/v2/bot/chat/loading/start`, {
-                                method: "POST",
-                                headers: {
-                                    "Content-Type": "application/json",
-                                    "Authorization": `Bearer ${config.channelAccessToken}`
-                                },
-                                body: JSON.stringify({ chatId: chat_id, loadingSeconds: 60 })
-                            });
+                            const targetUserId = event.source.userId;
+                            if (targetUserId) {
+                                await fetch(`https://api.line.me/v2/bot/chat/loading/start`, {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type": "application/json",
+                                        "Authorization": `Bearer ${config.channelAccessToken}`
+                                    },
+                                    body: JSON.stringify({ chatId: targetUserId, loadingSeconds: 60 })
+                                });
+                            }
                         } catch (e) { console.error("Loading animation failed", e); }
 
                         // 2. 轉發至 LazyTube Vercel API
