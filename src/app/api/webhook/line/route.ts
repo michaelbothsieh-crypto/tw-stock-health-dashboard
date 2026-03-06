@@ -54,7 +54,12 @@ export async function POST(req: NextRequest) {
                     const parts = userText.split(/\s+/); // 分割指令、網址、[prompt]
                     const videoUrl = parts[1];
                     const customPrompt = parts.slice(2).join(" ");
-                    const chat_id = event.source.userId || "";
+                    
+                    // 修正：支援群組與個人 ID 提取
+                    let chat_id = "";
+                    if (event.source.type === 'group') chat_id = event.source.groupId;
+                    else if (event.source.type === 'room') chat_id = event.source.roomId;
+                    else if (event.source.type === 'user') chat_id = event.source.userId;
 
                     if (videoUrl && (videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be"))) {
                         // 1. 啟動 LINE 讀取中動畫 (僅提供動態回饋，不發送文字氣泡以達成零殘留)
