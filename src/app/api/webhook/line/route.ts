@@ -73,6 +73,19 @@ export async function POST(req: NextRequest) {
                     continue;
                 }
 
+                // --- [ 處理 /my_id 指令 ] ---
+                if (userText === "/my_id") {
+                    const userId = event.source.userId || "無法取得 ID";
+                    await client.replyMessage({
+                        replyToken: event.replyToken,
+                        messages: [{
+                            type: "text",
+                            text: `您的 LINE User ID 為：\n${userId}`
+                        }]
+                    });
+                    continue;
+                }
+
                 // --- [ 新增：LazyTube 整合邏輯 - 僅限 /nlm 指令 ] ---
                 if (userText.startsWith("/nlm")) {
                     const parts = userText.split(/\s+/); // 分割指令、網址、[prompt]
