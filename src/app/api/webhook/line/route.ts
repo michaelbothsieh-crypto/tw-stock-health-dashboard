@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
                     const chat_id = event.source.userId || "";
 
                     if (videoUrl && (videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be"))) {
-                        // 1. 啟動 LINE 讀取中動畫 (最長 60 秒)
+                        // 1. 啟動 LINE 讀取中動畫 (僅提供動態回饋，不發送文字氣泡以達成零殘留)
                         try {
                             await fetch(`https://api.line.me/v2/bot/chat/loading/start`, {
                                 method: "POST",
@@ -69,16 +69,7 @@ export async function POST(req: NextRequest) {
                             });
                         } catch (e) { console.error("Loading animation failed", e); }
 
-                        // 2. 立即回覆極簡狀態
-                        await client.replyMessage({
-                            replyToken: event.replyToken,
-                            messages: [{
-                                type: "text",
-                                text: `⏳ 摘要處理中... (約 1-2 分鐘)`
-                            }]
-                        });
-
-                        // 3. 轉發至 LazyTube Vercel API
+                        // 2. 轉發至 LazyTube Vercel API
                         const LAZYTUBE_URL = "https://lazy-tube-assistant.vercel.app/api/external-dispatch";
                         const SECRET = process.env.TG_WEBHOOK_SECRET || "G8jadcqb";
 
