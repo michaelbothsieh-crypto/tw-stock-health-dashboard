@@ -43,16 +43,14 @@ export async function POST(req: NextRequest) {
                 const userText = event.message.text.trim();
                 console.log(`[LINE Webhook] Processing text from user: ${userText}`);
 
-                // --- [ 新增：LazyTube 整合邏輯 ] ---
-                const ytRegex = /(https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\/\S+)/i;
-                const ytMatch = userText.match(ytRegex);
-
-                if (ytMatch || userText.startsWith("/nlm")) {
-                    const videoUrl = ytMatch ? ytMatch[1] : userText.split(" ")[1];
-                    const customPrompt = userText.startsWith("/nlm") ? userText.split(" ").slice(2).join(" ") : "";
+                // --- [ 新增：LazyTube 整合邏輯 - 僅限 /nlm 指令 ] ---
+                if (userText.startsWith("/nlm")) {
+                    const parts = userText.split(/\s+/); // 分割指令、網址、[prompt]
+                    const videoUrl = parts[1];
+                    const customPrompt = parts.slice(2).join(" ");
                     const chat_id = event.source.userId || "";
 
-                    if (videoUrl) {
+                    if (videoUrl && (videoUrl.includes("youtube.com") || videoUrl.includes("youtu.be"))) {
                         // 1. 立即回覆 LINE 使用者
                         await client.replyMessage({
                             replyToken: event.replyToken,
@@ -63,7 +61,6 @@ export async function POST(req: NextRequest) {
                         });
 
                         // 2. 轉發至 LazyTube Vercel API
-                        // 注意：請確保 LAZYTUBE_API_URL 與 TG_WEBHOOK_SECRET 已設定在環境變數
                         const LAZYTUBE_URL = "https://lazy-tube-assistant.vercel.app/api/external-dispatch";
                         const SECRET = process.env.TG_WEBHOOK_SECRET || "G8jadcqb";
 
@@ -84,7 +81,16 @@ export async function POST(req: NextRequest) {
                         } catch (forwardErr) {
                             console.error("[LINE] Forwarding to LazyTube failed:", forwardErr);
                         }
-                        continue; // 處理完 YouTube 任務後跳過後續股票邏輯
+                        continue; 
+                    } else {
+                        await client.replyMessage({
+                            replyToken: event.replyToken,
+                            messages: [{
+                                type: "text",
+                                text: "❌ <b>格式錯誤</b>\n請使用：<code>/nlm &lt;YouTube網址&gt; [指令]</code>"
+                            }]
+                        });
+                        continue;
                     }
                 }
 
