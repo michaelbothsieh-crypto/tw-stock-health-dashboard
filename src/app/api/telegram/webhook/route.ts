@@ -29,12 +29,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, reason: "No text or chat id missing" });
     }
 
-    // 自動把 chat_id 存入 Redis，實現動態廣播更新
+    const userText = text.trim();
+
+    // 立即過濾非指令訊息，不執行任何註冊或 Log
+    if (!userText.startsWith("/")) {
+      return NextResponse.json({ ok: true, reason: "Not a command" });
+    }
+
+    // 只有指令訊息才會走到這裡：註冊 ID 並處理
     await registerChatId(chat.id);
 
-    // Process asynchronously (Vercel Serverless allows short execution background tasks or awaiting here if it's within 10s)
-    // We will await it directly to ensure we reply before lambda freezing.
-    await handleTelegramMessage(chat.id, text.trim(), false, { baseUrl: origin });
+    // Process asynchronously
+    await handleTelegramMessage(chat.id, userText, false, { baseUrl: origin });
 
     return NextResponse.json({ ok: true });
   } catch (error: any) {
