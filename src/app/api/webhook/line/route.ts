@@ -41,7 +41,13 @@ export async function POST(req: NextRequest) {
                 }
 
                 const userText = event.message.text.trim();
-                console.log(`[LINE Webhook] Processing text from user: ${userText}`);
+
+                // 立即過濾非指令訊息，不留 Log
+                if (!userText.startsWith("/")) {
+                    continue;
+                }
+
+                console.log(`[LINE Webhook] Command detected: ${userText}`);
 
                 // --- [ 新增：LazyTube 整合邏輯 - 僅限 /nlm 指令 ] ---
                 if (userText.startsWith("/nlm")) {
@@ -65,7 +71,8 @@ export async function POST(req: NextRequest) {
                         const SECRET = process.env.TG_WEBHOOK_SECRET || "G8jadcqb";
 
                         try {
-                            await fetch(LAZYTUBE_URL, {
+                            console.log(`[LINE] Forwarding to: ${LAZYTUBE_URL} with Secret: ${SECRET.substring(0, 3)}...`);
+                            const response = await fetch(LAZYTUBE_URL, {
                                 method: "POST",
                                 headers: {
                                     "Content-Type": "application/json",
@@ -77,7 +84,13 @@ export async function POST(req: NextRequest) {
                                     chat_id: chat_id
                                 })
                             });
-                            console.log("[LINE] Forwarded to LazyTube successfully");
+                            
+                            const resData = await response.json();
+                            console.log("[LINE] LazyTube Response:", response.status, resData);
+                            
+                            if (response.status !== 200) {
+                                console.error("[LINE] Forwarding failed with status:", response.status);
+                            }
                         } catch (forwardErr) {
                             console.error("[LINE] Forwarding to LazyTube failed:", forwardErr);
                         }
