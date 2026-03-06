@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
                                     "Content-Type": "application/json",
                                     "Authorization": `Bearer ${config.channelAccessToken}`
                                 },
-                                body: JSON.stringify({ chat_id: chat_id, loadingSeconds: 60 })
+                                body: JSON.stringify({ chatId: chat_id, loadingSeconds: 60 })
                             });
                         } catch (e) { console.error("Loading animation failed", e); }
 
