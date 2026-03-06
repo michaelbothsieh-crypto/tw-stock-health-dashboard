@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
                         replyToken: event.replyToken,
                         messages: [{
                             type: "text",
-                            text: "🤖 助手指令手冊\n\n1️⃣ 查詢台股資訊\n格式：/tw <股票代號>\n範例：/tw 2330\n\n2️⃣ AI 影片摘要 (NotebookLM)\n格式：/nlm <YouTube網址> [額外指令]\n範例：/nlm https://youtu.be/... 給我一句話總結\n\n💡 提示：隨選摘要通常需要 1-2 分鐘處理時間。"
+                            text: "🤖 助手指令手冊\n\n1️⃣ 查詢台股資訊\n格式：/tw <股票代號>\n範例：/tw 2330\n\n2️⃣ AI 影片摘要 (需開通)\n格式：/nlm <YouTube網址>\n⚠️ 注意：使用前請先輸入 /my_id 取得您的 ID，並傳送給管理員開通權限後方可使用。\n\n💡 提示：隨選摘要通常需要 1-2 分鐘處理時間。"
                         }]
                     });
                     continue;
