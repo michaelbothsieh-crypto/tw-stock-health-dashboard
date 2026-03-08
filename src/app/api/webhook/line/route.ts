@@ -186,13 +186,13 @@ export async function POST(req: NextRequest) {
           const videoUrl = parts[1];
           const customPrompt = parts.slice(2).join(" ");
 
-          if (!videoUrl || (!videoUrl.includes("youtube.com") && !videoUrl.includes("youtu.be"))) {
+          if (!videoUrl || !videoUrl.startsWith("http")) {
             await client.replyMessage({
               replyToken: event.replyToken,
               messages: [
                 {
                   type: "text",
-                  text: `格式錯誤\n請使用：${command === "nlm" ? "/nlm" : `/${command}`} <YouTube網址>`,
+                  text: `格式錯誤\n請使用：${command === "nlm" ? "/nlm" : `/${command}`} <網址>`,
                 },
               ],
             });
