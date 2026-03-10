@@ -1,23 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { mapErrorCodeToZh } from "@/i18n/zh-TW";
 
-/** 判斷目前對應市場是否在交易時段 */
-function isMarketOpen(ticker: string): boolean {
-  const now = new Date();
-  const day = now.getUTCDay(); // 0=Sun, 6=Sat
-  if (day === 0 || day === 6) return false;
-
-  const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const isTW = /^\d{4,5}$/.test(ticker) || /\.(TW|TWO)$/i.test(ticker);
-
-  if (isTW) {
-    // 台股：9:00–13:30 CST = 01:00–05:30 UTC
-    return utcMins >= 60 && utcMins <= 330;
-  } else {
-    // 美股：9:30–16:00 ET ≈ 13:30–21:00 UTC（含夏令/冬令寬裕）
-    return utcMins >= 810 && utcMins <= 1260;
-  }
-}
+import { isMarketOpen } from "@/lib/market";
 
 export function useStockSnapshot(ticker: string) {
   return useQuery({

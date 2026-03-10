@@ -17,6 +17,7 @@ import {
    parseSignedNumberLoose,
    syncLevel,
 } from "./formatters";
+import { isMarketOpen } from "@/lib/market";
 
 type TelegramStockRow = {
    symbol: string;
@@ -382,11 +383,18 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       }
 
       // 2. 注入 Yahoo 即時報價 (最高優先權)
+      const marketOpen = isMarketOpen(symbol);
       if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
-         card.close = rtQuote.regularMarketPrice;
-         card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : card.chgPct;
-         card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : card.chgAbs;
-         card.volume = rtQuote.regularMarketVolume || card.volume;
+         // 在盤後如果 Yahoo 給了一個相差很大的價格 (例如 > 5%)，則傾向相信 Snapshot (來自 FinMind)
+         // 這能防止有些 Yahoo Quote 在盤後誤傳盤後撮合價或 (bid+ask)/2
+         const mismatch = !marketOpen && card.close !== null && Math.abs(rtQuote.regularMarketPrice - card.close) / card.close > 0.05;
+
+         if (!mismatch) {
+            card.close = rtQuote.regularMarketPrice;
+            card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : card.chgPct;
+            card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : card.chgAbs;
+            card.volume = rtQuote.regularMarketVolume || card.volume;
+         }
 
          // 將今日即時報價合併進 Bars 陣列
          if (card.close !== null) {

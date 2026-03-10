@@ -61,6 +61,29 @@ export async function detectMarket(symbol: string): Promise<MarketDetectionResul
     return result;
 }
 
+/** 判斷目前對應市場是否在交易時段（含台、美股簡易定義） */
+export function isMarketOpen(ticker: string): boolean {
+    const now = new Date();
+    // 取得當前 UTC 分鐘數：(Hours*60) + Minutes
+    const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const day = now.getUTCDay(); // 0=Sun, 6=Sat
+
+    // 簡易判斷台股
+    const isTW = /^\d{4,6}$/.test(ticker) || /\.(TW|TWO)$/i.test(ticker);
+
+    if (isTW) {
+        // 台股：週一至週五 9:00~13:30 CST
+        // CST = UTC+8，故 UTC 時間為 1:00~5:30
+        if (day === 0 || day === 6) return false;
+        return utcMins >= 60 && utcMins <= 330;
+    } else {
+        // 美股：週一至週五 9:30~16:00 ET (夏令 UTC-4=13:30, 冬令 UTC-5=14:30)
+        // 抓個大概區間 13:30~21:00 UTC
+        if (day === 0 || day === 6) return false;
+        return utcMins >= 810 && utcMins <= 1260;
+    }
+}
+
 // 方便測試時清理 cache
 export function clearMarketCache() {
     marketCache.clear();

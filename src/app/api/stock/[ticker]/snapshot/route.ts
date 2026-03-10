@@ -15,7 +15,7 @@ import { calculateFlow } from "@/lib/signals/flow";
 import { calculateFundamental } from "@/lib/signals/fundamental";
 import { generateExplanation } from "@/lib/ai/explain";
 import { normalizeTicker } from "@/lib/ticker";
-import { detectMarket } from "@/lib/market";
+import { detectMarket, isMarketOpen } from "@/lib/market";
 import { fetchRecentBars } from "@/lib/range";
 import { calculateCatalystScore } from "@/lib/news/catalystScore";
 import { calculateShortTermVolatility } from "@/lib/signals/shortTermVolatility";
@@ -220,11 +220,19 @@ export async function GET(
     // ── 即時報價（提前抓，讓 keyLevels 也能納入今日盤中 H/L）──────────
     const fLatestClose = prices[prices.length - 1].close;
     const fPrevClose = prices.length >= 2 ? prices[prices.length - 2].close : fLatestClose;
+
     if (liveQuote && !liveQuote.previousClose) {
       liveQuote.previousClose = fPrevClose;
       if (fPrevClose !== 0) liveQuote.changePct = ((liveQuote.price - fPrevClose) / fPrevClose) * 100;
     }
-    const latestClose = liveQuote ? liveQuote.price : fLatestClose;
+
+    const marketOpen = isMarketOpen(ticker);
+    // 在盤後，如果 Yahoo 的 regularMarketPrice 怪怪的（例如超過收盤 5% 或變成盤後價），則回退到 FinMind 的收盤
+    let latestClose = liveQuote ? liveQuote.price : fLatestClose;
+    if (!marketOpen && liveQuote && Math.abs(liveQuote.price - fLatestClose) / fLatestClose > 0.05) {
+      console.log(`[Snapshot] Post-market price mismatch detected for ${ticker}. Yahoo: ${liveQuote.price}, FinMind: ${fLatestClose}. Preferring FinMind.`);
+      latestClose = fLatestClose;
+    }
     const realTimeChangePct = liveQuote ? liveQuote.changePct : undefined;
 
     // 建立含今日即時 bar 的 mappedPrices（供 keyLevels 計算）
@@ -495,7 +503,7 @@ export async function GET(
 
       globalLinkageResultData = glRes.linkage;
       insiderTransfersResultData = itRes;
-      
+
       playbookResult = await getTacticalPlaybook({
         ticker: norm.symbol,
         stockName: companyNameZh || norm.symbol,
