@@ -31,12 +31,22 @@ export async function POST(req: Request) {
 
     const userText = text.trim();
 
-    // 立即過濾非指令訊息，不執行任何註冊或 Log
+    // 1. 立即過濾非指令訊息
     if (!userText.startsWith("/")) {
       return NextResponse.json({ ok: true, reason: "Not a command" });
     }
 
-    // 只有指令訊息才會走到這裡：註冊 ID 並處理
+    // 2. 指令白名單：僅處理與本專案相關的指令
+    const [commandRaw] = userText.split(/\s+/);
+    const command = commandRaw.toLowerCase().split("@")[0];
+    const ALLOWED_COMMANDS = ["/tw", "/daily", "/stock", "/watchlist", "/setlist", "/start", "/help"];
+    
+    if (!ALLOWED_COMMANDS.includes(command)) {
+      // 若非專屬指令（例如 /nlm, /pic），直接結束並保持沉默
+      return NextResponse.json({ ok: true, reason: "Ignored: not a stock-specific command" });
+    }
+
+    // 只有白名單內的指令才會走到這裡：註冊 ID 並處理
     await registerChatId(chat.id);
 
     // Process asynchronously
