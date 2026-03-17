@@ -51,7 +51,7 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
       high: d.highPrice ?? price,
       low: d.lowPrice ?? price,
       open: d.openPrice ?? price,
-      isRealTime: true,
+      isRealTime: true as const,
     };
     console.info(`[FugleQuote] ${code} ✓ 即時價 ${price} (${quote.changePct >= 0 ? "+" : ""}${quote.changePct.toFixed(2)}%)`);
     return quote;
