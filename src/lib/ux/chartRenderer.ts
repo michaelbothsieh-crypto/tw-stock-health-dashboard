@@ -94,6 +94,28 @@ export async function renderStockChart(
     ctx.fillText(p.toFixed(1), width - padding.right + 10, y + 4);
   }
 
+  // 4.1 支撐 / 壓力線
+  const drawLevel = (label: string, price: number | null, color: string) => {
+    if (price === null) return;
+    if (price < minPrice || price > maxPrice) return;
+    const y = getY(price);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(width - padding.right, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${label} ${price.toFixed(2)}`, width - padding.right + 10, y);
+  };
+  drawLevel('R', resistance, '#ef4444');
+  drawLevel('S', support, '#22c55e');
+
   // 時間軸
   const labelInterval = Math.ceil(visibleData.length / 6);
   visibleData.forEach((d, i) => {
