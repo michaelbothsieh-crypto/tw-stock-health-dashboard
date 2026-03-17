@@ -356,7 +356,10 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
    const baseUrl = getSnapshotBaseUrl(overrideBaseUrl);
    if (!baseUrl) return null;
    try {
-      const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`);
+      // Timeout 20 秒，防止 snapshot API 掛住讓 bot 卡死
+      const controller = new AbortController();
+      const snapTimer = setTimeout(() => controller.abort(), 20000);
+      const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`, { signal: controller.signal }).finally(() => clearTimeout(snapTimer));
       if (!snapRes.ok) return null;
       const snapshot = await snapRes.json();
 
@@ -464,7 +467,12 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.resistance = snapshot?.keyLevels?.breakoutLevel || key.resistance;
 
       if (processedBars.length >= 2) {
-         card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
+         try {
+            card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
+         } catch {
+            // 圖表渲染失敗不影響文字卡片
+            card.chartBuffer = null;
+         }
       }
 
       card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? Math.round(snapshot.signals.flow.foreign5D / 1000) : null;
@@ -483,7 +491,9 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
       card.flowScore = snapshot?.signals?.flow?.flowScore ?? undefined;
       card.macroRisk = snapshot?.crashWarning?.score ?? undefined;
-      card.isPriceRealTime = fugleQuote !== null;
+      // 只有台股才能用 Fugle，非台股（美股）不標示延遲
+      const isTWStock = /^\d{4}$/.test(symbol);
+      card.isPriceRealTime = isTWStock ? fugleQuote !== null : undefined;
 
       return card;
    } catch (error) { return null; }
