@@ -32,7 +32,10 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
         cache: "no-store",
       }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[FugleQuote] ${code} → HTTP ${res.status}, falling back to Yahoo`);
+      return null;
+    }
 
     const d = await res.json();
 
@@ -40,7 +43,7 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
     const prevClose: number = d.previousClose ?? d.referencePrice;
     if (!price || !prevClose) return null;
 
-    return {
+    const quote = {
       price,
       changePct: prevClose !== 0 ? ((price - prevClose) / prevClose) * 100 : 0,
       changeAbs: price - prevClose,
@@ -50,7 +53,10 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
       open: d.openPrice ?? price,
       isRealTime: true,
     };
-  } catch {
+    console.info(`[FugleQuote] ${code} ✓ 即時價 ${price} (${quote.changePct >= 0 ? "+" : ""}${quote.changePct.toFixed(2)}%)`);
+    return quote;
+  } catch (e) {
+    console.warn(`[FugleQuote] ${code} 例外錯誤, falling back to Yahoo`, e);
     return null;
   }
 }
