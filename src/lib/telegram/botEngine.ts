@@ -359,7 +359,7 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
    if (!baseUrl) return null;
    try {
       const controller = new AbortController();
-      const snapTimer = setTimeout(() => controller.abort(), 20000);
+      const snapTimer = setTimeout(() => controller.abort(), 30000);
       const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`, { signal: controller.signal }).finally(() => clearTimeout(snapTimer));
       if (!snapRes.ok) return null;
       const snapshot = await snapRes.json();

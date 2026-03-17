@@ -123,13 +123,13 @@ export async function fetchStockSnapshot(norm: { symbol: string; market: string;
 
     return {
       displayName: usFundamentals.name,
-      prices: pricesResult.map(p => ({ 
-        date: p.date, 
-        open: p.close, 
-        high: p.close, 
-        low: p.close, 
-        close: p.close, 
-        volume: 0 
+      prices: pricesResult.map(p => ({
+        date: p.date,
+        open: p.open,
+        high: p.high,
+        low: p.low,
+        close: p.close,
+        volume: p.volume,
       })),
       fundamentals: {
         revenue: [], // US doesn't use FinMind monthly revenue array

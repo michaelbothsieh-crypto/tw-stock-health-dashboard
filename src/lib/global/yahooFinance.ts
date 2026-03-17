@@ -1,6 +1,10 @@
 export interface YahooBar {
   date: string;
+  open: number;
+  high: number;
+  low: number;
   close: number;
+  volume: number;
 }
 
 export async function fetchYahooFinanceBars(symbol: string, days: number = 100): Promise<YahooBar[]> {
@@ -15,16 +19,24 @@ export async function fetchYahooFinanceBars(symbol: string, days: number = 100):
     const data = await res.json();
     const result = data.chart?.result?.[0];
     if (!result) return [];
-    
+
     const timestamps = result.timestamp;
-    const closes = result.indicators?.quote?.[0]?.close;
-    
-    if (!timestamps || !closes) return [];
-    
+    const quote = result.indicators?.quote?.[0];
+
+    if (!timestamps || !quote?.close) return [];
+
     return timestamps.map((ts: number, i: number) => {
-      const date = new Date(ts * 1000).toISOString().split('T')[0];
-      return { date, close: closes[i] };
-    }).filter((x: any) => x.close !== null && x.close !== undefined);
+      const close = quote.close[i];
+      if (close === null || close === undefined) return null;
+      return {
+        date: new Date(ts * 1000).toISOString().split('T')[0],
+        open: quote.open?.[i] ?? close,
+        high: quote.high?.[i] ?? close,
+        low: quote.low?.[i] ?? close,
+        close,
+        volume: quote.volume?.[i] ?? 0,
+      };
+    }).filter(Boolean) as YahooBar[];
   } catch (e) {
     console.error(`Failed to fetch Yahoo Finance for ${symbol}`, e);
     return [];
