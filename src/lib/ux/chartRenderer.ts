@@ -52,12 +52,13 @@ export async function renderStockChart(
   // 2. 計算比例（過濾異常資料點，防止壞資料壓縮 Y 軸）
   const closes = [...visibleData.map(d => d.close)].sort((a, b) => a - b);
   const medianClose = closes[Math.floor(closes.length / 2)];
-  // 只用距中位數 ±50% 以內的價格計算 Y 軸範圍
-  const validPrices = visibleData
-    .flatMap(d => [d.high, d.low])
-    .filter(p => p > medianClose * 0.5 && p < medianClose * 1.5);
-  const minPrice = Math.min(...validPrices) * 0.98;
-  const maxPrice = Math.max(...validPrices) * 1.02;
+  // 先用距中位數 ±50% 的價格估算範圍，但一定要包含真實高低點避免被裁切
+  const rawPrices = visibleData.flatMap(d => [d.high, d.low]);
+  const filteredPrices = rawPrices.filter(p => p > medianClose * 0.5 && p < medianClose * 1.5);
+  const baseMin = filteredPrices.length ? Math.min(...filteredPrices) : Math.min(...rawPrices);
+  const baseMax = filteredPrices.length ? Math.max(...filteredPrices) : Math.max(...rawPrices);
+  const minPrice = Math.min(baseMin, Math.min(...rawPrices)) * 0.98;
+  const maxPrice = Math.max(baseMax, Math.max(...rawPrices)) * 1.02;
   const priceRange = maxPrice - minPrice;
   const maxVol = Math.max(...visibleData.map(d => d.volume), 1);
 

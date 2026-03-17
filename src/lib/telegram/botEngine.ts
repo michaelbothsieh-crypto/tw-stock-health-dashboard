@@ -424,28 +424,18 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
       card.support = snapshot?.keyLevels?.supportLevel || key.support;
       card.resistance = snapshot?.keyLevels?.breakoutLevel || key.resistance;
 
-      // 優先用自家 K 線圖（支撐/壓力/MA/趨勢線），失敗才回退 Finviz
-      if (processedBars.length >= 2) {
-         try {
-            card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
-         } catch {
-            card.chartBuffer = null;
+      // 美股直接用 Finviz 圖片
+      try {
+         const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
+         const chartRes = await fetch(finvizUrl, {
+            headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" },
+         });
+         if (chartRes.ok) {
+            const ab = await chartRes.arrayBuffer();
+            card.chartBuffer = Buffer.from(ab);
          }
-      }
-
-      if (!card.chartBuffer) {
-         try {
-            const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
-            const chartRes = await fetch(finvizUrl, {
-               headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" },
-            });
-            if (chartRes.ok) {
-               const ab = await chartRes.arrayBuffer();
-               card.chartBuffer = Buffer.from(ab);
-            }
-         } catch {
-            card.chartBuffer = null;
-         }
+      } catch {
+         card.chartBuffer = null;
       }
 
       card.p1d = snapshot?.predictions?.upProb1D;
