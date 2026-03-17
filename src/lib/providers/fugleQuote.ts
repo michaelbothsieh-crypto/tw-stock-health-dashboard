@@ -3,6 +3,7 @@
  * 免費方案：60 calls/min，永久有效
  * 文件：https://developer.fugle.tw/docs/marketdata/http-api/intraday/quote
  */
+import { getCache, setCache } from "@/lib/providers/redisCache";
 
 export type FugleQuote = {
   price: number;
@@ -25,6 +26,11 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
   // Fugle 只支援台股，strip .TW / .TWO suffix
   const code = symbol.replace(/\.(TW|TWO)$/i, "");
   if (!/^\d{4,}$/.test(code)) return null;
+
+  // 30s 快取，防止短時間內重複查詢同一檔股票超過 rate limit
+  const cacheKey = `fugle:quote:${code}`;
+  const cached = await getCache<FugleQuote>(cacheKey);
+  if (cached) return cached;
 
   try {
     const res = await fetch(
@@ -57,6 +63,7 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
       isRealTime: true as const,
     };
     console.info(`[FugleQuote] ${code} ✓ 即時價 ${price} (${quote.changePct >= 0 ? "+" : ""}${quote.changePct.toFixed(2)}%)`);
+    await setCache(cacheKey, quote, 30);
     return quote;
   } catch (e) {
     console.warn(`[FugleQuote] ${code} 例外錯誤, falling back to Yahoo`, e);

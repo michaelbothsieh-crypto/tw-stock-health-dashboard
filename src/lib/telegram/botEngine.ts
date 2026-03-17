@@ -87,6 +87,11 @@ type StockCard = {
    shortLots?: number;
    institutionalLots?: number;
    chartBuffer: Buffer | null;
+   // 從 snapshot 帶出，避免重複呼叫 AI
+   snapshotPlaybookCaption?: string;
+   snapshotVerdict?: string;
+   flowScore?: number;
+   macroRisk?: number;
 };
 
 type TelegramHandleOptions = {
@@ -310,15 +315,21 @@ function buildStockCardLines(card: StockCard, verdict: string = "數據整理中
 
 async function buildStockCardWithAI(card: StockCard): Promise<string> {
    try {
+      // 優先使用 snapshot 已計算好的 playbook（節省 LLM 呼叫）
+      if (card.snapshotPlaybookCaption) {
+         const structuredPart = buildStockCardLines(card, card.snapshotVerdict || "觀察中");
+         return `${structuredPart}\n\n💬 ${escapeHtml(card.snapshotPlaybookCaption)}`;
+      }
+      // Fallback：snapshot 沒有 playbook 時才重新呼叫 AI
       const playbook = await getTacticalPlaybook({
          ticker: card.symbol,
          stockName: card.nameZh,
          price: card.close || 0,
          support: card.support || 0,
          resistance: card.resistance || 0,
-         macroRisk: 0,
+         macroRisk: card.macroRisk ?? 0,
          technicalTrend: card.shortDir,
-         flowScore: 50,
+         flowScore: card.flowScore ?? 50,
          flowVerdict: card.shortDir,
          recentTrend: `目前現價 ${card.close}，今日漲跌幅 ${card.chgPct?.toFixed(2)}%，成交量 ${card.volume}。`,
          trustLots: card.trustLots || 0,
@@ -447,8 +458,9 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       }
 
       const key = calcSupportResistance(processedBars);
-      card.support = snapshot?.keyLevels?.support || key.support;
-      card.resistance = snapshot?.keyLevels?.resistance || key.resistance;
+      // snapshot 用 supportLevel / breakoutLevel，與本地計算結果互補
+      card.support = snapshot?.keyLevels?.supportLevel || key.support;
+      card.resistance = snapshot?.keyLevels?.breakoutLevel || key.resistance;
 
       if (processedBars.length >= 2) {
          card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
@@ -465,6 +477,11 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.shortLots = snapshot?.signals?.flow?.shortLots || 0;
       card.marginLots = snapshot?.signals?.flow?.marginLots || 0;
       card.institutionalLots = snapshot?.signals?.flow?.institutionalLots || 0;
+      // 帶出 snapshot 已計算好的 playbook，避免重複呼叫 LLM
+      card.snapshotPlaybookCaption = snapshot?.playbook?.telegramCaption || snapshot?.playbook?.tacticalScript || undefined;
+      card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
+      card.flowScore = snapshot?.signals?.flow?.flowScore ?? undefined;
+      card.macroRisk = snapshot?.crashWarning?.score ?? undefined;
 
       return card;
    } catch (error) { return null; }
