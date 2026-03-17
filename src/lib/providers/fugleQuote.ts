@@ -18,10 +18,7 @@ export type FugleQuote = {
 
 export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null> {
   const apiKey = process.env.FUGLE_API_KEY;
-  if (!apiKey) {
-    console.warn("[FugleQuote] FUGLE_API_KEY 未設定，falling back to Yahoo");
-    return null;
-  }
+  if (!apiKey) return null;
 
   // Fugle 只支援台股，strip .TW / .TWO suffix
   const code = symbol.replace(/\.(TW|TWO)$/i, "");
@@ -37,14 +34,10 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
       `https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/${code}`,
       {
         headers: { "X-API-KEY": apiKey },
-        // Next.js: 不快取，每次都拿最新
         cache: "no-store",
       }
     );
-    if (!res.ok) {
-      console.warn(`[FugleQuote] ${code} → HTTP ${res.status}, falling back to Yahoo`);
-      return null;
-    }
+    if (!res.ok) return null;
 
     const d = await res.json();
 
@@ -62,11 +55,9 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
       open: d.openPrice ?? price,
       isRealTime: true as const,
     };
-    console.info(`[FugleQuote] ${code} ✓ 即時價 ${price} (${quote.changePct >= 0 ? "+" : ""}${quote.changePct.toFixed(2)}%)`);
     await setCache(cacheKey, quote, 30);
     return quote;
-  } catch (e) {
-    console.warn(`[FugleQuote] ${code} 例外錯誤, falling back to Yahoo`, e);
+  } catch {
     return null;
   }
 }
