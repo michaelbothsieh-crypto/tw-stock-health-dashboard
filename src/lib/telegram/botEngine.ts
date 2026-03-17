@@ -619,13 +619,31 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
    }
 
    if (command === "/us") {
-      if (!query) return { text: "請輸入美股代號，例如: /us NVDA" };
-      const liveCard = await fetchLiveUsStockCard(query.toUpperCase(), options?.baseUrl);
-      if (liveCard) {
-         const finalMsg = await buildStockCardWithAI(liveCard);
-         return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
+      if (!query) return { text: "請輸入美股代號，例如:\n/us NVDA\n/us NVDA,AAPL,TSLA" };
+
+      const tickers = query.split(/[,，\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean).slice(0, 5);
+
+      if (tickers.length === 1) {
+         const liveCard = await fetchLiveUsStockCard(tickers[0], options?.baseUrl);
+         if (liveCard) {
+            const finalMsg = await buildStockCardWithAI(liveCard);
+            return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
+         }
+         return { text: "找不到該股票資料，請確認代號是否正確（例：AAPL、NVDA）。" };
       }
-      return { text: "找不到該股票資料，請確認代號是否正確（例：AAPL、NVDA）。" };
+
+      // 多檔並行查詢（最多 5 檔），不附圖
+      const cards = await Promise.all(tickers.map(t => fetchLiveUsStockCard(t, options?.baseUrl)));
+      const parts: string[] = [];
+      for (let i = 0; i < tickers.length; i++) {
+         const card = cards[i];
+         if (!card) {
+            parts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料`));
+         } else {
+            parts.push(buildStockCardLines(card, card.snapshotVerdict || "觀察中"));
+         }
+      }
+      return { text: parts.join("\n\n" + escapeHtml("──────────") + "\n\n"), chartBuffer: null };
    }
 
    // 如果不是正確指令，回傳 null 以保持沉默
