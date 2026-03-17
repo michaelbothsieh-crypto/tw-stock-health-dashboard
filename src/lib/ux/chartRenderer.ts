@@ -27,12 +27,13 @@ export async function renderStockChart(
   support: number | null,
   resistance: number | null,
   symbol: string,
-  visibleCount: number = 180
+  visibleCount: number = 180,
+  options: { width?: number; height?: number } = {}
 ): Promise<Buffer> {
   ensureFonts();
 
-  const width = 1200;
-  const height = 650;
+  const width = options.width ?? 1200;
+  const height = options.height ?? 650;
   const padding = { top: 70, right: 120, bottom: 70, left: 60 };
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');

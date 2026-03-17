@@ -233,7 +233,10 @@ async function ensureTelegramCommandsSynced() {
          method: "POST",
          headers: { "Content-Type": "application/json" },
          body: JSON.stringify({
-            commands: [{ command: "tw", description: "查詢台股個股（例：/tw 2330）" }],
+            commands: [
+               { command: "tw", description: "查詢台股個股（例：/tw 2330）" },
+               { command: "us", description: "查詢美股個股（例：/us NVDA）" },
+            ],
          }),
       });
       commandsSynced = true;
@@ -348,6 +351,98 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
    } catch (e) { return buildStockCardLines(card); }
 }
 
+
+async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): Promise<StockCard | null> {
+   if (!/^[A-Z]{1,5}(\.[A-Z]{1,2})?$/i.test(ticker)) return null;
+   const symbol = ticker.toUpperCase();
+   const baseUrl = getSnapshotBaseUrl(overrideBaseUrl);
+   if (!baseUrl) return null;
+   try {
+      const controller = new AbortController();
+      const snapTimer = setTimeout(() => controller.abort(), 20000);
+      const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`, { signal: controller.signal }).finally(() => clearTimeout(snapTimer));
+      if (!snapRes.ok) return null;
+      const snapshot = await snapRes.json();
+
+      const rtQuoteRaw = await yahooFinance.quote(symbol).catch(() => null);
+      const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
+
+      let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
+      let processedBars = bars.map((b: any) => ({
+         date: b.date || "",
+         open: Number(b.open || b.close || 0),
+         high: Number(b.high || b.close || 0),
+         low: Number(b.low || b.close || 0),
+         close: Number(b.close || 0),
+         volume: Number(b.volume || b.Trading_Volume || 0)
+      }));
+
+      const card: StockCard = {
+         symbol,
+         nameZh: String(snapshot?.normalizedTicker?.companyNameZh || snapshot?.normalizedTicker?.name || symbol),
+         close: null, chgPct: null, chgAbs: null, volume: null, volumeVs5dPct: null, flowNet: null, flowUnit: "股",
+         shortDir: "中立", strategySignal: "觀察", confidence: null, p1d: null, p3d: null, p5d: null,
+         support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "snapshot", insiderSells: [],
+         chartBuffer: null,
+      };
+
+      const todayStr = new Date().toLocaleDateString('en-CA');
+
+      if (processedBars.length >= 2) {
+         const latest = processedBars[processedBars.length - 1];
+         const prev = processedBars[processedBars.length - 2];
+         card.close = latest.close;
+         card.chgAbs = latest.close - prev.close;
+         card.chgPct = prev.close !== 0 ? (card.chgAbs / prev.close) * 100 : 0;
+         const volInfo = calcVolumeVs5d(processedBars);
+         card.volume = volInfo.volume;
+         card.volumeVs5dPct = volInfo.volumeVs5dPct;
+      }
+
+      if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
+         card.close = rtQuote.regularMarketPrice;
+         card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : card.chgPct;
+         card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : card.chgAbs;
+         card.volume = rtQuote.regularMarketVolume || card.volume;
+
+         if (card.close !== null) {
+            const lastBar = processedBars[processedBars.length - 1];
+            const rtHigh = typeof rtQuote.regularMarketDayHigh === "number" ? rtQuote.regularMarketDayHigh : card.close;
+            const rtLow = typeof rtQuote.regularMarketDayLow === "number" ? rtQuote.regularMarketDayLow : card.close;
+            const rtOpen = typeof rtQuote.regularMarketOpen === "number" ? rtQuote.regularMarketOpen : card.close;
+            if (lastBar && lastBar.date === todayStr) {
+               processedBars[processedBars.length - 1] = { ...lastBar, close: card.close, high: Math.max(lastBar.high, rtHigh), low: Math.min(lastBar.low, rtLow), volume: card.volume || lastBar.volume };
+            } else {
+               processedBars = [...processedBars, { date: todayStr, open: rtOpen, high: rtHigh, low: rtLow, close: card.close, volume: card.volume || 0 }];
+            }
+         }
+         const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
+         card.volumeVs5dPct = volInfo.volumeVs5dPct;
+      }
+
+      const key = calcSupportResistance(processedBars);
+      card.support = snapshot?.keyLevels?.supportLevel || key.support;
+      card.resistance = snapshot?.keyLevels?.breakoutLevel || key.resistance;
+
+      if (processedBars.length >= 2) {
+         try {
+            card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
+         } catch { card.chartBuffer = null; }
+      }
+
+      card.p1d = snapshot?.predictions?.upProb1D;
+      card.shortDir = buildTrendByProb(card.p1d);
+      card.strategySignal = snapshot?.strategy?.signal || "觀察";
+      card.confidence = snapshot?.strategy?.confidence;
+      card.newsLine = extractNewsLineFromSnapshot(snapshot);
+      card.snapshotPlaybookCaption = snapshot?.playbook?.telegramCaption || snapshot?.playbook?.tacticalScript || undefined;
+      card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
+      card.flowScore = snapshot?.signals?.flow?.flowScore ?? undefined;
+      card.macroRisk = snapshot?.crashWarning?.score ?? undefined;
+
+      return card;
+   } catch (error) { return null; }
+}
 
 async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Promise<StockCard | null> {
    const resolved = resolveCodeFromInputLocal(query);
@@ -517,6 +612,16 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       return { text: "找不到該股票資料。" };
    }
 
+   if (command === "/us") {
+      if (!query) return { text: "請輸入美股代號，例如: /us NVDA" };
+      const liveCard = await fetchLiveUsStockCard(query.toUpperCase(), options?.baseUrl);
+      if (liveCard) {
+         const finalMsg = await buildStockCardWithAI(liveCard);
+         return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
+      }
+      return { text: "找不到該股票資料，請確認代號是否正確（例：AAPL、NVDA）。" };
+   }
+
    // 如果不是正確指令，回傳 null 以保持沉默
    return null;
 }
@@ -529,7 +634,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
 
    // 先送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
-   if (command === "/tw") {
+   if (command === "/tw" || command === "/us") {
       await ensureTelegramCommandsSynced();
       progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
    }

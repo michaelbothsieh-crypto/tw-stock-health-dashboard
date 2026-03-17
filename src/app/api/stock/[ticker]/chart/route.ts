@@ -15,11 +15,12 @@ import { fetchFugleQuote } from "@/lib/providers/fugleQuote";
  * Cache-Control: 5 分鐘（盤中）；可用 ?ts= 強制 bust。
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ ticker: string }> },
 ) {
   try {
     const { ticker } = await params;
+    const isMobile = req.nextUrl.searchParams.get("mobile") === "1";
     let norm;
     try {
       norm = normalizeTicker(ticker);
@@ -33,7 +34,7 @@ export async function GET(
 
     // Redis 快取：同一檔股票 5 分鐘內不重複渲染（防 LINE CDN 重複抓）
     const todayStr = new Date().toLocaleDateString("en-CA");
-    const cacheKey = `chart:png:${norm.symbol}:${todayStr}`;
+    const cacheKey = `chart:png:${norm.symbol}:${todayStr}:${isMobile ? "m" : "d"}`;
     const cachedPng = await getCache<string>(cacheKey);
     if (cachedPng) {
       const buf = Buffer.from(cachedPng, "base64");
@@ -99,7 +100,8 @@ export async function GET(
     const support    = keyLevels.supportLevel  ?? null;
     const resistance = keyLevels.breakoutLevel ?? null;
 
-    const pngBuffer = await renderStockChart(chartData, support, resistance, norm.symbol, 180);
+    const chartOpts = isMobile ? { width: 800, height: 500 } : {};
+    const pngBuffer = await renderStockChart(chartData, support, resistance, norm.symbol, 180, chartOpts);
 
     // 快取 5 分鐘（base64 存 Redis）
     await setCache(cacheKey, (pngBuffer as Buffer).toString("base64"), 300);

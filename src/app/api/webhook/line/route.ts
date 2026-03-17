@@ -266,12 +266,12 @@ export async function POST(req: NextRequest) {
           .replace(/\*/g, "");
         const messages: line.messagingApi.Message[] = [];
 
-        const isStockCmd = userText.startsWith("/tw");
+        const isStockCmd = userText.startsWith("/tw") || userText.startsWith("/us");
         if (isStockCmd && reply.chartBuffer) {
           const parts = userText.trim().split(/\s+/);
           const rawTicker = parts[1]?.toUpperCase();
           if (rawTicker) {
-            const chartUrl = `${origin}/api/stock/${rawTicker}/chart`;
+            const chartUrl = `${origin}/api/stock/${rawTicker}/chart?mobile=1`;
             messages.push({
               type: "image",
               originalContentUrl: chartUrl,
