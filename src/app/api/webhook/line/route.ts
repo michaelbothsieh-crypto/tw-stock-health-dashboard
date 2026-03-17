@@ -255,7 +255,15 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        const cleanReply = reply.text.replace(/<[^>]*>?/gm, "").replace(/\*/g, "");
+        const cleanReply = reply.text
+          .replace(/<br\s*\/?>/gi, "\n")   // <br> → 換行
+          .replace(/<[^>]+>/g, "")         // 移除其餘 HTML 標籤
+          .replace(/&amp;/g, "&")          // 解 HTML entities
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/\*/g, "");
         const messages: line.messagingApi.Message[] = [];
 
         const isStockCmd = userText.startsWith("/tw");

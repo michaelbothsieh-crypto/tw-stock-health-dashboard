@@ -512,17 +512,20 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
 export async function handleTelegramMessage(chatId: number, text: string, isBackgroundPush = false, options?: TelegramHandleOptions) {
    if (isBackgroundPush) return;
 
-   const reply = await generateBotReply(text, options);
-   if (!reply) return; // 如果沒有回覆內容（指令不正確），直接結束
-
-   await ensureTelegramCommandsSynced();
    const [commandRaw] = text.trim().split(/\s+/);
    const command = commandRaw.toLowerCase().split("@")[0];
 
+   // 先送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
-   // 只有在確定要處理指令時才顯示 "搜尋中"
    if (command === "/tw") {
+      await ensureTelegramCommandsSynced();
       progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
+   }
+
+   const reply = await generateBotReply(text, options);
+   if (!reply) {
+      if (progressMessageId) await deleteMessage(chatId, progressMessageId);
+      return;
    }
 
    if (reply.chartBuffer) {
