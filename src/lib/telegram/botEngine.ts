@@ -95,11 +95,11 @@ type TelegramHandleOptions = {
 
 type SnapshotLike = {
    news?: {
-      topBullishNews?: Array<{ title?: string; sentiment?: string }>;
-      topBearishNews?: Array<{ title?: string; sentiment?: string }>;
-      topNews?: Array<{ title?: string; sentiment?: string }>;
-      timeline?: Array<{ title?: string; sentiment?: string }>;
-      items?: Array<{ title?: string; sentiment?: string }>;
+      topBullishNews?: Array<{ title?: string; sentiment?: string; date?: string }>;
+      topBearishNews?: Array<{ title?: string; sentiment?: string; date?: string }>;
+      topNews?: Array<{ title?: string; sentiment?: string; date?: string }>;
+      timeline?: Array<{ title?: string; sentiment?: string; date?: string }>;
+      items?: Array<{ title?: string; sentiment?: string; date?: string }>;
       error?: string | null;
    };
    newsMeta?: {
@@ -251,7 +251,8 @@ function buildTrendByProb(upProb1D: number | null): string {
 }
 
 function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
-   const allNews: Array<{ title?: string }> = [
+   const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000; // 2 天前
+   const allNews = [
       ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
       ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
       ...(Array.isArray(snapshot?.news?.topNews) ? snapshot.news.topNews : []),
@@ -260,7 +261,13 @@ function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
    ];
    for (const item of allNews) {
       const title = item?.title?.trim();
-      if (title && title.length > 0 && !title.startsWith("近")) return buildNewsLine(title, 96);
+      if (!title || title.length === 0 || title.startsWith("近")) continue;
+      // 有日期就過濾掉 2 天以上的舊聞
+      if (item.date) {
+         const newsTime = new Date(item.date).getTime();
+         if (!isNaN(newsTime) && newsTime < cutoff) continue;
+      }
+      return buildNewsLine(title, 96);
    }
    return "—（近期無重大新聞）";
 }
