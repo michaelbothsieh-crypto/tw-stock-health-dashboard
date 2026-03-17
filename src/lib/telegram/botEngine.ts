@@ -92,6 +92,7 @@ type StockCard = {
    snapshotVerdict?: string;
    flowScore?: number;
    macroRisk?: number;
+   isPriceRealTime?: boolean;
 };
 
 type TelegramHandleOptions = {
@@ -293,7 +294,7 @@ function buildStockCardLines(card: StockCard, verdict: string = "數據整理中
    const resistance = formatPrice(card.resistance, 2);
    const lines = [
       `${card.symbol} ${card.nameZh} [${verdict}]`,
-      `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）`,
+      `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）${card.isPriceRealTime === false ? "　⚠️延遲報價" : ""}`,
       `【量能】 ${volumeState}`,
       `【趨勢】 ${stanceText}（勝率 ${formatPct(card.confidence, 1)}）`,
       `【關鍵價】 支撐 ${support} ｜ 壓力 ${resistance}`,
@@ -482,6 +483,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
       card.flowScore = snapshot?.signals?.flow?.flowScore ?? undefined;
       card.macroRisk = snapshot?.crashWarning?.score ?? undefined;
+      card.isPriceRealTime = fugleQuote !== null;
 
       return card;
    } catch (error) { return null; }

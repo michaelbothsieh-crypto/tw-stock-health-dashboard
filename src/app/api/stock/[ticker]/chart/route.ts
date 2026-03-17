@@ -6,6 +6,8 @@ import { detectMarket } from "@/lib/market";
 import { fetchRecentBars } from "@/lib/range";
 import { renderStockChart, ChartDataPoint } from "@/lib/ux/chartRenderer";
 import { calculateKeyLevels } from "@/lib/signals/keyLevels";
+import { getCache, setCache } from "@/lib/providers/redisCache";
+import { fetchFugleQuote } from "@/lib/providers/fugleQuote";
 
 /**
  * GET /api/stock/{ticker}/chart
@@ -29,6 +31,18 @@ export async function GET(
     norm.market = marketInfo.market;
     norm.yahoo = marketInfo.yahoo;
 
+    // Redis 快取：同一檔股票 5 分鐘內不重複渲染（防 LINE CDN 重複抓）
+    const todayStr = new Date().toLocaleDateString("en-CA");
+    const cacheKey = `chart:png:${norm.symbol}:${todayStr}`;
+    const cachedPng = await getCache<string>(cacheKey);
+    if (cachedPng) {
+      const buf = Buffer.from(cachedPng, "base64");
+      return new NextResponse(buf as unknown as BodyInit, {
+        status: 200,
+        headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=300" },
+      });
+    }
+
     const rangeResult = await fetchRecentBars(norm.symbol, 180);
     const prices = rangeResult.data;
     if (prices.length < 2) {
@@ -44,45 +58,55 @@ export async function GET(
       volume: p.Trading_Volume,
     }));
 
-    // Inject today's real-time bar if available
+    // 即時報價：優先 Fugle（台股），fallback Yahoo
     try {
-      const { yf } = await import("@/lib/providers/yahooFinanceClient");
-      const yahooSym = norm.yahoo || `${norm.symbol}.TW`;
-      const rtRaw = await yf.quote(yahooSym);
-      const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;
-      if (rt && typeof rt.regularMarketPrice === "number") {
-        const todayStr = new Date().toLocaleDateString("en-CA");
+      const fugle = await fetchFugleQuote(norm.symbol);
+      let rtPrice: number | null = null, rtHigh: number | null = null, rtLow: number | null = null, rtOpen: number | null = null, rtVol: number | null = null;
+
+      if (fugle) {
+        rtPrice = fugle.price; rtHigh = fugle.high; rtLow = fugle.low; rtOpen = fugle.open; rtVol = fugle.volume;
+      } else {
+        const { yf } = await import("@/lib/providers/yahooFinanceClient");
+        const yahooSym = norm.yahoo || `${norm.symbol}.TW`;
+        const rtRaw = await yf.quote(yahooSym);
+        const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;
+        if (rt && typeof rt.regularMarketPrice === "number") {
+          rtPrice = rt.regularMarketPrice;
+          rtHigh = rt.regularMarketDayHigh ?? rtPrice;
+          rtLow = rt.regularMarketDayLow ?? rtPrice;
+          rtOpen = rt.regularMarketOpen ?? rtPrice;
+          rtVol = rt.regularMarketVolume ?? 0;
+        }
+      }
+
+      if (rtPrice !== null) {
         const last = chartData[chartData.length - 1];
-        const rtHigh = rt.regularMarketDayHigh ?? rt.regularMarketPrice;
-        const rtLow  = rt.regularMarketDayLow  ?? rt.regularMarketPrice;
-        const rtOpen = rt.regularMarketOpen     ?? rt.regularMarketPrice;
         if (last.date === todayStr) {
           chartData[chartData.length - 1] = {
-            ...last,
-            close: rt.regularMarketPrice,
-            high: Math.max(last.high, rtHigh),
-            low:  Math.min(last.low,  rtLow),
+            ...last, close: rtPrice,
+            high: Math.max(last.high, rtHigh ?? rtPrice),
+            low: Math.min(last.low, rtLow ?? rtPrice),
           };
         } else {
-          chartData.push({ date: todayStr, open: rtOpen, high: rtHigh, low: rtLow, close: rt.regularMarketPrice, volume: rt.regularMarketVolume || 0 });
+          chartData.push({ date: todayStr, open: rtOpen ?? rtPrice, high: rtHigh ?? rtPrice, low: rtLow ?? rtPrice, close: rtPrice, volume: rtVol ?? 0 });
         }
       }
     } catch {
-      // OK — proceed with historical data only
+      // 無即時報價，沿用歷史資料
     }
 
     const keyLevels = calculateKeyLevels(chartData);
-    const support    = keyLevels.supportLevel    ?? null;
-    const resistance = keyLevels.breakoutLevel   ?? null;
+    const support    = keyLevels.supportLevel  ?? null;
+    const resistance = keyLevels.breakoutLevel ?? null;
 
     const pngBuffer = await renderStockChart(chartData, support, resistance, norm.symbol, 180);
 
+    // 快取 5 分鐘（base64 存 Redis）
+    await setCache(cacheKey, (pngBuffer as Buffer).toString("base64"), 300);
+
     return new NextResponse(pngBuffer as unknown as BodyInit, {
       status: 200,
-      headers: {
-        "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=300, stale-while-revalidate=60",
-      },
+      headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=300, stale-while-revalidate=60" },
     });
   } catch (err) {
     console.error("[Chart API] Error:", err);
