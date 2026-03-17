@@ -5,6 +5,7 @@ import { getFilteredInsiderTransfers } from "../providers/twseInsiderFetch";
 import { twStockNames } from "../../data/twStockNames";
 import { renderStockChart, ChartDataPoint } from "../ux/chartRenderer";
 import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
+import { fetchFugleQuote } from "@/lib/providers/fugleQuote";
 import {
    buildNewsLine,
    buildStanceText,
@@ -346,8 +347,21 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          yahooSymbol = (symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5")) ? `${symbol}.TWO` : `${symbol}.TW`;
       }
 
-      const rtQuoteRaw = await yahooFinance.quote(yahooSymbol).catch(() => null);
-      const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
+      // 1. 優先用 Fugle 即時報價（台股，無延遲）
+      // 2. Fallback 到 Yahoo Finance（15-20 分鐘延遲）
+      const fugleQuote = await fetchFugleQuote(symbol);
+      const rtQuoteRaw = fugleQuote ? null : await yahooFinance.quote(yahooSymbol).catch(() => null);
+      const rtQuote: any = fugleQuote
+        ? {
+            regularMarketPrice: fugleQuote.price,
+            regularMarketChangePercent: fugleQuote.changePct,
+            regularMarketChange: fugleQuote.changeAbs,
+            regularMarketVolume: fugleQuote.volume,
+            regularMarketDayHigh: fugleQuote.high,
+            regularMarketDayLow: fugleQuote.low,
+            regularMarketOpen: fugleQuote.open,
+          }
+        : Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
 
       let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
       let processedBars = bars.map((b: any) => ({
