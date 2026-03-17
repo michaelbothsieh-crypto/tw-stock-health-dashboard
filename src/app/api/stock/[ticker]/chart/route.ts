@@ -44,6 +44,22 @@ export async function GET(
       });
     }
 
+    // 美股（字母代號）：直接 proxy Finviz 圖片
+    if (!/^\d/.test(norm.symbol)) {
+      const finvizUrl = `https://finviz.com/chart.ashx?t=${norm.symbol}&ty=c&ta=1&p=d`;
+      const chartRes = await fetch(finvizUrl, {
+        headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" },
+      });
+      if (!chartRes.ok) return new NextResponse("Chart not available", { status: 404 });
+      const ab = await chartRes.arrayBuffer();
+      const pngBuffer = Buffer.from(ab);
+      await setCache(cacheKey, pngBuffer.toString("base64"), 300);
+      return new NextResponse(pngBuffer as unknown as BodyInit, {
+        status: 200,
+        headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=300" },
+      });
+    }
+
     const rangeResult = await fetchRecentBars(norm.symbol, 180);
     const prices = rangeResult.data;
     if (prices.length < 2) {
