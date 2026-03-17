@@ -17,7 +17,10 @@ export type FugleQuote = {
 
 export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null> {
   const apiKey = process.env.FUGLE_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.warn("[FugleQuote] FUGLE_API_KEY 未設定，falling back to Yahoo");
+    return null;
+  }
 
   // Fugle 只支援台股，strip .TW / .TWO suffix
   const code = symbol.replace(/\.(TW|TWO)$/i, "");
