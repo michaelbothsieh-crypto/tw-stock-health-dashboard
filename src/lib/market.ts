@@ -68,8 +68,8 @@ export function isMarketOpen(ticker: string): boolean {
     const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
     const day = now.getUTCDay(); // 0=Sun, 6=Sat
 
-    // 簡易判斷台股
-    const isTW = /^\d{4,6}$/.test(ticker) || /\.(TW|TWO)$/i.test(ticker);
+    // 簡易判斷台股：包含數字或是帶有 .TW/.TWO 後綴
+    const isTW = /[0-9]/.test(ticker) || /\.(TW|TWO)$/i.test(ticker);
 
     if (isTW) {
         // 台股：週一至週五 9:00~13:30 CST

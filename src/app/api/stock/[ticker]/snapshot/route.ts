@@ -44,7 +44,7 @@ import { getTacticalPlaybook } from "@/lib/ai/playbookAgent";
 import { getFilteredInsiderTransfers } from "@/lib/providers/twseInsiderFetch";
 
 function isTaiwanStock(symbol: string) {
-  return /^\d+$/.test(symbol) || symbol.endsWith(".TW") || symbol.endsWith(".TWO");
+  return /[0-9]/.test(symbol) || symbol.endsWith(".TW") || symbol.endsWith(".TWO");
 }
 
 export async function GET(

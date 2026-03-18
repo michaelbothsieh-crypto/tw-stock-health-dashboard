@@ -244,14 +244,30 @@ async function ensureTelegramCommandsSynced() {
 }
 
 function resolveCodeFromInputLocal(input: string): string | null {
-   const query = input.trim();
-   const codeMatch = query.match(/^(\d{4,})(\.TW|\.TWO)?$/i);
+   const query = input.trim().toUpperCase();
+   if (!query) return null;
+
+   // 1. 優先直接匹配 Key (代號)
+   if (twStockNames[query]) return query;
+
+   // 2. 正規表示式匹配 (台股代號可能是 4-6 碼，包含字母如 00984B)
+   const codeMatch = query.match(/^([A-Z0-9]{4,6})(\.TW|\.TWO)?$/i);
    if (codeMatch) return codeMatch[1];
-   for (const [code, name] of Object.entries(twStockNames)) { if (name === query) return code; }
-   for (const [code, name] of Object.entries(twStockNames)) { if (name.includes(query) || query.includes(name)) return code; }
+
+   // 3. 匹配 Value (中文名稱) - 完全匹配優先
+   for (const [code, name] of Object.entries(twStockNames)) {
+      if (name === query) return code;
+   }
+
+   // 4. 模糊匹配 (至少輸入兩個字才進行模糊匹配，避免 "台" 匹配到 "台泥")
+   if (query.length >= 2) {
+      for (const [code, name] of Object.entries(twStockNames)) {
+         if (name.includes(query)) return code;
+      }
+   }
+
    return null;
 }
-
 function buildTrendByProb(upProb1D: number | null): string {
    if (upProb1D === null) return "中立";
    if (upProb1D >= 58) return "偏多";
@@ -453,8 +469,7 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
 }
 
 async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Promise<StockCard | null> {
-   const resolved = resolveCodeFromInputLocal(query);
-   const symbol = resolved || query.match(/^(\d{4,})(\.TW|\.TWO)?$/i)?.[1];
+   const symbol = resolveCodeFromInputLocal(query);
    if (!symbol) return null;
    const baseUrl = getSnapshotBaseUrl(overrideBaseUrl);
    if (!baseUrl) return null;
@@ -660,20 +675,29 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
 
    // 先送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
-   if (command === "/tw" || command === "/us") {
-      await ensureTelegramCommandsSynced();
-      progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
-   }
+   try {
+      if (command === "/tw" || command === "/us") {
+         await ensureTelegramCommandsSynced();
+         progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
+      }
 
-   const reply = await generateBotReply(text, options);
-   if (!reply) {
-      if (progressMessageId) await deleteMessage(chatId, progressMessageId);
-      return;
-   }
+      const reply = await generateBotReply(text, options);
+      if (!reply) {
+         if (progressMessageId) await deleteMessage(chatId, progressMessageId);
+         return;
+      }
 
-   if (reply.chartBuffer) {
-      await replyWithCard(chatId, progressMessageId, reply.text, reply.chartBuffer);
-   } else {
-      await replyOrEdit(chatId, progressMessageId, reply.text);
+      if (reply.chartBuffer) {
+         await replyWithCard(chatId, progressMessageId, reply.text, reply.chartBuffer);
+      } else {
+         await replyOrEdit(chatId, progressMessageId, reply.text);
+      }
+   } catch (error) {
+      console.error("[BotEngine] handleTelegramMessage Error:", error);
+      if (progressMessageId) {
+         await editMessage(chatId, progressMessageId, "抱歉，處理資料時發生錯誤。");
+      } else {
+         await sendMessage(chatId, "抱歉，處理資料時發生錯誤。");
+      }
    }
 }

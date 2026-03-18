@@ -19,15 +19,11 @@ export function normalizeTicker(input: string): NormalizedTicker {
     let yahoo = '';
 
     // 2. 正則判斷
-    const pureNumberMatch = cleanInput.match(/^(\d{4,6})$/);
-    const suffixMatch = cleanInput.match(/^(\d{4,6})\.(TW|TWO)$/);
+    const twSymbolMatch = cleanInput.match(/^([A-Z0-9]{4,6})$/);
+    const suffixMatch = cleanInput.match(/^([A-Z0-9]{4,6})\.(TW|TWO)$/);
     const usSymbolMatch = cleanInput.match(/^[A-Z]{1,5}$/);
 
-    if (pureNumberMatch) {
-        symbol = pureNumberMatch[1];
-        market = 'UNKNOWN';
-        yahoo = `${symbol}.TW`; // 預設用 .TW, 後續由 market.ts 修正
-    } else if (suffixMatch) {
+    if (suffixMatch) {
         symbol = suffixMatch[1];
         const suffix = suffixMatch[2];
         if (suffix === 'TW') {
@@ -37,9 +33,20 @@ export function normalizeTicker(input: string): NormalizedTicker {
             market = 'TPEX';
             yahoo = `${symbol}.TWO`;
         }
+    } else if (twSymbolMatch && /[0-9]/.test(cleanInput)) {
+        // 包含數字的 4-6 碼通常是台股
+        symbol = twSymbolMatch[1];
+        market = 'UNKNOWN';
+        yahoo = `${symbol}.TW`; // 預設用 .TW, 後續由 market.ts 修正
     } else if (usSymbolMatch) {
         symbol = cleanInput;
-        market = 'UNKNOWN'; // US stocks don't map to TW exchanges
+        market = 'UNKNOWN';
+        yahoo = symbol;
+    } else if (twSymbolMatch) {
+        // 全字母但長度 4-6，可能是台股也可能是美股 (如 AAPL, NVDA)
+        // 這裡暫且當作美股處理，除非有特別後綴
+        symbol = cleanInput;
+        market = 'UNKNOWN';
         yahoo = symbol;
     } else {
         throw new Error(`InvalidTickerFormat: 無效的股票代碼格式 '${input}'`);
