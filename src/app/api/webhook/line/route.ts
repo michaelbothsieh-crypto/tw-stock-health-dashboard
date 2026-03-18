@@ -272,9 +272,10 @@ export async function POST(req: NextRequest) {
           .replace(/&#39;/g, "'")
           .replace(/\*/g, "");
         const messages: line.messagingApi.Message[] = [];
-
         const isStockCmd = userText.startsWith("/tw") || userText.startsWith("/us");
-        if (isStockCmd && (reply.chartBuffer || userText.startsWith("/tw"))) {
+        
+        // 只有當成功產生圖表 (reply.chartBuffer 存在) 時才發送圖片訊息
+        if (isStockCmd && reply.chartBuffer) {
           const parts = userText.trim().split(/\s+/);
           const query = parts.slice(1).join(" ").trim();
           
