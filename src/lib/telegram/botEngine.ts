@@ -484,7 +484,9 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       let yahooSymbol = snapshot?.normalizedTicker?.yahoo;
       if (symbol === "8299") yahooSymbol = "8299.TWO";
       if (!yahooSymbol || yahooSymbol === symbol) {
-         yahooSymbol = (symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5")) ? `${symbol}.TWO` : `${symbol}.TW`;
+         // 修正推算邏輯：5、6、8 開頭，或是以 B 結尾（債券 ETF）通常是在 TPEX (.TWO)
+         const isTPEX = symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5") || symbol.toUpperCase().endsWith("B");
+         yahooSymbol = isTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
       }
 
       // 1. 優先用 Fugle 即時報價（台股，無延遲）
@@ -610,7 +612,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.flowScore = snapshot?.signals?.flow?.flowScore ?? undefined;
       card.macroRisk = snapshot?.crashWarning?.score ?? undefined;
       // 只有台股才能用 Fugle，非台股（美股）不標示延遲
-      const isTWStock = /^\d{4}$/.test(symbol);
+      const isTWStock = /[0-9]/.test(symbol);
       card.isPriceRealTime = isTWStock ? fugleQuote !== null : undefined;
 
       return card;

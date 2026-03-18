@@ -15,7 +15,21 @@
       "Bash(curl:*)",
       "Bash(unzip:*)",
       "Bash(sort -k2 -n)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "WebFetch(domain:finmind.github.io)",
+      "WebFetch(domain:finmindtrade.com)",
+      "WebFetch(domain:api.finmindtrade.com)",
+      "WebFetch(domain:developer.fugle.tw)",
+      "WebFetch(domain:api.fugle.tw)",
+      "WebFetch(domain:fugle.tw)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(curl -sk \"https://api.github.com/search/repositories?q=fugle+marketdata&sort=stars\" 2>&1 | python3 -c \"import json,sys; repos=json.load\\(sys.stdin\\)['items'][:3]; [print\\(r['full_name'], r['html_url']\\) for r in repos]\")",
+      "Bash(FUGLE_API_KEY=\"YjFhYzA4ZmMtY2UxZi00ZGM0LWI2N2MtOThmZWViZmRkMzAzIDAwZGMyOTEyLTRkMzAtNGYwNC1iN2I4LTRmZTI2YmFlOTUwMw==\"\ncurl -s \"https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/2330\" \\\\\n  -H \"X-API-KEY: $FUGLE_API_KEY\" | python3 -c \"\nimport json, sys\nd = json.load\\(sys.stdin\\)\nprint\\(f'股票: {d[\\\\\"symbol\\\\\"]} {d[\\\\\"name\\\\\"]}'\\)\nprint\\(f'現價: {d[\\\\\"lastPrice\\\\\"]}'\\)\nprint\\(f'昨收: {d[\\\\\"previousClose\\\\\"]}'\\)\nchg = d['lastPrice'] - d['previousClose']\nchgpct = chg / d['previousClose'] * 100\nprint\\(f'漲跌: {chg:+.0f} \\({chgpct:+.2f}%\\)'\\)\nprint\\(f'高/低: {d[\\\\\"highPrice\\\\\"]} / {d[\\\\\"lowPrice\\\\\"]}'\\)\nprint\\(f'成交量: {d[\\\\\"total\\\\\"][\\\\\"tradeVolume\\\\\"]} 張'\\)\n\")",
+      "Bash(gh auth:*)",
+      "Bash(FUGLE_API_KEY=\"YjFhYzA4ZmMtY2UxZi00ZGM0LWI2N2MtOThmZWViZmRkMzAzIDAwZGMyOTEyLTRkMzAtNGYwNC1iN2I4LTRmZTI2YmFlOTUwMw==\"\ncurl -s \"https://api.fugle.tw/marketdata/v1.0/stock/intraday/quote/2337\" \\\\\n  -H \"X-API-KEY: $FUGLE_API_KEY\" | python3 -c \"\nimport json, sys\nd = json.load\\(sys.stdin\\)\nprint\\(f'lastPrice: {d[\\\\\"lastPrice\\\\\"]}'\\)\nprint\\(f'tradeVolume: {d[\\\\\"total\\\\\"][\\\\\"tradeVolume\\\\\"]}'\\)\nprint\\(f'tradeValue: {d[\\\\\"total\\\\\"][\\\\\"tradeValue\\\\\"]}'\\)\n# 用成交值 / 成交價 反推股數\nshares = d['total']['tradeValue'] / d['lastPrice']\nlots = shares / 1000\nprint\\(f'推算: {shares:.0f} 股 = {lots:.0f} 張'\\)\nprint\\(f'所以 tradeVolume {d[\\\\\"total\\\\\"][\\\\\"tradeVolume\\\\\"]} 的單位是: {\\\\\"張\\\\\" if abs\\(d[\\\\\"total\\\\\"][\\\\\"tradeVolume\\\\\"] - lots\\) < lots*0.01 else \\\\\"股\\(shares\\)\\\\\"}'\\)\n\")",
+      "Bash(npm list:*)"
     ]
   }
 }

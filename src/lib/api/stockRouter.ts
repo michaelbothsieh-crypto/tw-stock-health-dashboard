@@ -15,7 +15,7 @@ import { getCompanyNameZh } from "@/lib/companyName";
 import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
 
 export async function fetchStockSnapshot(norm: { symbol: string; market: string; yahoo: string }): Promise<UnifiedStockSnapshot> {
-  const isTaiwanStock = /^\d+$/.test(norm.symbol) || norm.symbol.endsWith(".TW") || norm.symbol.endsWith(".TWO");
+  const isTaiwanStock = /[0-9]/.test(norm.symbol) || norm.symbol.endsWith(".TW") || norm.symbol.endsWith(".TWO");
   const warnings: string[] = [];
 
   if (isTaiwanStock) {
