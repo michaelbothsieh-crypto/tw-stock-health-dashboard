@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as line from "@line/bot-sdk";
 
-import { generateBotReply } from "@/lib/telegram/botEngine";
+import { generateBotReply, resolveCodeFromInputLocal } from "@/lib/telegram/botEngine";
 
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "",
@@ -11,6 +11,13 @@ const config = {
 const client = new line.messagingApi.MessagingApiClient({
   channelAccessToken: config.channelAccessToken,
 });
+
+function getSecureBaseUrl(origin: string): string {
+  const envBase = process.env.APP_BASE_URL || process.env.BOT_BASE_URL;
+  const base = envBase ? envBase.replace(/\/+$/, "") : origin.replace(/\/+$/, "");
+  // LINE 強制要求 https，確保開頭是 https
+  return base.replace(/^http:\/\//i, "https://");
+}
 
 const LAZYTUBE_URL =
   process.env.LAZYTUBE_EXTERNAL_DISPATCH_URL ||
@@ -267,16 +274,22 @@ export async function POST(req: NextRequest) {
         const messages: line.messagingApi.Message[] = [];
 
         const isStockCmd = userText.startsWith("/tw") || userText.startsWith("/us");
-        if (isStockCmd && reply.chartBuffer) {
+        if (isStockCmd && (reply.chartBuffer || userText.startsWith("/tw"))) {
           const parts = userText.trim().split(/\s+/);
-          const rawTicker = parts[1]?.toUpperCase();
-          if (rawTicker) {
-            const chartUrl = `${origin}/api/stock/${rawTicker}/chart?mobile=1`;
-            messages.push({
-              type: "image",
-              originalContentUrl: chartUrl,
-              previewImageUrl: chartUrl,
-            } as line.messagingApi.ImageMessage);
+          const query = parts.slice(1).join(" ").trim();
+          
+          if (query) {
+             const resolvedTicker = userText.startsWith("/tw") ? resolveCodeFromInputLocal(query) : query.toUpperCase();
+             const secureBase = getSecureBaseUrl(origin);
+             
+             if (resolvedTicker) {
+                const chartUrl = `${secureBase}/api/stock/${encodeURIComponent(resolvedTicker)}/chart?mobile=1`;
+                messages.push({
+                  type: "image",
+                  originalContentUrl: chartUrl,
+                  previewImageUrl: chartUrl,
+                } as line.messagingApi.ImageMessage);
+             }
           }
         }
 

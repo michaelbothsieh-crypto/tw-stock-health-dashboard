@@ -243,7 +243,7 @@ async function ensureTelegramCommandsSynced() {
    } catch (error) { }
 }
 
-function resolveCodeFromInputLocal(input: string): string | null {
+export function resolveCodeFromInputLocal(input: string): string | null {
    const query = input.trim().toUpperCase();
    if (!query) return null;
 
