@@ -42,8 +42,19 @@ export async function renderStockChart(
 
   const startIndex = Math.max(0, allData.length - visibleCount);
   
-  // 0. 資料清洗：過濾掉價格為 0 或負數的異常點，避免均線與趨勢線失真
-  const cleanData = allData.filter(d => d.close > 0 && d.open > 0 && d.high > 0 && d.low > 0);
+  // 0. 資料清洗：排除價格異常點
+  // 先計算中位數作為基準，排除掉與中位數差異過大（例如低於 10%）的髒資料
+  const validCloses = allData.map(d => d.close).filter(c => c > 0).sort((a, b) => a - b);
+  const medianPrice = validCloses.length > 0 ? validCloses[Math.floor(validCloses.length / 2)] : 0;
+  
+  const cleanData = allData.filter(d => {
+    const isNormal = d.close > medianPrice * 0.1 && d.close < medianPrice * 10 &&
+                     d.open > medianPrice * 0.1 && d.open < medianPrice * 10 &&
+                     d.high > medianPrice * 0.1 && d.high < medianPrice * 10 &&
+                     d.low > medianPrice * 0.1 && d.low < medianPrice * 10;
+    return isNormal;
+  });
+
   if (cleanData.length < 2) return canvas.toBuffer('image/png');
 
   const visibleData = cleanData.slice(Math.max(0, cleanData.length - visibleCount));
