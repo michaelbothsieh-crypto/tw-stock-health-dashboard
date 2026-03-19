@@ -16,7 +16,7 @@ export interface WhatIsResult {
 }
 
 export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> {
-  const cacheKey = `whatis:v4:${ctx.ticker || ctx.stockName}`;
+  const cacheKey = `whatis:v5:${ctx.ticker || ctx.stockName}`;
 
   if (redis) {
     try {
@@ -27,22 +27,27 @@ export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> 
 
 
   const prompt = `
-你是一位擁有 20 年資歷的頂級財經分析師與產業研究員。
-請針對這間公司進行深度解析：${ctx.stockName} ${ctx.ticker ? `(${ctx.ticker})` : ""}。
+你是一位資深財經分析師與產業專家。請針對：${ctx.stockName} ${ctx.ticker ? `(${ctx.ticker})` : ""} 進行深度解析。
 
-【已知資料】
-${ctx.companyProfile || "請根據你的知識庫提供該公司的業務核心、主要產品及營收來源。"}
+【重要準則】
+1. 務必確保業務描述與事實相符。
+2. 嚴禁使用任何 Emoji 或圖示。
+3. 使用專業、精煉、具備商業洞察力的語氣。
 
-【近期重大新聞】
-${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `* ${n}`).join('\n') : "近期無重大新聞，請根據產業近況進行推論。"}
+【輸出格式要求】
+請回傳 JSON 格式。其中 telegramReply 需嚴格遵守以下排版：
+- 每一段開頭為 **加粗標題**: 
+- 段落之間僅保留「一個空行」作為區隔。
+- 不要使用多餘的換行符號。
 
-【輸出要求】請嚴格回傳 JSON 格式：
-{
-  "businessSummary": "業務核心與獲利模式摘要 (約 80 字)",
-  "recentNewsAnalysis": "動態解析與近期趨勢 (約 80 字)",
-  "marketPosition": "地位、競爭對手與展望 (約 80 字)",
-  "telegramReply": "【Telegram 專用回覆，約 250 字內】：\n1. 請使用極度專業、精煉且具洞察力的語氣。\n2. 嚴禁使用任何 Emoji 或圖示。\n3. 每一個段落標題請使用 **標題** 格式，且「段落與段落之間必須有兩個換行 (\\n\\n)」以利閱讀。\n\n回覆內容需嚴格包含：\n**公司定位**: 說明業務核心與競爭優勢。\n\n**熱點與新聞**: 分析近期動態與產業趨勢。\n\n**競爭與地位**: 點出主要對手與產業排名。\n\n**分析點評**: 提供一針見血的投資風險與機會評估。"
-}
+回覆內容需包含：
+**公司定位**: 說明其核心業務、獲利模式與競爭優勢。
+
+**熱點與新聞**: 總結近期動態與產業趨勢。
+
+**競爭與地位**: 說明其在產業中的位置及主要競爭對手。
+
+**分析點評**: 提供一針見血的投資觀察與風險提示。
 `;
 
 
