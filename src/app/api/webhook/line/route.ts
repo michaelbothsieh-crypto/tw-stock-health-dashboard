@@ -272,7 +272,7 @@ export async function POST(req: NextRequest) {
           .replace(/&#39;/g, "'")
           .replace(/\*/g, "");
         const messages: line.messagingApi.Message[] = [];
-        const isStockCmd = userText.startsWith("/tw") || userText.startsWith("/us");
+        const isStockCmd = userText.startsWith("/tw") || userText.startsWith("/us") || userText.startsWith("/whatis");
         
         // 只有當成功產生圖表 (reply.chartBuffer 存在) 時才發送圖片訊息
         if (isStockCmd && reply.chartBuffer) {
@@ -280,7 +280,7 @@ export async function POST(req: NextRequest) {
           const query = parts.slice(1).join(" ").trim();
           
           if (query) {
-             const resolvedTicker = userText.startsWith("/tw") ? resolveCodeFromInputLocal(query) : query.toUpperCase();
+             const resolvedTicker = (userText.startsWith("/tw") || userText.startsWith("/whatis")) ? resolveCodeFromInputLocal(query) : query.toUpperCase();
              const secureBase = getSecureBaseUrl(origin);
              
              if (resolvedTicker) {
