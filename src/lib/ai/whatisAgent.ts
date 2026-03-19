@@ -16,7 +16,7 @@ export interface WhatIsResult {
 }
 
 export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> {
-  const cacheKey = `whatis:v2:${ctx.ticker || ctx.stockName}`;
+  const cacheKey = `whatis:v3:${ctx.ticker || ctx.stockName}`;
 
   if (redis) {
     try {
@@ -24,6 +24,7 @@ export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> 
       if (cached) return cached;
     } catch (e) {}
   }
+
 
   const prompt = `
 你是一位擁有 20 年資歷的頂級財經分析師與產業研究員。
