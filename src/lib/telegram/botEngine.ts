@@ -651,20 +651,25 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
    if (command === "/whatis") {
       if (!query) return { text: "請輸入公司名稱或代號，例如:\n/whatis 2330\n/whatis 台積電\n/whatis OpenAI" };
       
-      // 1. 嘗試解析代號（優先尋找已知代號）
-      const isUs = /^[A-Z]{1,5}$/i.test(query);
-      const liveCard = isUs 
-         ? await fetchLiveUsStockCard(query, options?.baseUrl)
-         : await fetchLiveStockCard(query, options?.baseUrl);
+      try {
+         // 1. 嘗試解析代號（優先尋找已知代號）
+         const isUs = /^[A-Z]{1,5}$/i.test(query);
+         const liveCard = isUs 
+            ? await fetchLiveUsStockCard(query, options?.baseUrl)
+            : await fetchLiveStockCard(query, options?.baseUrl);
 
-      // 2. 呼叫 AI 進行分析
-      const result = await getStockWhatIs({
-         ticker: liveCard?.symbol,
-         stockName: liveCard?.nameZh || query, // 若找不到代號，就用使用者輸入的名稱
-         recentNews: liveCard?.recentNews,
-      });
+         // 2. 呼叫 AI 進行分析
+         const result = await getStockWhatIs({
+            ticker: liveCard?.symbol,
+            stockName: liveCard?.nameZh || query, // 若找不到代號，就用使用者輸入的名稱
+            recentNews: liveCard?.recentNews,
+         });
 
-      return { text: result.telegramReply, chartBuffer: liveCard?.chartBuffer || null };
+         return { text: result.telegramReply, chartBuffer: liveCard?.chartBuffer || null };
+      } catch (err) {
+         console.error("[BotEngine] /whatis Error:", err);
+         return { text: `抱歉，分析「${query}」時發生錯誤，請稍後再試。`, chartBuffer: null };
+      }
    }
 
    if (command === "/us") {
