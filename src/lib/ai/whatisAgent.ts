@@ -16,7 +16,7 @@ export interface WhatIsResult {
 }
 
 export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> {
-  const cacheKey = `whatis:v6:${ctx.ticker || ctx.stockName}`;
+  const cacheKey = `whatis:v7:${ctx.ticker || ctx.stockName}`;
 
   if (redis) {
     try {
@@ -27,28 +27,29 @@ export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> 
 
 
   const prompt = `
-你是一位資深財經分析師與產業專家。請針對：${ctx.stockName} ${ctx.ticker ? `(${ctx.ticker})` : ""} 進行深度解析。
+你是一位資深財經分析師。請針對：${ctx.stockName} ${ctx.ticker ? `(${ctx.ticker})` : ""} 進行分析。
 
 【重要準則】
-1. 務必確保業務描述與事實相符。
-2. 嚴禁使用任何 Emoji、圖示或 Markdown 語法（例如不要使用星號 ** 或底線 _）。
-3. 使用專業、精煉、具備商業洞察力的純文字語氣。
+1. 務必確保業務描述精確（例如瑞軒 2489 是顯示器 OEM，而非半導體）。
+2. 嚴禁使用任何 Emoji、圖示或 Markdown 符號。
+3. 使用專業、精鍊的純文字。
 
-【輸出格式要求】
-請回傳 JSON 格式。其中 telegramReply 需嚴格遵守以下排版：
-- 每段標題格式為「標題名稱：」(例如：公司定位：)，不要加任何符號。
-- 段落之間僅保留一個空行。
-- 使用純文字，確保所有設備（包含行動裝置）都能清晰閱讀。
+【排版規範 - 極度重要】
+1. 每段開頭為「標題名稱：內容」。
+2. 段落與段落之間「僅容許一個空行」（即兩個換行字元 \\n\\n）。
+3. 嚴禁連續出現三個或以上的換行字元。
+4. 結尾不要有額外的換行。
 
-回覆內容需包含：
-公司定位：說明其核心業務、獲利模式與競爭優勢。
+回覆內容包含：
+公司定位：核心業務與競爭力。
 
-熱點與新聞：總結近期動態與產業趨勢。
+熱點與新聞：近期動態。
 
-競爭與地位：說明其在產業中的位置及主要競爭對手。
+競爭與地位：產業位置。
 
-分析點評：提供一針見血的投資觀察與風險提示。
+分析點評：投資建議。
 `;
+
 
 
   let result: WhatIsResult;
