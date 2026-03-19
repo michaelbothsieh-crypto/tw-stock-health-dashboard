@@ -41,24 +41,21 @@ export async function renderStockChart(
   const FONT_SANS = `bold 13px ${FONT_FAMILY}`;
 
   const startIndex = Math.max(0, allData.length - visibleCount);
-  const visibleData = allData.slice(startIndex);
+  
+  // 0. 資料清洗：過濾掉價格為 0 或負數的異常點，避免均線與趨勢線失真
+  const cleanData = allData.filter(d => d.close > 0 && d.open > 0 && d.high > 0 && d.low > 0);
+  if (cleanData.length < 2) return canvas.toBuffer('image/png');
+
+  const visibleData = cleanData.slice(Math.max(0, cleanData.length - visibleCount));
 
   // 1. 背景
   ctx.fillStyle = '#121212';
   ctx.fillRect(0, 0, width, height);
 
-  if (visibleData.length < 2) return canvas.toBuffer('image/png');
-
-  // 2. 計算比例（過濾異常資料點，防止壞資料壓縮 Y 軸）
-  const closes = [...visibleData.map(d => d.close)].sort((a, b) => a - b);
-  const medianClose = closes[Math.floor(closes.length / 2)];
-  // 先用距中位數 ±50% 的價格估算範圍，但一定要包含真實高低點避免被裁切
-  const rawPrices = visibleData.flatMap(d => [d.high, d.low]);
-  const filteredPrices = rawPrices.filter(p => p > medianClose * 0.5 && p < medianClose * 1.5);
-  const baseMin = filteredPrices.length ? Math.min(...filteredPrices) : Math.min(...rawPrices);
-  const baseMax = filteredPrices.length ? Math.max(...filteredPrices) : Math.max(...rawPrices);
-  const minPrice = Math.min(baseMin, Math.min(...rawPrices)) * 0.98;
-  const maxPrice = Math.max(baseMax, Math.max(...rawPrices)) * 1.02;
+  // 2. 計算比例
+  const allPrices = visibleData.flatMap(d => [d.high, d.low]);
+  const minPrice = Math.min(...allPrices) * 0.98;
+  const maxPrice = Math.max(...allPrices) * 1.02;
   const priceRange = maxPrice - minPrice;
   const maxVol = Math.max(...visibleData.map(d => d.volume), 1);
 
@@ -141,10 +138,15 @@ export async function renderStockChart(
   const drawMA = (period: number, color: string) => {
     ctx.strokeStyle = color; ctx.lineWidth = period === 5 ? 1 : 2; ctx.beginPath();
     let started = false;
+    
+    // 計算 visibleData 在 cleanData 中的起始位置
+    const offset = Math.max(0, cleanData.length - visibleData.length);
+    
     for (let i = 0; i < visibleData.length; i++) {
-      const realIdx = startIndex + i;
-      const slice = allData.slice(Math.max(0, realIdx - period + 1), realIdx + 1);
+      const cleanIdx = offset + i;
+      const slice = cleanData.slice(Math.max(0, cleanIdx - period + 1), cleanIdx + 1);
       if (slice.length < period) continue;
+      
       const avg = slice.reduce((sum, d) => sum + d.close, 0) / period;
       const x = getX(i); const y = getY(avg);
       if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
