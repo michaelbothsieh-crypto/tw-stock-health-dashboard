@@ -1,8 +1,6 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import Groq from "groq-sdk";
 import { redis } from "../providers/redisCache";
-import { getAvailableGroqModels } from "./modelRouter";
 import { InsiderTransfer } from "../providers/twseInsiderFetch";
+import { callLLMWithFallback } from "./base";
 
 export interface PlaybookContext {
   ticker: string;
@@ -68,66 +66,6 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
   };
 }
 
-// Tier 2: Gemini API
-async function callGemini(prompt: string): Promise<ActionPlaybook> {
-  console.log('🤖 Current AI Tier: Gemini');
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("Missing GEMINI_API_KEY");
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
-    generationConfig: {
-      temperature: 0,
-      responseMimeType: "application/json",
-    }
-  });
-
-  const fetchWithTimeout = async () => {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
-    // Gemini sometimes wraps in markdown blocks even with responseMimeType
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    const cleanJson = jsonMatch ? jsonMatch[0] : text;
-    return JSON.parse(cleanJson) as ActionPlaybook;
-  };
-
-  const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Gemini Timeout")), 8000)
-  );
-
-  return Promise.race([fetchWithTimeout(), timeoutPromise]);
-}
-
-// Tier 1: Groq API
-async function callGroq(prompt: string, modelName: string): Promise<ActionPlaybook> {
-  console.log(`🤖 Current AI Tier: Groq (${modelName})`);
-  const apiKey = process.env.GROQ_API_KEY;
-  if (!apiKey) throw new Error("Missing GROQ_API_KEY");
-
-  const groq = new Groq({ apiKey });
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-  try {
-    const completion = await groq.chat.completions.create({
-      messages: [{ role: "system", content: prompt }],
-      model: modelName,
-      temperature: 0,
-      response_format: { type: "json_object" },
-    }, { signal: controller.signal });
-
-    clearTimeout(timeoutId);
-    const content = completion.choices[0]?.message?.content;
-    if (!content) throw new Error(`Empty response from Groq model: ${modelName}`);
-    return JSON.parse(content) as ActionPlaybook;
-  } catch (err) {
-    clearTimeout(timeoutId);
-    throw err;
-  }
-}
-
 export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionPlaybook> {
   const hourKey = Math.floor(Date.now() / 3600000);
   const cacheKey = `playbook:v3:${ctx.ticker}:${hourKey}`;
@@ -150,7 +88,7 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
   const fMacro = Number(ctx.macroRisk).toFixed(1);
 
   const prompt = `
-你是一位擁有 20 年華爾街與台股實戰經驗的頂級避險基金操盤手。請為客戶深度分析股票：${ctx.stockName} (${ctx.ticker})。
+你是一位擁有 20 年華爾街與台股實戰經驗的頂級避險基金操盤手。請為客戶深度 analysis 股票：${ctx.stockName} (${ctx.ticker})。
 你的風格是「刁鑽、犀利、一針見血、不說廢話」。對於散戶的盲目樂觀或恐慌會直接點出盲點。
 
 【客觀盤勢與價格數據】
@@ -185,29 +123,10 @@ ${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `  * ${n
 
   let result: ActionPlaybook | null = null;
 
-  // Step 1: Dynamic Groq Discovery & Routing
-  const availableModels = await getAvailableGroqModels();
-
-  for (const modelName of availableModels) {
-    try {
-      result = await callGroq(prompt, modelName);
-      if (result) break;
-    } catch (err) {
-      console.warn(`[Playbook] Groq model ${modelName} failed, trying next...`);
-    }
-  }
-
-  // Step 2: Fallback to Gemini
-  if (!result) {
-    try {
-      result = await callGemini(prompt);
-    } catch (err) {
-      console.error("[Playbook] Gemini also failed", err);
-    }
-  }
-
-  // Step 3: Rule-based Last Resort
-  if (!result) {
+  try {
+    result = await callLLMWithFallback<ActionPlaybook>(prompt, { jsonMode: true });
+  } catch (err) {
+    console.error("[Playbook] LLM failed", err);
     result = generateRuleBasedPlaybook(ctx);
   }
 

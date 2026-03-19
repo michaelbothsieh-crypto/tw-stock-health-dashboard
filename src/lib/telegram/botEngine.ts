@@ -1,6 +1,7 @@
 import { fetchLatestReport } from "./reportFetcher";
 import { getAllChatIds } from "./chatStore";
 import { getTacticalPlaybook } from "../ai/playbookAgent";
+import { getStockWhatIs } from "../ai/whatisAgent";
 import { getFilteredInsiderTransfers } from "../providers/twseInsiderFetch";
 import { twStockNames } from "../../data/twStockNames";
 import { renderStockChart, ChartDataPoint } from "../ux/chartRenderer";
@@ -82,6 +83,7 @@ type StockCard = {
    newsLine: string;
    sourceLabel: string;
    insiderSells: any[];
+   recentNews?: string[];
    trustLots?: number;
    marginLots?: number;
    shortLots?: number;
@@ -236,6 +238,7 @@ async function ensureTelegramCommandsSynced() {
             commands: [
                { command: "tw", description: "查詢台股個股（例：/tw 2330）" },
                { command: "us", description: "查詢美股個股（例：/us NVDA）" },
+               { command: "whatis", description: "分析公司做什麼及近期新聞（例：/whatis 2330）" },
             ],
          }),
       });
@@ -459,6 +462,14 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
       card.strategySignal = snapshot?.strategy?.signal || "觀察";
       card.confidence = snapshot?.strategy?.confidence;
       card.newsLine = extractNewsLineFromSnapshot(snapshot);
+      card.recentNews = [
+        ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
+        ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
+        ...(Array.isArray(snapshot?.news?.topNews) ? snapshot.news.topNews : []),
+        ...(Array.isArray(snapshot?.news?.timeline) ? snapshot.news.timeline : []),
+        ...(Array.isArray(snapshot?.news?.items) ? snapshot.news.items : []),
+      ].map(n => n?.title || "").filter(Boolean).slice(0, 10);
+      
       card.snapshotPlaybookCaption = snapshot?.playbook?.telegramCaption || snapshot?.playbook?.tacticalScript || undefined;
       card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
       card.flowScore = snapshot?.signals?.flow?.flowScore ?? undefined;
@@ -637,6 +648,25 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       return { text: "找不到該股票資料。" };
    }
 
+   if (command === "/whatis") {
+      if (!query) return { text: "請輸入公司名稱或代號，例如:\n/whatis 2330\n/whatis 台積電\n/whatis OpenAI" };
+      
+      // 1. 嘗試解析代號（優先尋找已知代號）
+      const isUs = /^[A-Z]{1,5}$/i.test(query);
+      const liveCard = isUs 
+         ? await fetchLiveUsStockCard(query, options?.baseUrl)
+         : await fetchLiveStockCard(query, options?.baseUrl);
+
+      // 2. 呼叫 AI 進行分析
+      const result = await getStockWhatIs({
+         ticker: liveCard?.symbol,
+         stockName: liveCard?.nameZh || query, // 若找不到代號，就用使用者輸入的名稱
+         recentNews: liveCard?.recentNews,
+      });
+
+      return { text: result.telegramReply, chartBuffer: liveCard?.chartBuffer || null };
+   }
+
    if (command === "/us") {
       if (!query) return { text: "請輸入美股代號，例如:\n/us NVDA\n/us NVDA,AAPL,TSLA" };
 
@@ -678,7 +708,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
    // 先送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
    try {
-      if (command === "/tw" || command === "/us") {
+      if (command === "/tw" || command === "/us" || command === "/whatis") {
          await ensureTelegramCommandsSynced();
          progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
       }
