@@ -84,6 +84,7 @@ type StockCard = {
    sourceLabel: string;
    insiderSells: any[];
    recentNews?: string[];
+   industry?: string;
    trustLots?: number;
    marginLots?: number;
    shortLots?: number;
@@ -456,12 +457,15 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
       } catch {
          card.chartBuffer = null;
       }
+card.p1d = snapshot?.predictions?.upProb1D;
+card.shortDir = buildTrendByProb(card.p1d);
+card.strategySignal = snapshot?.strategy?.signal || "觀察";
+card.confidence = snapshot?.strategy?.confidence;
+card.newsLine = extractNewsLineFromSnapshot(snapshot);
+card.industry = snapshot?.normalizedTicker?.industry || snapshot?.normalizedTicker?.sector || "";
+card.recentNews = [
 
-      card.p1d = snapshot?.predictions?.upProb1D;
-      card.shortDir = buildTrendByProb(card.p1d);
-      card.strategySignal = snapshot?.strategy?.signal || "觀察";
-      card.confidence = snapshot?.strategy?.confidence;
-      card.newsLine = extractNewsLineFromSnapshot(snapshot);
+      card.industry = snapshot?.normalizedTicker?.industry || snapshot?.normalizedTicker?.sector || "";
       card.recentNews = [
         ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
         ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
@@ -663,8 +667,8 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             ticker: liveCard?.symbol,
             stockName: liveCard?.nameZh || query, // 若找不到代號，就用使用者輸入的名稱
             recentNews: liveCard?.recentNews,
+            companyProfile: liveCard?.industry ? `該公司所屬產業為：${liveCard.industry}` : undefined,
          });
-
          return { text: result.telegramReply, chartBuffer: liveCard?.chartBuffer || null };
       } catch (err) {
          console.error("[BotEngine] /whatis Error:", err);

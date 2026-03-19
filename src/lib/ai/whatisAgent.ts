@@ -16,7 +16,8 @@ export interface WhatIsResult {
 }
 
 export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> {
-  const cacheKey = `whatis:v8:${ctx.ticker || ctx.stockName}`;
+  // v9: 強制修正幻覺，加入產業資訊參考
+  const cacheKey = `whatis:v9:${ctx.ticker || ctx.stockName}`;
 
   if (redis) {
     try {
@@ -28,10 +29,15 @@ export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> 
   const prompt = `
 你是一位資深財經分析師。請針對：${ctx.stockName} ${ctx.ticker ? `(${ctx.ticker})` : ""} 進行深度分析。
 
-【重要準則】
-1. 務必確保業務描述精確。
-2. 嚴禁使用任何 Emoji、圖示或 Markdown 符號。
-3. 使用專業、精鍊的純文字語氣。
+【公司資訊】
+${ctx.companyProfile || "請根據你的知識庫提供該公司的業務核心。"}
+
+【重要準則 - 嚴禁幻覺】
+1. **嚴禁僅根據名稱字面意思猜測業務**（例如：名稱有「竹」不代表是做竹子，名稱有「天」不代表是做天文）。
+2. 請務必結合「產業資訊」與你的「財經知識庫」來判斷。
+3. 如果該公司是台灣上市櫃公司，請確保分析其真正的商業模式（如軟體、半導體、航運等）。
+4. 嚴禁使用任何 Emoji、圖示或 Markdown 符號。
+5. 使用專業、精鍊的純文字語氣。
 
 【排版規範】
 1. 每段開頭為標題名稱（如 公司定位：）。
