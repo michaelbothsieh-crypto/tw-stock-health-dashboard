@@ -16,7 +16,7 @@ export interface WhatIsResult {
 }
 
 export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> {
-  const cacheKey = `whatis:v7:${ctx.ticker || ctx.stockName}`;
+  const cacheKey = `whatis:v8:${ctx.ticker || ctx.stockName}`;
 
   if (redis) {
     try {
@@ -25,32 +25,27 @@ export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> 
     } catch (e) {}
   }
 
-
   const prompt = `
-你是一位資深財經分析師。請針對：${ctx.stockName} ${ctx.ticker ? `(${ctx.ticker})` : ""} 進行分析。
+你是一位資深財經分析師。請針對：${ctx.stockName} ${ctx.ticker ? `(${ctx.ticker})` : ""} 進行深度分析。
 
 【重要準則】
-1. 務必確保業務描述精確（例如瑞軒 2489 是顯示器 OEM，而非半導體）。
+1. 務必確保業務描述精確。
 2. 嚴禁使用任何 Emoji、圖示或 Markdown 符號。
-3. 使用專業、精鍊的純文字。
+3. 使用專業、精鍊的純文字語氣。
 
-【排版規範 - 極度重要】
-1. 每段開頭為「標題名稱：內容」。
-2. 段落與段落之間「僅容許一個空行」（即兩個換行字元 \\n\\n）。
-3. 嚴禁連續出現三個或以上的換行字元。
-4. 結尾不要有額外的換行。
+【排版規範】
+1. 每段開頭為標題名稱（如 公司定位：）。
+2. 段落與段落之間僅保留一個空行。
+3. 嚴禁使用星號 ** 或底線 _。
 
-回覆內容包含：
-公司定位：核心業務與競爭力。
-
-熱點與新聞：近期動態。
-
-競爭與地位：產業位置。
-
-分析點評：投資建議。
+【輸出要求】請回傳 JSON 格式：
+{
+  "businessSummary": "業務核心與獲利模式摘要 (約 80 字)",
+  "recentNewsAnalysis": "近期新聞與趨勢 (約 80 字)",
+  "marketPosition": "地位與競爭對手 (約 80 字)",
+  "telegramReply": "公司定位：[內容]\n\n熱點與新聞：[內容]\n\n競爭與地位：[內容]\n\n分析點評：[內容]"
+}
 `;
-
-
 
   let result: WhatIsResult;
   try {
@@ -61,13 +56,13 @@ export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> 
       businessSummary: `${ctx.stockName} 業務分析中。`,
       recentNewsAnalysis: "近期新聞整理中。",
       marketPosition: "產業地位確認中。",
-      telegramReply: `抱歉，目前無法針對 ${ctx.stockName} 提供深度分析，請稍後再試。`
+      telegramReply: `抱歉，目前無法針對 ${ctx.stockName} 提供分析，請稍後再試。`
     };
   }
 
   if (redis && result) {
     try {
-      await redis.set(cacheKey, result, { ex: 86400 }); // 快取 24 小時
+      await redis.set(cacheKey, result, { ex: 86400 });
     } catch (e) {}
   }
 
