@@ -16,7 +16,7 @@ export interface WhatIsResult {
 }
 
 export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> {
-  const cacheKey = `whatis:v3:${ctx.ticker || ctx.stockName}`;
+  const cacheKey = `whatis:v4:${ctx.ticker || ctx.stockName}`;
 
   if (redis) {
     try {
@@ -31,25 +31,20 @@ export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> 
 請針對這間公司進行深度解析：${ctx.stockName} ${ctx.ticker ? `(${ctx.ticker})` : ""}。
 
 【已知資料】
-- 公司/標的名稱: ${ctx.stockName}
-- 系統代號: ${ctx.ticker || "未提供，請根據名稱判斷"}
-- 近期新聞摘要:
-${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `  * ${n}`).join('\n') : "  * 系統未抓取到近期新聞，請根據你的知識庫提供該公司或該產業近期的重大動態。"}
+${ctx.companyProfile || "請根據你的知識庫提供該公司的業務核心、主要產品及營收來源。"}
 
-【任務目標】
-1. **業務核心**: 這間公司到底是做什麼的？它的賺錢模型是什麼？（核心產品、服務、客戶群）。
-2. **動態解析**: 近期（特別是這一年）該公司有什麼重大新聞、政策影響或產業趨勢？
-3. **競爭力與地位**: 它在產業中的地位如何？誰是它最主要的競爭對手？它有什麼護城河或弱點？
-4. **展望與風險**: 對於投資者，目前最需要關注的關鍵觀察點是什麼？（利多或風險點）。
+【近期重大新聞】
+${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `* ${n}`).join('\n') : "近期無重大新聞，請根據產業近況進行推論。"}
 
 【輸出要求】請嚴格回傳 JSON 格式：
 {
   "businessSummary": "業務核心與獲利模式摘要 (約 80 字)",
   "recentNewsAnalysis": "動態解析與近期趨勢 (約 80 字)",
   "marketPosition": "地位、競爭對手與展望 (約 80 字)",
-  "telegramReply": "【Telegram 專用回覆，約 250 字內】：\n請使用極度專業、精煉且具洞察力的語氣。嚴禁使用任何 Emoji 或圖示，僅使用純文字標題與條列。內容需包含：\n公司定位: 它是做什麼的，強項在哪。\n熱點與新聞: 近期發生了什麼值得注意的事。\n競爭與地位: 產業地位與對手。\n分析點評: 一針見血的投資觀察與風險提示。"
+  "telegramReply": "【Telegram 專用回覆，約 250 字內】：\n1. 請使用極度專業、精煉且具洞察力的語氣。\n2. 嚴禁使用任何 Emoji 或圖示。\n3. 每一個段落標題請使用 **標題** 格式，且「段落與段落之間必須有兩個換行 (\\n\\n)」以利閱讀。\n\n回覆內容需嚴格包含：\n**公司定位**: 說明業務核心與競爭優勢。\n\n**熱點與新聞**: 分析近期動態與產業趨勢。\n\n**競爭與地位**: 點出主要對手與產業排名。\n\n**分析點評**: 提供一針見血的投資風險與機會評估。"
 }
 `;
+
 
   let result: WhatIsResult;
   try {
