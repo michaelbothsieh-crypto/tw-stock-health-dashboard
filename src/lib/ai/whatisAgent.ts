@@ -16,7 +16,7 @@ export interface WhatIsResult {
 }
 
 export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> {
-  const cacheKey = `whatis:v5:${ctx.ticker || ctx.stockName}`;
+  const cacheKey = `whatis:v6:${ctx.ticker || ctx.stockName}`;
 
   if (redis) {
     try {
@@ -31,23 +31,23 @@ export async function getStockWhatIs(ctx: WhatIsContext): Promise<WhatIsResult> 
 
 【重要準則】
 1. 務必確保業務描述與事實相符。
-2. 嚴禁使用任何 Emoji 或圖示。
-3. 使用專業、精煉、具備商業洞察力的語氣。
+2. 嚴禁使用任何 Emoji、圖示或 Markdown 語法（例如不要使用星號 ** 或底線 _）。
+3. 使用專業、精煉、具備商業洞察力的純文字語氣。
 
 【輸出格式要求】
 請回傳 JSON 格式。其中 telegramReply 需嚴格遵守以下排版：
-- 每一段開頭為 **加粗標題**: 
-- 段落之間僅保留「一個空行」作為區隔。
-- 不要使用多餘的換行符號。
+- 每段標題格式為「標題名稱：」(例如：公司定位：)，不要加任何符號。
+- 段落之間僅保留一個空行。
+- 使用純文字，確保所有設備（包含行動裝置）都能清晰閱讀。
 
 回覆內容需包含：
-**公司定位**: 說明其核心業務、獲利模式與競爭優勢。
+公司定位：說明其核心業務、獲利模式與競爭優勢。
 
-**熱點與新聞**: 總結近期動態與產業趨勢。
+熱點與新聞：總結近期動態與產業趨勢。
 
-**競爭與地位**: 說明其在產業中的位置及主要競爭對手。
+競爭與地位：說明其在產業中的位置及主要競爭對手。
 
-**分析點評**: 提供一針見血的投資觀察與風險提示。
+分析點評：提供一針見血的投資觀察與風險提示。
 `;
 
 
