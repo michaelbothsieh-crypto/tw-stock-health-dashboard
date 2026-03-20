@@ -311,7 +311,8 @@ function buildVolumeState(volume: number | null, volumeVs5dPct: number | null, u
    let volText = "—";
    if (volume !== null) {
       if (unit === "張") {
-         volText = `${humanizeNumber(volume / 1000)}張`;
+         // 台股從各個 provider (FinMind, Fugle) 拿到的 volume 通常都已經是「張數」了，不需要再除以 1000
+         volText = `${humanizeNumber(volume)}張`;
       } else {
          volText = `${humanizeNumber(volume)}股`;
       }
