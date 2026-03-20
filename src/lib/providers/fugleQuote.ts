@@ -44,8 +44,8 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
 
     const d = await res.json();
     
-    // 檢查關鍵欄位是否存在
-    const price: number = d.lastPrice ?? d.closePrice;
+    // 檢查關鍵欄位是否存在 (盤前可能沒有 lastPrice / closePrice)
+    const price: number = d.lastPrice ?? d.closePrice ?? d.lastTrial?.price ?? d.previousClose ?? d.referencePrice;
     const prevClose: number = d.previousClose ?? d.referencePrice;
     
     if (price === undefined || prevClose === undefined) {
@@ -65,7 +65,8 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
     };
     await setCache(cacheKey, quote, 30);
     return quote;
-  } catch {
+  } catch (error) {
+    console.error(`[Fugle] Unexpected error for ${code}:`, error);
     return null;
   }
 }
