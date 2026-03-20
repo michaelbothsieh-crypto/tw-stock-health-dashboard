@@ -37,13 +37,21 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
         cache: "no-store",
       }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.error(`[Fugle] API error: ${res.status} ${res.statusText} for code ${code}`);
+      return null;
+    }
 
     const d = await res.json();
-
+    
+    // 檢查關鍵欄位是否存在
     const price: number = d.lastPrice ?? d.closePrice;
     const prevClose: number = d.previousClose ?? d.referencePrice;
-    if (!price || !prevClose) return null;
+    
+    if (price === undefined || prevClose === undefined) {
+      console.warn(`[Fugle] Missing price data for ${code}. price: ${price}, prevClose: ${prevClose}`);
+      return null;
+    }
 
     const quote = {
       price,

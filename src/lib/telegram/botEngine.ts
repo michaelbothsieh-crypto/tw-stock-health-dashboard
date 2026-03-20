@@ -7,6 +7,14 @@ import { twStockNames } from "../../data/twStockNames";
 import { renderStockChart, ChartDataPoint } from "../ux/chartRenderer";
 import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
 import { fetchFugleQuote } from "@/lib/providers/fugleQuote";
+
+// 建立反向查詢表加速名稱解析
+const reverseStockNames: Record<string, string> = {};
+if (twStockNames) {
+   Object.entries(twStockNames).forEach(([code, name]) => {
+      reverseStockNames[name] = code;
+   });
+}
 import {
    buildNewsLine,
    buildStanceText,
@@ -259,9 +267,7 @@ export function resolveCodeFromInputLocal(input: string): string | null {
    if (codeMatch) return codeMatch[1];
 
    // 3. 匹配 Value (中文名稱) - 完全匹配優先
-   for (const [code, name] of Object.entries(twStockNames)) {
-      if (name === query) return code;
-   }
+   if (reverseStockNames[query]) return reverseStockNames[query];
 
    // 4. 模糊匹配 (至少輸入兩個字才進行模糊匹配，避免 "台" 匹配到 "台泥")
    if (query.length >= 2) {
@@ -464,36 +470,43 @@ card.confidence = snapshot?.strategy?.confidence;
 card.newsLine = extractNewsLineFromSnapshot(snapshot);
 card.industry = snapshot?.normalizedTicker?.industry || snapshot?.normalizedTicker?.sector || "";
 card.recentNews = [
+  ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
+  ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
+  ...(Array.isArray(snapshot?.news?.topNews) ? snapshot.news.topNews : []),
+  ...(Array.isArray(snapshot?.news?.timeline) ? snapshot.news.timeline : []),
+  ...(Array.isArray(snapshot?.news?.items) ? snapshot.news.items : []),
+].map(n => n?.title || "").filter(Boolean).slice(0, 10);
 
-      card.industry = snapshot?.normalizedTicker?.industry || snapshot?.normalizedTicker?.sector || "";
-      card.recentNews = [
-        ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
-        ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
-        ...(Array.isArray(snapshot?.news?.topNews) ? snapshot.news.topNews : []),
-        ...(Array.isArray(snapshot?.news?.timeline) ? snapshot.news.timeline : []),
-        ...(Array.isArray(snapshot?.news?.items) ? snapshot.news.items : []),
-      ].map(n => n?.title || "").filter(Boolean).slice(0, 10);
-      
-      card.snapshotPlaybookCaption = snapshot?.playbook?.telegramCaption || snapshot?.playbook?.tacticalScript || undefined;
-      card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
-      card.flowScore = snapshot?.signals?.flow?.flowScore ?? undefined;
-      card.macroRisk = snapshot?.crashWarning?.score ?? undefined;
+card.snapshotPlaybookCaption = snapshot?.playbook?.telegramCaption || snapshot?.playbook?.tacticalScript || undefined;
+card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
+card.flowScore = snapshot?.signals?.flow?.flowScore ?? undefined;
+card.macroRisk = snapshot?.crashWarning?.score ?? undefined;
 
-      return card;
-   } catch (error) { return null; }
+return card;
+} catch (error) { return null; }
 }
-
 async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Promise<StockCard | null> {
    const symbol = resolveCodeFromInputLocal(query);
-   if (!symbol) return null;
+   if (!symbol) {
+      console.warn(`[BotEngine] resolveCodeFromInputLocal failed for query: ${query}`);
+      return null;
+   }
    const baseUrl = getSnapshotBaseUrl(overrideBaseUrl);
-   if (!baseUrl) return null;
+   if (!baseUrl) {
+      console.error("[BotEngine] baseUrl is missing. Set BOT_BASE_URL or APP_BASE_URL.");
+      return null;
+   }
    try {
+      const snapUrl = `${baseUrl}/api/stock/${symbol}/snapshot`;
       // Timeout 20 秒，防止 snapshot API 掛住讓 bot 卡死
       const controller = new AbortController();
       const snapTimer = setTimeout(() => controller.abort(), 20000);
-      const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`, { signal: controller.signal }).finally(() => clearTimeout(snapTimer));
-      if (!snapRes.ok) return null;
+      const snapRes = await fetch(snapUrl, { signal: controller.signal }).finally(() => clearTimeout(snapTimer));
+      
+      if (!snapRes.ok) {
+         console.error(`[BotEngine] Snapshot API failed: ${snapUrl}, Status: ${snapRes.status}`);
+         return null;
+      }
       const snapshot = await snapRes.json();
 
       let yahooSymbol = snapshot?.normalizedTicker?.yahoo;
@@ -631,9 +644,11 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.isPriceRealTime = isTWStock ? fugleQuote !== null : undefined;
 
       return card;
-   } catch (error) { return null; }
-}
-
+      } catch (error) { 
+      console.error("[BotEngine] fetchLiveStockCard Error:", error);
+      return null; 
+      }
+      }
 export async function generateBotReply(text: string, options?: TelegramHandleOptions): Promise<{ text: string, chartBuffer?: Buffer | null } | null> {
    const trimmedText = text.trim();
    if (!trimmedText.startsWith("/")) return null;
