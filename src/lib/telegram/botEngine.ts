@@ -497,11 +497,15 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       return null;
    }
    try {
-      const snapUrl = `${baseUrl}/api/stock/${symbol}/snapshot`;
-      // Timeout 20 秒，防止 snapshot API 掛住讓 bot 卡死
+      const snapUrl = `${baseUrl}/api/stock/${symbol}/snapshot?mode=lite`;
       const controller = new AbortController();
       const snapTimer = setTimeout(() => controller.abort(), 20000);
-      const snapRes = await fetch(snapUrl, { signal: controller.signal }).finally(() => clearTimeout(snapTimer));
+      
+      // 1. 並行發送 Snapshot 與 Fugle 請求 (節省等待時間)
+      const [snapRes, fugleQuote] = await Promise.all([
+         fetch(snapUrl, { signal: controller.signal }).finally(() => clearTimeout(snapTimer)),
+         fetchFugleQuote(symbol)
+      ]);
       
       if (!snapRes.ok) {
          console.error(`[BotEngine] Snapshot API failed: ${snapUrl}, Status: ${snapRes.status}`);
@@ -517,9 +521,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
          yahooSymbol = isTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
       }
 
-      // 1. 優先用 Fugle 即時報價（台股，無延遲）
-      // 2. Fallback 到 Yahoo Finance（15-20 分鐘延遲）
-      const fugleQuote = await fetchFugleQuote(symbol);
+      // 2. 如果 Fugle 沒抓到，Fallback 到 Yahoo Finance（15-20 分鐘延遲）
       const rtQuoteRaw = fugleQuote ? null : await yahooFinance.quote(yahooSymbol).catch(() => null);
       const rtQuote: any = fugleQuote
         ? {
