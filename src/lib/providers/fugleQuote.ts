@@ -17,11 +17,13 @@ export type FugleQuote = {
 };
 
 export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null> {
-  const apiKey = process.env.FUGLE_API_KEY;
-  if (!apiKey) {
+  const rawApiKey = process.env.FUGLE_API_KEY;
+  if (!rawApiKey) {
     console.error("[Fugle] FUGLE_API_KEY is missing in environment variables.");
     return null;
   }
+  // Sanitize API key: remove ONLY newlines or carriage returns, preserve spaces
+  const apiKey = rawApiKey.replace(/[\r\n]+/g, "");
 
   // Fugle 只支援台股，strip .TW / .TWO suffix
   const code = symbol.replace(/\.(TW|TWO)$/i, "");
