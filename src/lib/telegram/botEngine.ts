@@ -307,18 +307,25 @@ function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
    return "—（近期無重大新聞）";
 }
 
-function buildVolumeState(volume: number | null, volumeVs5dPct: number | null): string {
-   const volumeText = humanizeNumber(volume);
-   if (volumeVs5dPct === null) return `${volumeText}（平量）`;
-   if (volumeVs5dPct >= 80) return `${volumeText}（爆量）`;
-   if (volumeVs5dPct >= 15) return `${volumeText}（放量）`;
-   if (volumeVs5dPct <= -20) return `${volumeText}（縮量）`;
-   return `${volumeText}（平量）`;
+function buildVolumeState(volume: number | null, volumeVs5dPct: number | null, unit: string = "股"): string {
+   let volText = "—";
+   if (volume !== null) {
+      if (unit === "張") {
+         volText = `${humanizeNumber(volume / 1000)}張`;
+      } else {
+         volText = `${humanizeNumber(volume)}股`;
+      }
+   }
+   if (volumeVs5dPct === null) return `${volText}（平量）`;
+   if (volumeVs5dPct >= 80) return `${volText}（爆量）`;
+   if (volumeVs5dPct >= 15) return `${volText}（放量）`;
+   if (volumeVs5dPct <= -20) return `${volText}（縮量）`;
+   return `${volText}（平量）`;
 }
 
 function buildStockCardLines(card: StockCard, verdict: string = "數據整理中"): string {
    const stanceText = buildStanceText(card.shortDir, card.strategySignal, card.confidence);
-   const volumeState = buildVolumeState(card.volume, card.volumeVs5dPct);
+   const volumeState = buildVolumeState(card.volume, card.volumeVs5dPct, card.flowUnit);
    const support = formatPrice(card.support, 2);
    const resistance = formatPrice(card.resistance, 2);
    const lines = [
