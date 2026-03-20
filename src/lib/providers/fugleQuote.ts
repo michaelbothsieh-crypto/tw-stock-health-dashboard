@@ -18,11 +18,17 @@ export type FugleQuote = {
 
 export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null> {
   const apiKey = process.env.FUGLE_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) {
+    console.error("[Fugle] FUGLE_API_KEY is missing in environment variables.");
+    return null;
+  }
 
   // Fugle 只支援台股，strip .TW / .TWO suffix
   const code = symbol.replace(/\.(TW|TWO)$/i, "");
-  if (!/^\d{4,}$/.test(code)) return null;
+  if (!/^\d{4,}$/.test(code)) {
+    console.warn(`[Fugle] Invalid symbol format for Fugle: ${symbol}`);
+    return null;
+  }
 
   // 30s 快取，防止短時間內重複查詢同一檔股票超過 rate limit
   const cacheKey = `fugle:quote:${code}`;
