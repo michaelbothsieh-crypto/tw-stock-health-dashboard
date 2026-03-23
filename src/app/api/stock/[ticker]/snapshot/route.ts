@@ -309,105 +309,6 @@ export async function GET(
 
     const mappedPricesTw = prices.map(p => ({ date: p.date, close: p.close }));
 
-    // Parallelize Global Linkage, Crash Warning, and Insider Transfers
-    const [globalLinkageResult, marketData, insiderTransfersResult] = await Promise.all([
-      (async () => {
-        // --- New Global Linkage Pipeline (Clustering & Auto-Mapping) ---
-        const stockProfile = await resolveStockProfile(norm.symbol, displayName);
-
-        // 1. Compute dynamic clusters
-        const { members: allMembers, targetClusterId } = await getOrComputeClusters(
-          norm.symbol,
-          mappedPricesTw,
-          15
-        );
-
-        // 2. Filter target's cluster members
-        const clusterMembers = Array.from(allMembers.values()).filter(m => m.clusterId === targetClusterId);
-
-        // 3. Resolve dominant theme (Sector name)
-        const themeName = stockProfile.sectorZh;
-        const usMapping = mapThemeToUS(themeName, norm.symbol);
-
-        // 4. Local Peers (TW)
-        const twPeerLinkage = await selectTwPeers(norm.symbol, clusterMembers, themeName, allMembers);
-
-        // 5. Overseas Drivers
-        const allUsSymbols = Array.from(new Set([usMapping.sector.id, ...usMapping.hints]));
-        const globalDataMap: Record<string, any[]> = {};
-        let globalFetchSuccess = true;
-
-        try {
-          const globalBars = await Promise.all(
-            allUsSymbols.map(async (sym) => {
-              return { symbol: sym, bars: await fetchYahooFinanceBars(sym, 120) };
-            })
-          );
-          for (const res of globalBars) {
-            if (res.bars.length === 0) {
-              globalFetchSuccess = false;
-            }
-            globalDataMap[res.symbol] = res.bars;
-          }
-        } catch (e) {
-          console.error("Failed to fetch overseas data for Global Linkage", e);
-          globalFetchSuccess = false;
-        }
-
-        let selectedDrivers = selectDrivers(mappedPricesTw, usMapping, globalDataMap);
-        let relativeStrength = calculateRelativeStrength(mappedPricesTw, selectedDrivers.sector, globalDataMap);
-
-        if (!globalFetchSuccess || !selectedDrivers.sector || selectedDrivers.peers.length === 0) {
-          if (!selectedDrivers.sector) {
-            selectedDrivers = { sector: null, peers: [] };
-          }
-          return {
-            linkage: {
-              profile: stockProfile,
-              drivers: selectedDrivers,
-              relativeStrength,
-              twPeerLinkage
-            },
-            warning: "目前海外資料暫時無法取得，連動指標以可用資料估算或暫停顯示"
-          };
-        }
-
-        return {
-          linkage: {
-            profile: stockProfile,
-            drivers: selectedDrivers,
-            relativeStrength,
-            twPeerLinkage
-          },
-          warning: null
-        };
-      })(),
-
-      // Fetch Crash Warning Data
-      getMarketIndicators({
-        symbols: ["^VIX", "^MOVE", "SOXX", "QQQ", "^DXY", "DX-Y.NYB", "UUP", "USDJPY=X", "JPY=X"],
-        rangeDays: 65
-      }),
-
-      // Fetch Insider Transfers (Taiwan Only)
-      (async () => {
-        if (!isTaiwanStock(norm.symbol)) return [];
-        try {
-          return await getFilteredInsiderTransfers(norm.symbol);
-        } catch (e) {
-          console.warn("[Snapshot] Failed to fetch insider transfers", e);
-          return [];
-        }
-      })()
-    ]);
-
-    const globalLinkage = globalLinkageResult.linkage;
-    if (globalLinkageResult.warning) {
-      warnings.push(globalLinkageResult.warning);
-    }
-
-    const crashWarning = evaluateCrashWarning(marketData);
-    const insiderTransfers = insiderTransfersResult;
     // Calculate Recent Trend String for AI Context（含即時價格數字）
     let recentTrend = "區間震盪 / 橫盤整理";
     const sma20 = trendSignals.sma20;
@@ -427,69 +328,88 @@ export async function GET(
     if (sma20) recentTrend += `，SMA20 ${sma20.toFixed(1)}`;
     if (sma60) recentTrend += `，SMA60 ${sma60.toFixed(1)}`;
 
-    const playbook = await getTacticalPlaybook({
-      ticker: norm.symbol,
-      stockName: companyNameZh || norm.symbol,
-      price: latestClose,
-      support: keyLevels.supportLevel || (technicalTactics?.levels.support ?? 0),
-      resistance: keyLevels.breakoutLevel || (technicalTactics?.levels.resistance ?? 0),
-      macroRisk: crashWarning.score ?? 0,
-      technicalTrend: technicalTactics?.signals[0]?.status || "趨勢不明",
-      flowScore: flowSignals.flowScore ?? 50,
-      smartMoneyFlow: flowSignals.smartMoneyFlow,
-      retailSentiment: flowSignals.retailSentiment,
-      flowVerdict: flowSignals.flowVerdict,
-      institutionalLots: flowSignals.institutionalLots,
-      trustLots: flowSignals.trustLots,
-      marginLots: flowSignals.marginLots,
-      shortLots: flowSignals.shortLots,
-      insiderTransfers,
-      recentTrend,
-      recentNews: snapshotData.news
-        .filter((n: any) => {
-          if (typeof n === 'string') return true;
-          if (!n.date) return true;
-          const newsDate = new Date(n.date);
-          const twoDaysAgo = subDays(new Date(), 2);
-          return newsDate >= twoDaysAgo;
-        })
-        .slice(0, 5)
-        .map((n: any) => typeof n === 'string' ? n : `[${n.date.split(' ')[0]}] ${n.title}`),
-    });
-
-    // Adjust strategy confidence based on crash score
-    if (crashWarning.score !== null) {
-      strategy.confidence = Math.max(0, strategy.confidence * (1 - crashWarning.score / 150));
-    }
-
     // --- Lite Mode Logic: Skip heavy computations if requested ---
     let playbookResult = { shortSummary: "數據整理中", tacticalScript: "", telegramCaption: "" };
     let globalLinkageResultData = null;
     let insiderTransfersResultData: any[] = [];
+    let crashWarning: any = { score: 0, level: "正常", triggersTop: [] };
 
     if (isLite) {
       // 在精簡模式下，我們只回傳基礎分數與數據，不進行 AI 與複雜運算
       playbookResult.shortSummary = explainBreakdown.trend.reasons[0]?.replace('。', '') || "趨勢分析中";
     } else {
       // Parallelize Global Linkage, Crash Warning, and Insider Transfers (Full Mode Only)
-      const [glRes, marketData, itRes] = await Promise.all([
+      const [glRes, mktData, itRes] = await Promise.all([
         (async () => {
+          // --- New Global Linkage Pipeline (Clustering & Auto-Mapping) ---
           const stockProfile = await resolveStockProfile(norm.symbol, displayName);
-          const { members: allMembers, targetClusterId } = await getOrComputeClusters(norm.symbol, mappedPricesTw, 15);
+
+          // 1. Compute dynamic clusters
+          const { members: allMembers, targetClusterId } = await getOrComputeClusters(
+            norm.symbol,
+            mappedPricesTw,
+            15
+          );
+
+          // 2. Filter target's cluster members
           const clusterMembers = Array.from(allMembers.values()).filter(m => m.clusterId === targetClusterId);
+
+          // 3. Resolve dominant theme (Sector name)
           const themeName = stockProfile.sectorZh;
           const usMapping = mapThemeToUS(themeName, norm.symbol);
+
+          // 4. Local Peers (TW)
           const twPeerLinkage = await selectTwPeers(norm.symbol, clusterMembers, themeName, allMembers);
+
+          // 5. Overseas Drivers
           const allUsSymbols = Array.from(new Set([usMapping.sector.id, ...usMapping.hints]));
           const globalDataMap: Record<string, any[]> = {};
           let globalFetchSuccess = true;
+
           try {
-            const globalBars = await Promise.all(allUsSymbols.map(async (sym) => ({ symbol: sym, bars: await fetchYahooFinanceBars(sym, 120) })));
-            for (const res of globalBars) { if (res.bars.length === 0) globalFetchSuccess = false; globalDataMap[res.symbol] = res.bars; }
-          } catch (e) { globalFetchSuccess = false; }
+            const globalBars = await Promise.all(
+              allUsSymbols.map(async (sym) => {
+                return { symbol: sym, bars: await fetchYahooFinanceBars(sym, 120) };
+              })
+            );
+            for (const res of globalBars) {
+              if (res.bars.length === 0) {
+                globalFetchSuccess = false;
+              }
+              globalDataMap[res.symbol] = res.bars;
+            }
+          } catch (e) {
+            console.error("Failed to fetch overseas data for Global Linkage", e);
+            globalFetchSuccess = false;
+          }
+
           let selectedDrivers = selectDrivers(mappedPricesTw, usMapping, globalDataMap);
           let relativeStrength = calculateRelativeStrength(mappedPricesTw, selectedDrivers.sector, globalDataMap);
-          return { linkage: { profile: stockProfile, drivers: selectedDrivers, relativeStrength, twPeerLinkage }, warning: null };
+
+          if (!globalFetchSuccess || !selectedDrivers.sector || selectedDrivers.peers.length === 0) {
+            if (!selectedDrivers.sector) {
+              selectedDrivers = { sector: null, peers: [] };
+            }
+            return {
+              linkage: {
+                profile: stockProfile,
+                drivers: selectedDrivers,
+                relativeStrength,
+                twPeerLinkage
+              },
+              warning: "目前海外資料暫時無法取得，連動指標以可用資料估算或暫停顯示"
+            };
+          }
+
+          return {
+            linkage: {
+              profile: stockProfile,
+              drivers: selectedDrivers,
+              relativeStrength,
+              twPeerLinkage
+            },
+            warning: null
+          };
         })(),
         getMarketIndicators({
           symbols: ["^VIX", "^MOVE", "SOXX", "QQQ", "^DXY", "DX-Y.NYB", "UUP", "USDJPY=X", "JPY=X"],
@@ -497,12 +417,25 @@ export async function GET(
         }),
         (async () => {
           if (!isTaiwanStock(norm.symbol)) return [];
-          try { return await getFilteredInsiderTransfers(norm.symbol); } catch (e) { return []; }
+          try {
+            return await getFilteredInsiderTransfers(norm.symbol);
+          } catch (e) {
+            console.warn("[Snapshot] Failed to fetch insider transfers", e);
+            return [];
+          }
         })()
       ]);
 
       globalLinkageResultData = glRes.linkage;
+      if (glRes.warning) warnings.push(glRes.warning);
+      
       insiderTransfersResultData = itRes;
+      crashWarning = evaluateCrashWarning(mktData);
+
+      // Adjust strategy confidence based on crash score
+      if (crashWarning.score !== null) {
+        strategy.confidence = Math.max(0, strategy.confidence * (1 - crashWarning.score / 150));
+      }
 
       playbookResult = await getTacticalPlaybook({
         ticker: norm.symbol,
@@ -510,7 +443,7 @@ export async function GET(
         price: latestClose,
         support: keyLevels.supportLevel || (technicalTactics?.levels.support ?? 0),
         resistance: keyLevels.breakoutLevel || (technicalTactics?.levels.resistance ?? 0),
-        macroRisk: evaluateCrashWarning(marketData).score ?? 0,
+        macroRisk: crashWarning.score ?? 0,
         technicalTrend: technicalTactics?.signals[0]?.status || "趨勢不明",
         flowScore: flowSignals.flowScore ?? 50,
         smartMoneyFlow: flowSignals.smartMoneyFlow,
@@ -522,7 +455,16 @@ export async function GET(
         shortLots: flowSignals.shortLots,
         insiderTransfers: insiderTransfersResultData,
         recentTrend,
-        recentNews: snapshotData.news.slice(0, 5).map((n: any) => typeof n === 'string' ? n : `[${n.date?.split(' ')[0]}] ${n.title}`),
+        recentNews: snapshotData.news
+          .filter((n: any) => {
+            if (typeof n === 'string') return true;
+            if (!n.date) return true;
+            const newsDate = new Date(n.date);
+            const twoDaysAgo = subDays(new Date(), 2);
+            return newsDate >= twoDaysAgo;
+          })
+          .slice(0, 5)
+          .map((n: any) => typeof n === 'string' ? n : `[${n.date?.split(' ')[0]}] ${n.title}`),
       });
     }
 

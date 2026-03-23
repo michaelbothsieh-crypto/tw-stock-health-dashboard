@@ -118,7 +118,6 @@ export async function generateStockAnalysis(input: StockAnalystInput): Promise<s
             });
             const result = completion.choices[0]?.message?.content?.trim();
             if (result && result.length > 30) {
-                console.log(`[StockAnalyst] Generated with ${model} (${result.length} chars)`);
                 return result;
             }
         } catch (error) {

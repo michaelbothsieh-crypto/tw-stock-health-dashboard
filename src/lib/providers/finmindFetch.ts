@@ -132,7 +132,6 @@ export async function finmindFetch(args: FinmindFetchArgs): Promise<FinmindFetch
     // 2. Check Redis Cache
     const cachedBody = await getCache<any>(redisKey);
     if (cachedBody) {
-      console.log(`[Cache Hit] ${redisKey}`);
       return {
         ok: true,
         body: cachedBody,

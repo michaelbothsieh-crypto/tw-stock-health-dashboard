@@ -144,7 +144,7 @@ export async function getOrComputeClusters(
     console.warn(`[ClusteringEngine] Redis cache read failed:`, error);
   }
 
-  console.log(`[ClusteringEngine] Computing dynamic K-Means clusters (K=${k}) for ${targetSymbol}...`);
+// 移除 console.log(`[ClusteringEngine] Computing dynamic K-Means clusters (K=${k}) for ${targetSymbol}...`);
 
   // We want ~100 symbols + targetSymbol
   const activeSymbols = new Set(CLUSTER_STOCK_POOL);

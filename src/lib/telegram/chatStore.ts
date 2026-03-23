@@ -45,7 +45,6 @@ export async function registerChatId(chatId: number | string): Promise<void> {
   }
   try {
     await upstashRequest(config, ["SADD", REDIS_KEY, String(chatId)]);
-    console.log(`[chatStore] Registered chat_id: ${chatId}`);
   } catch (error) {
     console.error("[chatStore] Failed to register chat_id:", error);
   }
@@ -87,7 +86,6 @@ export async function removeChatId(chatId: number | string): Promise<void> {
   if (!config) return;
   try {
     await upstashRequest(config, ["SREM", REDIS_KEY, String(chatId)]);
-    console.log(`[chatStore] Removed chat_id: ${chatId}`);
   } catch (error) {
     console.error("[chatStore] Failed to remove chat_id:", error);
   }

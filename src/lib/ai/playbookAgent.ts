@@ -34,7 +34,7 @@ export interface ActionPlaybook {
 
 // Tier 3: Rule-based Fallback (深度優化版)
 export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook {
-  console.log('🤖 Current AI Tier: Rule-based (Enhanced)');
+// 移除 console.log('🤖 Current AI Tier: Rule-based (Enhanced)');
 
   const fPrice = Number(ctx.price).toFixed(2);
   const fSupport = Number(ctx.support).toFixed(2);

@@ -85,7 +85,6 @@ async function forwardToLazyTube(params: {
     data = text;
   }
 
-  console.log("[LINE] LazyTube response:", response.status, data);
   return { response, data };
 }
 
@@ -144,7 +143,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        console.log(`[LINE Webhook] Command detected: ${userText}`);
+// 移除 console.log("[LINE Webhook] Command detected: ${userText}");
 
         const chatId = getChatId(event.source);
 
@@ -303,7 +302,7 @@ export async function POST(req: NextRequest) {
           replyToken: event.replyToken,
           messages,
         });
-        console.log(`[LINE Webhook] Successfully replied to ${userText}`);
+// 移除 console.log("[LINE Webhook] Successfully replied to ${userText}");
       } catch (eventErr) {
         console.error("[LINE Webhook] Error processing specific event:", eventErr);
       }
