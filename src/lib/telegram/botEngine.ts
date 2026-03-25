@@ -672,6 +672,24 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       return null; 
       }
       }
+async function fetchPriceOnly(symbol: string): Promise<number | null> {
+   try {
+      const isUs = /^[A-Z]{1,5}$/.test(symbol);
+      let yahooSymbol = symbol;
+      if (!isUs) {
+         // 台股代號推算 (含 3 開頭上櫃)
+         const isTPEX = symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5") || symbol.startsWith("3") || symbol.toUpperCase().endsWith("B");
+         yahooSymbol = isTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
+      }
+      const quote = await yahooFinance.quote(yahooSymbol);
+      const res: any = Array.isArray(quote) ? quote[0] : quote;
+      return res?.regularMarketPrice || null;
+   } catch (error) {
+      console.error(`[BotEngine] fetchPriceOnly error for ${symbol}:`, error);
+      return null;
+   }
+}
+
 export async function generateBotReply(text: string, options?: TelegramHandleOptions): Promise<{ text: string, chartBuffer?: Buffer | null } | null> {
    const trimmedText = text.trim();
    if (!trimmedText.startsWith("/")) return null;
@@ -762,23 +780,23 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          const chartData: { symbol: string; pct: number; count: number }[] = [];
          const results = await Promise.all(ranks.map(async (r, index) => {
             try {
-               const isUs = /^[A-Z]{1,5}$/.test(r.symbol);
-               const live = isUs 
-                  ? await fetchLiveUsStockCard(r.symbol, options.baseUrl)
-                  : await fetchLiveStockCard(r.symbol, options.baseUrl);
+               // 改用輕量級抓取，只拿價格，速度快且不易 Timeout
+               const currentPrice = await fetchPriceOnly(r.symbol);
                
-               const currentPrice = live?.close || 0;
+               if (currentPrice === null) {
+                  return `${index + 1}. <b>${r.symbol}</b> (查 ${r.count} 次) - 報價抓取失敗`;
+               }
+
                const diff = currentPrice - r.initialPrice;
                const pct = r.initialPrice !== 0 ? (diff / r.initialPrice) * 100 : 0;
                
-               // 改用環境無關的日期處理，避免 zh-TW locale 遺失導致崩潰
                const d = new Date(r.initialTimestamp);
                const dateStr = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`;
                
                chartData.push({ symbol: r.symbol, pct, count: r.count });
                return `${index + 1}. <b>${r.symbol}</b> (查 ${r.count} 次)\n   ${dateStr}: ${formatPrice(r.initialPrice, 2)} → 現價: ${formatPrice(currentPrice, 2)} (${formatSignedPct(pct, 2)})`;
-            } catch (e) {
-               return `${index + 1}. <b>${r.symbol}</b> (數據抓取失敗)`;
+            } catch (e: any) {
+               return `${index + 1}. <b>${r.symbol}</b> (處理失敗: ${e.message})`;
             }
          }));
 
