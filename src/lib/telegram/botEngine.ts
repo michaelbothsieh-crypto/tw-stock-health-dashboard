@@ -896,7 +896,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          const currentPrice = live.close!;
          const pct = ((currentPrice - initialPrice) / initialPrice) * 100;
          const startStr = history[0].date.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
-         const chartBuffer = await renderProfitChart(symbol, history, initialPrice, currentPrice).catch(() => null);
+         const chartBuffer = await renderProfitChart(symbol, history, initialPrice, currentPrice, periodRaw).catch(() => null);
          
          return {
             text: `📈 <b>${symbol} 報酬率分析</b>\n\n` +
@@ -913,7 +913,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          symbol: r.symbol,
          data: r.history,
          initialPrice: r.initialPrice
-      }))).catch(() => null);
+      })), periodRaw).catch(() => null);
 
       const textParts = validResults.map(r => {
          const pct = ((r.live.close! - r.initialPrice) / r.initialPrice) * 100;

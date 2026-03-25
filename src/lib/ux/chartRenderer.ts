@@ -312,6 +312,7 @@ export async function renderRankChart(
  */
 export async function renderMultiRoiChart(
   series: { symbol: string; data: { date: Date; close: number }[]; initialPrice: number }[],
+  period: string = "",
   options: { width?: number; height?: number } = {}
 ): Promise<Buffer> {
   ensureFonts();
@@ -335,7 +336,7 @@ export async function renderMultiRoiChart(
   ctx.fillStyle = '#ffffff';
   ctx.font = `bold 28px ${FONT_FAMILY}`;
   ctx.textAlign = 'left';
-  ctx.fillText('ROI Comparison Analysis', padding.left, 45);
+  ctx.fillText(`ROI Comparison (${period})`, padding.left, 45);
 
   // 計算所有系列的百分比數據
   const normalizedSeries = series.map((s, idx) => {
@@ -451,6 +452,7 @@ export async function renderProfitChart(
   history: { date: Date; close: number }[],
   initialPrice: number,
   currentPrice: number,
+  period: string = "",
   options: { width?: number; height?: number } = {}
 ): Promise<Buffer> {
   ensureFonts();
@@ -472,7 +474,7 @@ export async function renderProfitChart(
   ctx.fillStyle = '#ffffff';
   ctx.font = `bold 28px ${FONT_FAMILY}`;
   ctx.textAlign = 'left';
-  ctx.fillText(`${symbol} ROI Analysis`, padding.left, 45);
+  ctx.fillText(`${symbol} ROI Analysis (${period})`, padding.left, 45);
 
   ctx.font = `bold 24px ${FONT_FAMILY}`;
   ctx.fillStyle = totalPct >= 0 ? '#ef4444' : '#22c55e';
