@@ -253,7 +253,7 @@ async function ensureTelegramCommandsSynced() {
                { command: "us", description: "查詢美股個股（例：/us NVDA）" },
                { command: "whatis", description: "分析公司做什麼及近期新聞（例：/whatis 2330）" },
                { command: "rank", description: "列出本群熱門股票及查詢至今報酬率" },
-               { command: "profit", description: "計算指定時間段報酬率（例：/profit 2330 1m）" },
+               { command: "roi", description: "計算指定時間段報酬率（例：/roi 2330 1m）" },
             ],
          }),
       });
@@ -777,9 +777,9 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       return { text: lines.join("\n"), chartBuffer };
    }
 
-   if (command === "/profit") {
+   if (command === "/roi") {
       const [tickerRaw, periodRaw] = query.split(/\s+/);
-      if (!tickerRaw || !periodRaw) return { text: "用法: /profit 股票代號 時間(1m, 1y, 或 YYYY-MM-DD)\n例如: /profit 2330 1m" };
+      if (!tickerRaw || !periodRaw) return { text: "用法: /roi 股票代號 時間(1m, 3m, 6m, 1y, ytd, 或 YYYY-MM-DD)\n例如: /roi 2330 1m" };
 
       const symbol = resolveCodeFromInputLocal(tickerRaw) || tickerRaw.toUpperCase();
       const isUs = /^[A-Z]{1,5}$/.test(symbol);
@@ -864,7 +864,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
    // 先送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
    try {
-      if (command === "/tw" || command === "/us" || command === "/whatis" || command === "/rank" || command === "/profit") {
+      if (command === "/tw" || command === "/us" || command === "/whatis" || command === "/rank" || command === "/roi") {
          await ensureTelegramCommandsSynced();
          progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
       }

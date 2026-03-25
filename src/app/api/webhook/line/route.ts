@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
                   "📊 股票查詢：\n" +
                   "輸入 /tw <代號> (例：/tw 2330)\n" +
                   "輸入 /rank (熱門排行)\n" +
-                  "輸入 /profit <代號> <時間> (績效分析)\n\n" +
+                  "輸入 /roi <代號> <時間> (績效分析)\n\n" +
                   "🎥 影片工具：\n" +
                   "輸入 /nlm <YouTube網址>\n" +
                   "輸入 /pic <YouTube網址>\n" +
