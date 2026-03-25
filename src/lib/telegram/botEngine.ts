@@ -4,9 +4,11 @@ import { getTacticalPlaybook } from "../ai/playbookAgent";
 import { getStockWhatIs } from "../ai/whatisAgent";
 import { getFilteredInsiderTransfers } from "../providers/twseInsiderFetch";
 import { twStockNames } from "../../data/twStockNames";
-import { renderStockChart, ChartDataPoint } from "../ux/chartRenderer";
+import { renderStockChart, ChartDataPoint, renderRankChart, renderProfitChart } from "../ux/chartRenderer";
 import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
 import { fetchFugleQuote } from "@/lib/providers/fugleQuote";
+import { recordStockSearch, getTopRankedStocks } from "./rankStore";
+import { subMonths, subYears, parseISO, startOfDay, endOfDay } from "date-fns";
 
 // 建立反向查詢表加速名稱解析
 const reverseStockNames: Record<string, string> = {};
@@ -108,6 +110,7 @@ type StockCard = {
 
 type TelegramHandleOptions = {
    baseUrl?: string;
+   chatId?: number | string;
 };
 
 type SnapshotLike = {
@@ -248,6 +251,8 @@ async function ensureTelegramCommandsSynced() {
                { command: "tw", description: "查詢台股個股（例：/tw 2330）" },
                { command: "us", description: "查詢美股個股（例：/us NVDA）" },
                { command: "whatis", description: "分析公司做什麼及近期新聞（例：/whatis 2330）" },
+               { command: "rank", description: "列出本群熱門股票及查詢至今報酬率" },
+               { command: "profit", description: "計算指定時間段報酬率（例：/profit 2330 1m）" },
             ],
          }),
       });
@@ -671,6 +676,9 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       if (!query) return { text: "請輸入股票代號，例如: /tw 2330" };
       const liveCard = await fetchLiveStockCard(query, options?.baseUrl);
       if (liveCard) {
+         if (options?.chatId) {
+            recordStockSearch(options.chatId, liveCard.symbol, liveCard.close).catch(() => null);
+         }
          const finalMsg = await buildStockCardWithAI(liveCard);
          return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
       }
@@ -709,6 +717,9 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       if (tickers.length === 1) {
          const liveCard = await fetchLiveUsStockCard(tickers[0], options?.baseUrl);
          if (liveCard) {
+            if (options?.chatId) {
+               recordStockSearch(options.chatId, liveCard.symbol, liveCard.close).catch(() => null);
+            }
             const finalMsg = await buildStockCardWithAI(liveCard);
             return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
          }
@@ -723,10 +734,109 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          if (!card) {
             parts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料`));
          } else {
+            if (options?.chatId && card.close) {
+               recordStockSearch(options.chatId, card.symbol, card.close).catch(() => null);
+            }
             parts.push(buildStockCardLines(card, card.snapshotVerdict || "觀察中"));
          }
       }
       return { text: parts.join("\n\n" + escapeHtml("──────────") + "\n\n"), chartBuffer: null };
+   }
+
+   if (command === "/rank") {
+      if (!options?.chatId) return { text: "無法辨識群組 ID，請在群組中使用。" };
+      const ranks = await getTopRankedStocks(options.chatId);
+      if (ranks.length === 0) return { text: "目前尚未有股票查詢紀錄。" };
+
+      const lines: string[] = ["🏆 <b>本群熱門股票表現 (Top 10)</b>", ""];
+      
+      const chartData: { symbol: string; pct: number; count: number }[] = [];
+      const results = await Promise.all(ranks.map(async (r, index) => {
+         const isUs = /^[A-Z]{1,5}$/.test(r.symbol);
+         const live = isUs 
+            ? await fetchLiveUsStockCard(r.symbol, options.baseUrl)
+            : await fetchLiveStockCard(r.symbol, options.baseUrl);
+         
+         const currentPrice = live?.close || 0;
+         const diff = currentPrice - r.initialPrice;
+         const pct = r.initialPrice !== 0 ? (diff / r.initialPrice) * 100 : 0;
+         const dateStr = new Date(r.initialTimestamp).toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
+         
+         chartData.push({ symbol: r.symbol, pct, count: r.count });
+         return `${index + 1}. <b>${r.symbol}</b> (查 ${r.count} 次)\n   ${dateStr}: ${formatPrice(r.initialPrice, 2)} → 現價: ${formatPrice(currentPrice, 2)} (${formatSignedPct(pct, 2)})`;
+      }));
+
+      // 按報酬率排序圖表數據 (從高到低)
+      chartData.sort((a, b) => b.pct - a.pct);
+      const chartBuffer = await renderRankChart(chartData).catch(() => null);
+
+      lines.push(...results);
+      return { text: lines.join("\n"), chartBuffer };
+   }
+
+   if (command === "/profit") {
+      const [tickerRaw, periodRaw] = query.split(/\s+/);
+      if (!tickerRaw || !periodRaw) return { text: "用法: /profit 股票代號 時間(1m, 1y, 或 YYYY-MM-DD)\n例如: /profit 2330 1m" };
+
+      const symbol = resolveCodeFromInputLocal(tickerRaw) || tickerRaw.toUpperCase();
+      const isUs = /^[A-Z]{1,5}$/.test(symbol);
+      
+      const live = isUs 
+         ? await fetchLiveUsStockCard(symbol, options?.baseUrl)
+         : await fetchLiveStockCard(symbol, options?.baseUrl);
+      
+      if (!live || !live.close) return { text: `找不到 ${symbol} 的當前報價。` };
+
+      let startDate: Date;
+      const period = periodRaw.toLowerCase();
+      if (period === "1m") startDate = subMonths(new Date(), 1);
+      else if (period === "3m") startDate = subMonths(new Date(), 3);
+      else if (period === "6m") startDate = subMonths(new Date(), 6);
+      else if (period === "1y") startDate = subYears(new Date(), 1);
+      else if (period === "ytd") startDate = new Date(new Date().getFullYear(), 0, 1);
+      else {
+         try {
+            startDate = parseISO(periodRaw);
+            if (isNaN(startDate.getTime())) throw new Error();
+         } catch {
+            return { text: "時間格式錯誤。請使用 1m, 1y 或 2025-01-01。" };
+         }
+      }
+
+      let yahooSymbol = isUs ? symbol : symbol;
+      if (!isUs) {
+         const isTPEX = symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5") || symbol.toUpperCase().endsWith("B");
+         yahooSymbol = isTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
+      }
+      
+      try {
+         const history = await yahooFinance.historical(yahooSymbol, {
+            period1: startDate,
+            period2: new Date(),
+         });
+
+         if (!history || history.length === 0) return { text: `找不到 ${yahooSymbol} 在 ${periodRaw} 的歷史資料。` };
+         
+         const initial = history[0];
+         const initialPrice = initial.adjClose || initial.close;
+         const currentPrice = live.close;
+         const diff = currentPrice - initialPrice;
+         const pct = (diff / initialPrice) * 100;
+         
+         const startStr = initial.date.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
+         const chartBuffer = await renderProfitChart(symbol, history.map(h => ({ date: h.date, close: h.adjClose || h.close })), initialPrice, currentPrice).catch(() => null);
+         
+         return {
+            text: `📈 <b>${symbol} 報酬率分析</b>\n\n` +
+                  `起點: ${startStr}\n` +
+                  `當時收盤: ${formatPrice(initialPrice, 2)}\n` +
+                  `現在價格: ${formatPrice(currentPrice, 2)}\n\n` +
+                  `總報酬率: <b>${formatSignedPct(pct, 2)}</b>`,
+            chartBuffer
+         };
+      } catch (err: any) {
+         return { text: `抓取歷史資料失敗: ${err.message}` };
+      }
    }
 
    // 如果不是正確指令，回傳 null 以保持沉默
@@ -742,12 +852,12 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
    // 先送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
    try {
-      if (command === "/tw" || command === "/us" || command === "/whatis") {
+      if (command === "/tw" || command === "/us" || command === "/whatis" || command === "/rank" || command === "/profit") {
          await ensureTelegramCommandsSynced();
          progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
       }
 
-      const reply = await generateBotReply(text, options);
+      const reply = await generateBotReply(text, { ...options, chatId });
       if (!reply) {
          if (progressMessageId) await deleteMessage(chatId, progressMessageId);
          return;

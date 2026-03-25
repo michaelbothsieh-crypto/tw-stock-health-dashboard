@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     // 2. 指令白名單：僅處理與本專案相關的指令
     const [commandRaw] = userText.split(/\s+/);
     const command = commandRaw.toLowerCase().split("@")[0];
-    const ALLOWED_COMMANDS = ["/tw", "/us", "/whatis", "/daily", "/stock", "/watchlist", "/setlist", "/start", "/help"];
+    const ALLOWED_COMMANDS = ["/tw", "/us", "/whatis", "/daily", "/stock", "/watchlist", "/setlist", "/start", "/help", "/rank", "/profit"];
     
     if (!ALLOWED_COMMANDS.includes(command)) {
       // 若非專屬指令（例如 /nlm, /pic），直接結束並保持沉默

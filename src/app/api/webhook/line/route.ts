@@ -121,7 +121,9 @@ export async function POST(req: NextRequest) {
                   "👋 歡迎使用 LazyTube & Stock 助手！\n\n" +
                   "您可以透過以下指令與我互動：\n\n" +
                   "📊 股票查詢：\n" +
-                  "輸入 /tw <代號> (例：/tw 2330)\n\n" +
+                  "輸入 /tw <代號> (例：/tw 2330)\n" +
+                  "輸入 /rank (熱門排行)\n" +
+                  "輸入 /profit <代號> <時間> (績效分析)\n\n" +
                   "🎥 影片工具：\n" +
                   "輸入 /nlm <YouTube網址>\n" +
                   "輸入 /pic <YouTube網址>\n" +
@@ -251,20 +253,19 @@ export async function POST(req: NextRequest) {
               ],
             });
           }
+continue;
+}
 
-          continue;
-        }
-
-        const reply = await generateBotReply(userText, { baseUrl: origin });
-
+const reply = await generateBotReply(userText, { baseUrl: origin, chatId });
         if (!reply) {
           continue;
         }
 
         const cleanReply = reply.text
-          .replace(/<br\s*\/?>/gi, "\n")   // <br> → 換行
-          .replace(/<[^>]+>/g, "")         // 移除其餘 HTML 標籤
-          .replace(/&amp;/g, "&")          // 解 HTML entities
+          .replace(/<b>(.*?)<\/b>/gi, "$1") // 移除 <b> 標籤並保留內容
+          .replace(/<br\s*\/?>/gi, "\n")    // <br> → 換行
+          .replace(/<[^>]+>/g, "")          // 移除其餘 HTML 標籤
+          .replace(/&amp;/g, "&")           // 解 HTML entities
           .replace(/&lt;/g, "<")
           .replace(/&gt;/g, ">")
           .replace(/&quot;/g, '"')
@@ -272,6 +273,7 @@ export async function POST(req: NextRequest) {
           .replace(/\*/g, "");
         const messages: line.messagingApi.Message[] = [];
         const isStockCmd = userText.startsWith("/tw") || userText.startsWith("/us") || userText.startsWith("/whatis");
+
         
         // 只有當成功產生圖表 (reply.chartBuffer 存在) 時才發送圖片訊息
         if (isStockCmd && reply.chartBuffer) {

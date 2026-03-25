@@ -232,3 +232,179 @@ export async function renderStockChart(
 
   return canvas.toBuffer('image/png');
 }
+
+/**
+ * 繪製熱門股票報酬率排行圖 (橫向長條圖)
+ */
+export async function renderRankChart(
+  data: { symbol: string; pct: number; count: number }[],
+  options: { width?: number; height?: number } = {}
+): Promise<Buffer> {
+  ensureFonts();
+  const width = options.width ?? 800;
+  const height = options.height ?? (data.length * 50 + 100);
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+
+  // 背景
+  ctx.fillStyle = '#121212';
+  ctx.fillRect(0, 0, width, height);
+
+  const padding = { top: 60, right: 100, bottom: 40, left: 120 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+
+  // 標題
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold 24px ${FONT_FAMILY}`;
+  ctx.textAlign = 'center';
+  ctx.fillText('🏆 本群熱門股票報酬率排行', width / 2, 35);
+
+  if (data.length === 0) return canvas.toBuffer('image/png');
+
+  // 計算比例
+  const maxPct = Math.max(...data.map(d => Math.abs(d.pct)), 5);
+  const getX = (pct: number) => padding.left + (chartWidth / 2) + (pct / (maxPct * 1.1)) * (chartWidth / 2);
+  const barHeight = 30;
+  const gap = (chartHeight - (data.length * barHeight)) / (data.length + 1);
+
+  // 繪製中心軸
+  ctx.strokeStyle = '#404040';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padding.left + chartWidth / 2, padding.top);
+  ctx.lineTo(padding.left + chartWidth / 2, height - padding.bottom);
+  ctx.stroke();
+
+  data.forEach((d, i) => {
+    const y = padding.top + gap + i * (barHeight + gap);
+    const centerX = padding.left + chartWidth / 2;
+    const endX = getX(d.pct);
+    const color = d.pct >= 0 ? '#ef4444' : '#22c55e';
+
+    // 繪製長條
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.min(centerX, endX), y, Math.abs(endX - centerX), barHeight);
+
+    // 繪製代號與查詢次數
+    ctx.fillStyle = '#e5e7eb';
+    ctx.font = `bold 16px ${FONT_FAMILY}`;
+    ctx.textAlign = 'right';
+    ctx.fillText(d.symbol, padding.left - 10, y + barHeight / 2 + 6);
+    
+    ctx.font = `12px ${FONT_FAMILY}`;
+    ctx.fillStyle = '#9ca3af';
+    ctx.fillText(`${d.count}次`, padding.left - 10, y + barHeight / 2 + 22);
+
+    // 繪製百分比文字
+    ctx.fillStyle = color;
+    ctx.font = `bold 16px ${FONT_FAMILY}`;
+    ctx.textAlign = d.pct >= 0 ? 'left' : 'right';
+    const textX = d.pct >= 0 ? endX + 10 : endX - 10;
+    ctx.fillText(`${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%`, textX, y + barHeight / 2 + 6);
+  });
+
+  return canvas.toBuffer('image/png');
+}
+
+/**
+ * 繪製報酬率線圖
+ */
+export async function renderProfitChart(
+  symbol: string,
+  history: { date: Date; close: number }[],
+  initialPrice: number,
+  currentPrice: number,
+  options: { width?: number; height?: number } = {}
+): Promise<Buffer> {
+  ensureFonts();
+  const width = options.width ?? 1000;
+  const height = options.height ?? 500;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+
+  // 背景
+  ctx.fillStyle = '#121212';
+  ctx.fillRect(0, 0, width, height);
+
+  const padding = { top: 80, right: 80, bottom: 60, left: 80 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+
+  // 標題與數據
+  const totalPct = ((currentPrice - initialPrice) / initialPrice) * 100;
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold 28px ${FONT_FAMILY}`;
+  ctx.textAlign = 'left';
+  ctx.fillText(`${symbol} 報酬率分析`, padding.left, 45);
+
+  ctx.font = `bold 24px ${FONT_FAMILY}`;
+  ctx.fillStyle = totalPct >= 0 ? '#ef4444' : '#22c55e';
+  ctx.textAlign = 'right';
+  ctx.fillText(`${totalPct >= 0 ? '+' : ''}${totalPct.toFixed(2)}%`, width - padding.right, 45);
+
+  if (history.length < 2) return canvas.toBuffer('image/png');
+
+  // 計算比例
+  const allPrices = [...history.map(h => h.close), initialPrice, currentPrice];
+  const maxPrice = Math.max(...allPrices) * 1.05;
+  const minPrice = Math.min(...allPrices) * 0.95;
+  const priceRange = maxPrice - minPrice;
+
+  const getX = (i: number) => padding.left + (i * chartWidth) / (history.length - 1);
+  const getY = (price: number) => padding.top + (maxPrice - price) * (chartHeight / priceRange);
+
+  // 繪製基準線 (Initial Price)
+  const initialY = getY(initialPrice);
+  ctx.strokeStyle = '#6b7280';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([8, 8]);
+  ctx.beginPath();
+  ctx.moveTo(padding.left, initialY);
+  ctx.lineTo(width - padding.right, initialY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // 基準線標籤
+  ctx.fillStyle = '#6b7280';
+  ctx.font = `14px ${FONT_FAMILY}`;
+  ctx.textAlign = 'left';
+  ctx.fillText(`起點: ${initialPrice.toFixed(2)}`, padding.left + 5, initialY - 10);
+
+  // 繪製折線
+  ctx.strokeStyle = totalPct >= 0 ? '#ef4444' : '#22c55e';
+  ctx.lineWidth = 3;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  history.forEach((h, i) => {
+    const x = getX(i);
+    const y = getY(h.close);
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // 繪製漸層填充
+  const gradient = ctx.createLinearGradient(0, padding.top, 0, height - padding.bottom);
+  gradient.addColorStop(0, totalPct >= 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.2)');
+  gradient.addColorStop(1, 'rgba(18, 18, 18, 0)');
+  ctx.fillStyle = gradient;
+  ctx.lineTo(getX(history.length - 1), height - padding.bottom);
+  ctx.lineTo(getX(0), height - padding.bottom);
+  ctx.closePath();
+  ctx.fill();
+
+  // 時間軸標籤
+  ctx.fillStyle = '#9ca3af';
+  ctx.font = `14px ${FONT_FAMILY}`;
+  ctx.textAlign = 'center';
+  const labelCount = 5;
+  for (let i = 0; i < labelCount; i++) {
+    const idx = Math.floor((i * (history.length - 1)) / (labelCount - 1));
+    const x = getX(idx);
+    const date = history[idx].date.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
+    ctx.fillText(date, x, height - padding.bottom + 25);
+  }
+
+  return canvas.toBuffer('image/png');
+}
