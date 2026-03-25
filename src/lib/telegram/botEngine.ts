@@ -106,6 +106,7 @@ type StockCard = {
    flowScore?: number;
    macroRisk?: number;
    isPriceRealTime?: boolean;
+   yahooSymbol?: string;
 };
 
 type TelegramHandleOptions = {
@@ -494,6 +495,7 @@ card.snapshotPlaybookCaption = snapshot?.playbook?.telegramCaption || snapshot?.
 card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
 card.flowScore = snapshot?.signals?.flow?.flowScore ?? undefined;
 card.macroRisk = snapshot?.crashWarning?.score ?? undefined;
+card.yahooSymbol = symbol;
 
 return card;
 } catch (error) { return null; }
@@ -654,6 +656,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
       card.flowScore = snapshot?.signals?.flow?.flowScore ?? undefined;
       card.macroRisk = snapshot?.crashWarning?.score ?? undefined;
+      card.yahooSymbol = yahooSymbol;
       // 只有台股才能用 Fugle，非台股（美股）不標示延遲
       const isTWStock = /[0-9]/.test(symbol);
       card.isPriceRealTime = isTWStock ? fugleQuote !== null : undefined;
@@ -785,7 +788,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          ? await fetchLiveUsStockCard(symbol, options?.baseUrl)
          : await fetchLiveStockCard(symbol, options?.baseUrl);
       
-      if (!live || !live.close) return { text: `找不到 ${symbol} 的當前報價。` };
+      if (!live || !live.close || !live.yahooSymbol) return { text: `找不到 ${symbol} 的當前報價或 Yahoo 代號。` };
 
       let startDate: Date;
       const period = periodRaw.toLowerCase();
@@ -803,11 +806,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          }
       }
 
-      let yahooSymbol = isUs ? symbol : symbol;
-      if (!isUs) {
-         const isTPEX = symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5") || symbol.toUpperCase().endsWith("B");
-         yahooSymbol = isTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
-      }
+      const yahooSymbol = live.yahooSymbol;
       
       try {
          // 使用 chart API 代替 historical，通常對缺失數據更強健
