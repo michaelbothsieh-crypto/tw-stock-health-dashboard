@@ -33,7 +33,6 @@ function getOtFont() {
 function drawTextAsPath(ctx: any, text: string, x: number, y: number, fontSize: number, color: string, options: { textAlign?: 'left' | 'right' | 'center' } = {}) {
   const font = getOtFont();
   if (!font) {
-    // Fallback to fillText if font not loaded
     ctx.fillStyle = color;
     ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
     ctx.fillText(text, x, y);
@@ -49,16 +48,26 @@ function drawTextAsPath(ctx: any, text: string, x: number, y: number, fontSize: 
     else if (align === 'center') drawX = x - width / 2;
   }
 
+  // 使用 opentype 獲取路徑並手動繪製到 Canvas
   const path = font.getPath(text, drawX, y, fontSize);
   ctx.fillStyle = color;
   
-  // napi-rs/canvas 的 ctx 可以直接執行 opentype path 的 draw
-  // 或者手動轉換
-  const svgPath = path.toPathData(2); 
-  // 這裡我們需要一個簡單的方法將 opentype path 畫到 canvas ctx 上
-  // opentype 的 path 對象有 draw(ctx) 方法
-  path.fill = color;
-  path.draw(ctx);
+  // 透過 opentype 的 path 對象獲取命令並手動繪製
+  ctx.beginPath();
+  for (const cmd of path.commands) {
+    if (cmd.type === 'M') {
+      ctx.moveTo(cmd.x, cmd.y);
+    } else if (cmd.type === 'L') {
+      ctx.lineTo(cmd.x, cmd.y);
+    } else if (cmd.type === 'C') {
+      ctx.bezierCurveTo(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.x, cmd.y);
+    } else if (cmd.type === 'Q') {
+      ctx.quadraticCurveTo(cmd.x1, cmd.y1, cmd.x, cmd.y);
+    } else if (cmd.type === 'Z') {
+      ctx.closePath();
+    }
+  }
+  ctx.fill();
 }
 
 // 字型只需要註冊一次（module-level singleton）
@@ -68,8 +77,19 @@ const FONT_FAMILY = 'NotoSans';
 
 function ensureFonts() {
   if (_fontsRegistered) return;
+  // 1. 註冊基礎 NotoSans (Latin)
   const buf = Buffer.from(NOTO_SANS_BOLD_B64, 'base64');
   GlobalFonts.register(buf, FONT_FAMILY);
+
+  // 2. 嘗試註冊較大的 TTF (可能含 CJK)
+  try {
+    const ttfPath = path.join(process.cwd(), 'public/fonts/NotoSans-Bold.ttf');
+    const ttfBuf = require('fs').readFileSync(ttfPath);
+    GlobalFonts.register(ttfBuf, 'NotoSansCJK');
+    console.log('[ChartRenderer] Registered NotoSansCJK from public/fonts');
+  } catch (e) {
+    console.warn('[ChartRenderer] Failed to register NotoSansCJK:', e);
+  }
   _fontsRegistered = true;
 }
 
