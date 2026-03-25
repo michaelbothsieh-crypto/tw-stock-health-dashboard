@@ -51,21 +51,33 @@ export async function getTopRankedStocks(chatId: string | number): Promise<Stock
   const initialKey = `tg:rank:initial:${id}`;
 
   try {
-    // 1. 從 ZSET 取得次數前十名的股票及其分數 (ZRANGE ... REV WITHSCORES)
-    // Upstash Redis SDK 的 zrange 若加上 withScores，返回 [member, score, member, score...]
-    const rawRanks = await redis.zrange(countKey, 0, 9, { rev: true, withScores: true }) as (string | number)[];
-    
-    console.log(`[rankStore] Rank ZRange result for ${id}:`, rawRanks);
+    // 1. 從 ZSET 取得次數前十名的股票及其分數
+    const rawRanks = await redis.zrange(countKey, 0, 9, { rev: true, withScores: true });
 
-    if (!rawRanks || rawRanks.length === 0) return [];
+    console.log(`[rankStore] Rank ZRange result for ${id}:`, JSON.stringify(rawRanks));
+
+    if (!rawRanks || (Array.isArray(rawRanks) && rawRanks.length === 0)) return [];
 
     const ranks: { symbol: string, count: number }[] = [];
-    for (let i = 0; i < rawRanks.length; i += 2) {
-      ranks.push({
-        symbol: rawRanks[i] as string,
-        count: Number(rawRanks[i + 1]),
-      });
+
+    // 處理不同的回傳格式
+    if (Array.isArray(rawRanks)) {
+      if (typeof rawRanks[0] === 'object' && rawRanks[0] !== null) {
+        // 格式 A: [{ member: '...', score: 10 }, ...]
+        for (const item of (rawRanks as any[])) {
+          ranks.push({ symbol: item.member, count: item.score });
+        }
+      } else {
+        // 格式 B: ['member1', 10, 'member2', 5, ...]
+        for (let i = 0; i < rawRanks.length; i += 2) {
+          ranks.push({
+            symbol: rawRanks[i] as string,
+            count: Number(rawRanks[i + 1]),
+          });
+        }
+      }
     }
+
 
     // 2. 批量取得初始價格 (HMGET)
     const symbols = ranks.map(r => r.symbol);

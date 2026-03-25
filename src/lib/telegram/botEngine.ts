@@ -254,6 +254,7 @@ async function ensureTelegramCommandsSynced() {
                { command: "whatis", description: "分析公司做什麼及近期新聞（例：/whatis 2330）" },
                { command: "rank", description: "列出本群熱門股票及查詢至今報酬率" },
                { command: "roi", description: "計算指定時間段報酬率（例：/roi 2330 1m）" },
+               { command: "debug_rank", description: "診斷排行榜連動問題" },
             ],
          }),
       });
@@ -775,6 +776,17 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
 
       lines.push(...results);
       return { text: lines.join("\n"), chartBuffer };
+   }
+
+   if (command === "/debug_rank") {
+      const { redis: redisInstance } = require("../providers/redisCache");
+      const redisStatus = redisInstance ? "✅ 已連線" : "❌ 未連線 (請檢查環境變數)";
+      return { 
+         text: `🔍 <b>排行榜診斷資訊</b>\n\n` +
+               `群組 ID: <code>${options?.chatId || "未知"}</code>\n` +
+               `Redis 狀態: ${redisStatus}\n\n` +
+               `請先輸入 <code>/tw 2330</code> 測試是否有產生紀錄。`
+      };
    }
 
    if (command === "/roi") {
