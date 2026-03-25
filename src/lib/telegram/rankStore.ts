@@ -24,6 +24,7 @@ export async function recordStockSearch(chatId: string | number, ticker: string,
   const initialKey = `tg:rank:initial:${id}`;
 
   try {
+    console.log(`[rankStore] Recording search for ${ticker} in chat ${id} (Price: ${currentPrice})`);
     // 1. 增加查詢次數 (Sorted Set)
     await redis.zincrby(countKey, 1, ticker);
 
@@ -54,6 +55,8 @@ export async function getTopRankedStocks(chatId: string | number): Promise<Stock
     // Upstash Redis SDK 的 zrange 若加上 withScores，返回 [member, score, member, score...]
     const rawRanks = await redis.zrange(countKey, 0, 9, { rev: true, withScores: true }) as (string | number)[];
     
+    console.log(`[rankStore] Rank ZRange result for ${id}:`, rawRanks);
+
     if (!rawRanks || rawRanks.length === 0) return [];
 
     const ranks: { symbol: string, count: number }[] = [];

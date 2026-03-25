@@ -677,7 +677,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       const liveCard = await fetchLiveStockCard(query, options?.baseUrl);
       if (liveCard) {
          if (options?.chatId) {
-            recordStockSearch(options.chatId, liveCard.symbol, liveCard.close).catch(() => null);
+            await recordStockSearch(options.chatId, liveCard.symbol, liveCard.close).catch(() => null);
          }
          const finalMsg = await buildStockCardWithAI(liveCard);
          return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
@@ -718,7 +718,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          const liveCard = await fetchLiveUsStockCard(tickers[0], options?.baseUrl);
          if (liveCard) {
             if (options?.chatId) {
-               recordStockSearch(options.chatId, liveCard.symbol, liveCard.close).catch(() => null);
+               await recordStockSearch(options.chatId, liveCard.symbol, liveCard.close).catch(() => null);
             }
             const finalMsg = await buildStockCardWithAI(liveCard);
             return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
@@ -735,7 +735,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             parts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料`));
          } else {
             if (options?.chatId && card.close) {
-               recordStockSearch(options.chatId, card.symbol, card.close).catch(() => null);
+               await recordStockSearch(options.chatId, card.symbol, card.close).catch(() => null);
             }
             parts.push(buildStockCardLines(card, card.snapshotVerdict || "觀察中"));
          }
