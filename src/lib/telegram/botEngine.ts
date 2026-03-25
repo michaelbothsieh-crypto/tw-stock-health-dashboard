@@ -672,9 +672,10 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       return null; 
       }
       }
-async function fetchPriceOnly(symbol: string): Promise<{ price: number | null, finalSymbol: string }> {
-   let yahooSymbol = symbol.toUpperCase();
+async function fetchPriceOnly(symbol: any): Promise<{ price: number | null, finalSymbol: string }> {
+   let yahooSymbol = String(symbol || "").toUpperCase();
    try {
+      if (!yahooSymbol) return { price: null, finalSymbol: "" };
       const isUs = /^[A-Z]{1,5}$/.test(yahooSymbol);
       if (!isUs && !yahooSymbol.includes(".")) {
          // 台股代號自動補後綴，1-4, 5, 6, 8 開頭都可能是上市或上櫃

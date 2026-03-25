@@ -65,13 +65,13 @@ export async function getTopRankedStocks(chatId: string | number): Promise<Stock
       if (typeof rawRanks[0] === 'object' && rawRanks[0] !== null) {
         // 格式 A: [{ member: '...', score: 10 }, ...]
         for (const item of (rawRanks as any[])) {
-          ranks.push({ symbol: item.member, count: item.score });
+          ranks.push({ symbol: String(item.member), count: Number(item.score) });
         }
       } else {
         // 格式 B: ['member1', 10, 'member2', 5, ...]
         for (let i = 0; i < rawRanks.length; i += 2) {
           ranks.push({
-            symbol: rawRanks[i] as string,
+            symbol: String(rawRanks[i]),
             count: Number(rawRanks[i + 1]),
           });
         }
