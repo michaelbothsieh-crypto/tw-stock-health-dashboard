@@ -4,7 +4,7 @@ import { getTacticalPlaybook } from "../ai/playbookAgent";
 import { getStockWhatIs } from "../ai/whatisAgent";
 import { getFilteredInsiderTransfers } from "../providers/twseInsiderFetch";
 import { twStockNames } from "../../data/twStockNames";
-import { renderStockChart, ChartDataPoint, renderRankChart, renderProfitChart } from "../ux/chartRenderer";
+import { renderStockChart, ChartDataPoint, renderRankChart, renderProfitChart, renderMultiRoiChart } from "../ux/chartRenderer";
 import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
 import { fetchFugleQuote } from "@/lib/providers/fugleQuote";
 import { recordStockSearch, getTopRankedStocks } from "./rankStore";
@@ -791,17 +791,10 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
 
    if (command === "/roi") {
       const [tickerRaw, periodRaw] = query.split(/\s+/);
-      if (!tickerRaw || !periodRaw) return { text: "用法: /roi 股票代號 時間(1m, 3m, 6m, 1y, ytd, 或 YYYY-MM-DD)\n例如: /roi 2330 1m" };
+      if (!tickerRaw || !periodRaw) return { text: "用法: /roi 股票代號(多個可用逗號分隔) 時間(1m, 3m, 6m, 1y, ytd, 或 YYYY-MM-DD)\n例如: /roi 2330,2317,NVDA 1m" };
 
-      const symbol = resolveCodeFromInputLocal(tickerRaw) || tickerRaw.toUpperCase();
-      const isUs = /^[A-Z]{1,5}$/.test(symbol);
+      const tickers = tickerRaw.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean).slice(0, 5);
       
-      const live = isUs 
-         ? await fetchLiveUsStockCard(symbol, options?.baseUrl)
-         : await fetchLiveStockCard(symbol, options?.baseUrl);
-      
-      if (!live || !live.close || !live.yahooSymbol) return { text: `找不到 ${symbol} 的當前報價或 Yahoo 代號。` };
-
       let startDate: Date;
       const period = periodRaw.toLowerCase();
       if (period === "1m") startDate = subMonths(new Date(), 1);
@@ -814,39 +807,46 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             startDate = parseISO(periodRaw);
             if (isNaN(startDate.getTime())) throw new Error();
          } catch {
-            return { text: "時間格式錯誤。請使用 1m, 1y 或 2025-01-01。" };
+            return { text: "時間格式錯誤。請使用 1m, 3m, 6m, 1y, ytd 或 2025-01-01。" };
          }
       }
 
-      const yahooSymbol = live.yahooSymbol;
-      
-      try {
-         // 使用 chart API 代替 historical，通常對缺失數據更強健
-         const chartResult = await yahooFinance.chart(yahooSymbol, {
-            period1: startDate,
-            period2: new Date(),
-            interval: '1d',
-         });
-
-         const historyRaw = chartResult.quotes || [];
-         // 過濾掉價格缺失的資料點
-         const history = historyRaw
-            .filter(h => h.date && (h.adjclose !== null || h.close !== null))
-            .map(h => ({
-               date: h.date,
-               close: h.adjclose ?? h.close ?? 0
-            }))
-            .filter(h => h.close > 0);
-
-         if (!history || history.length === 0) return { text: `找不到 ${yahooSymbol} 在 ${periodRaw} 的有效歷史資料。` };
+      // 並行抓取所有資料
+      const results = await Promise.all(tickers.map(async (t) => {
+         const symbol = resolveCodeFromInputLocal(t) || t.toUpperCase();
+         const isUs = /^[A-Z]{1,5}$/.test(symbol);
+         const live = isUs 
+            ? await fetchLiveUsStockCard(symbol, options?.baseUrl)
+            : await fetchLiveStockCard(symbol, options?.baseUrl);
          
-         const initial = history[0];
-         const initialPrice = initial.close;
-         const currentPrice = live.close;
-         const diff = currentPrice - initialPrice;
-         const pct = (diff / initialPrice) * 100;
-         
-         const startStr = initial.date.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
+         if (!live || !live.close || !live.yahooSymbol) return null;
+
+         try {
+            const chartResult = await yahooFinance.chart(live.yahooSymbol, {
+               period1: startDate,
+               period2: new Date(),
+               interval: '1d',
+            });
+            const historyRaw = chartResult.quotes || [];
+            const history = historyRaw
+               .filter(h => h.date && (h.adjclose !== null || h.close !== null))
+               .map(h => ({ date: h.date, close: h.adjclose ?? h.close ?? 0 }))
+               .filter(h => h.close > 0);
+            
+            if (history.length === 0) return null;
+            return { symbol, live, history, initialPrice: history[0].close };
+         } catch { return null; }
+      }));
+
+      const validResults = results.filter((r): r is NonNullable<typeof r> => r !== null);
+      if (validResults.length === 0) return { text: `找不到指定股票在 ${periodRaw} 的有效資料。` };
+
+      // 情況 A：單檔 - 使用原有的詳細線圖 (絕對價格)
+      if (validResults.length === 1) {
+         const { symbol, live, history, initialPrice } = validResults[0];
+         const currentPrice = live.close!;
+         const pct = ((currentPrice - initialPrice) / initialPrice) * 100;
+         const startStr = history[0].date.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
          const chartBuffer = await renderProfitChart(symbol, history, initialPrice, currentPrice).catch(() => null);
          
          return {
@@ -857,10 +857,24 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
                   `總報酬率: <b>${formatSignedPct(pct, 2)}</b>`,
             chartBuffer
          };
-      } catch (err: any) {
-         console.error(`[BotEngine] /profit Error for ${yahooSymbol}:`, err);
-         return { text: `抓取歷史資料失敗: ${err.message}` };
       }
+
+      // 情況 B：多檔 - 使用對比圖 (百分比)
+      const chartBuffer = await renderMultiRoiChart(validResults.map(r => ({
+         symbol: r.symbol,
+         data: r.history,
+         initialPrice: r.initialPrice
+      }))).catch(() => null);
+
+      const textParts = validResults.map(r => {
+         const pct = ((r.live.close! - r.initialPrice) / r.initialPrice) * 100;
+         return `${r.symbol}: <b>${formatSignedPct(pct, 2)}</b>`;
+      });
+
+      return {
+         text: `📊 <b>多檔股票報酬率對比 (${periodRaw})</b>\n\n` + textParts.join("\n"),
+         chartBuffer
+      };
    }
 
    // 如果不是正確指令，回傳 null 以保持沉默
