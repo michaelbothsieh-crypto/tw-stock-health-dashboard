@@ -28,19 +28,70 @@ function getOtFont() {
 }
 
 /**
- * 繪製文字 (支援中文回退)
+ * 繪製文字 (支援路徑繪製與方塊防護)
  */
-function drawText(ctx: any, text: string, x: number, y: number, fontSize: number, color: string, options: { textAlign?: 'left' | 'right' | 'center', isBold?: boolean } = {}) {
+function drawText(ctx: any, text: string, x: number, y: number, fontSize: number, color: string, options: { textAlign?: 'left' | 'right' | 'center', isBold?: boolean, symbolFallback?: string } = {}) {
   const align = options.textAlign || 'left';
-  const weight = options.isBold ? 'bold' : 'normal';
-  
-  ctx.save();
-  ctx.fillStyle = color;
-  ctx.textAlign = align;
-  // 關鍵：將中文字型放在最前面，讓 NotoSans 僅處理拉丁字元
-  ctx.font = `${weight} ${fontSize}px "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", ${FONT_FAMILY}, sans-serif`;
-  ctx.fillText(text, x, y);
-  ctx.restore();
+  const font = getOtFont();
+
+  // 檢查是否含有中文字元
+  const hasChinese = /[\u4e00-\u9fa5]/.test(text);
+
+  // 如果沒有中文，或者沒載入到 OTF，直接用 fillText
+  if (!hasChinese || !font) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.font = `${options.isBold ? 'bold' : 'normal'} ${fontSize}px ${FONT_FAMILY}, sans-serif`;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+    return;
+  }
+
+  // 處理中文：嘗試用 opentype 畫路徑
+  try {
+    let drawX = x;
+    if (align !== 'left') {
+      const width = font.getAdvanceWidth(text, fontSize);
+      if (align === 'right') drawX = x - width;
+      else if (align === 'center') drawX = x - width / 2;
+    }
+
+    // 檢查字型是否真的含有這些字元的 Glyph
+    const glyphs = font.stringToGlyphs(text);
+    const hasAllGlyphs = glyphs.every(g => g.unicode !== undefined && g.index > 0);
+
+    if (!hasAllGlyphs && options.symbolFallback) {
+      // 如果字型不支援某些中文字，降級顯示代碼
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.textAlign = align;
+      ctx.font = `${options.isBold ? 'bold' : 'normal'} ${fontSize}px ${FONT_FAMILY}, sans-serif`;
+      ctx.fillText(options.symbolFallback, x, y);
+      ctx.restore();
+      return;
+    }
+
+    const path = font.getPath(text, drawX, y, fontSize);
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    for (const cmd of path.commands) {
+      if (cmd.type === 'M') ctx.moveTo(cmd.x, cmd.y);
+      else if (cmd.type === 'L') ctx.lineTo(cmd.x, cmd.y);
+      else if (cmd.type === 'C') ctx.bezierCurveTo(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.x, cmd.y);
+      else if (cmd.type === 'Q') ctx.quadraticCurveTo(cmd.x1, cmd.y1, cmd.x, cmd.y);
+      else if (cmd.type === 'Z') ctx.closePath();
+    }
+    ctx.fill();
+    ctx.restore();
+  } catch (e) {
+    // 最終回退
+    ctx.save();
+    ctx.textAlign = align;
+    ctx.fillText(options.symbolFallback || text, x, y);
+    ctx.restore();
+  }
 }
 
 // 修改原有的呼叫點，改用 drawText
