@@ -258,7 +258,7 @@ export async function renderRankChart(
   ctx.fillStyle = '#ffffff';
   ctx.font = `bold 24px ${FONT_FAMILY}`;
   ctx.textAlign = 'center';
-  ctx.fillText('🏆 Group Top Performance', width / 2, 35);
+  ctx.fillText('Group Top Performance', width / 2, 35);
 
   if (data.length === 0) return canvas.toBuffer('image/png');
 

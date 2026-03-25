@@ -677,13 +677,16 @@ async function fetchPriceOnly(symbol: string): Promise<number | null> {
       const isUs = /^[A-Z]{1,5}$/.test(symbol);
       let yahooSymbol = symbol;
       if (!isUs) {
-         // 台股代號推算 (含 3 開頭上櫃)
-         const isTPEX = symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5") || symbol.startsWith("3") || symbol.toUpperCase().endsWith("B");
+         // 修正台股代號推算：1, 2, 3, 4, 5, 6, 8 開頭都可能是上櫃 (.TWO)，這裡改用更寬鬆的判斷或 Snapshot 邏輯
+         // 為了保險，我們優先檢查是否為常見的上櫃開頭
+         const isTPEX = /^[34568]/.test(symbol) || symbol.toUpperCase().endsWith("B");
          yahooSymbol = isTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
       }
-      const quote = await yahooFinance.quote(yahooSymbol);
-      const res: any = Array.isArray(quote) ? quote[0] : quote;
-      return res?.regularMarketPrice || null;
+      
+      // 改用 chart API 抓取最後一筆價格，與 /roi 邏輯一致，更穩定
+      const res = await yahooFinance.chart(yahooSymbol, { period1: new Date(Date.now() - 86400 * 7 * 1000) });
+      const lastQuote = res.quotes[res.quotes.length - 1];
+      return lastQuote?.close || lastQuote?.adjclose || null;
    } catch (error) {
       console.error(`[BotEngine] fetchPriceOnly error for ${symbol}:`, error);
       return null;
