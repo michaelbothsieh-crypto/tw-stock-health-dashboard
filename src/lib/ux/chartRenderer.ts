@@ -256,7 +256,7 @@ export async function renderRankChart(
 
   // 標題
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold 24px ${FONT_FAMILY}`;
+  ctx.font = `bold 24px "${FONT_FAMILY}"`;
   ctx.textAlign = 'center';
   ctx.fillText('🏆 本群熱門股票報酬率排行', width / 2, 35);
 
@@ -288,17 +288,17 @@ export async function renderRankChart(
 
     // 繪製代號與查詢次數
     ctx.fillStyle = '#e5e7eb';
-    ctx.font = `bold 16px ${FONT_FAMILY}`;
+    ctx.font = `bold 16px "${FONT_FAMILY}"`;
     ctx.textAlign = 'right';
     ctx.fillText(d.symbol, padding.left - 10, y + barHeight / 2 + 6);
     
-    ctx.font = `12px ${FONT_FAMILY}`;
+    ctx.font = `12px "${FONT_FAMILY}"`;
     ctx.fillStyle = '#9ca3af';
     ctx.fillText(`${d.count}次`, padding.left - 10, y + barHeight / 2 + 22);
 
     // 繪製百分比文字
     ctx.fillStyle = color;
-    ctx.font = `bold 16px ${FONT_FAMILY}`;
+    ctx.font = `bold 16px "${FONT_FAMILY}"`;
     ctx.textAlign = d.pct >= 0 ? 'left' : 'right';
     const textX = d.pct >= 0 ? endX + 10 : endX - 10;
     ctx.fillText(`${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%`, textX, y + barHeight / 2 + 6);
@@ -334,11 +334,11 @@ export async function renderProfitChart(
   // 標題與數據
   const totalPct = ((currentPrice - initialPrice) / initialPrice) * 100;
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold 28px ${FONT_FAMILY}`;
+  ctx.font = `bold 28px "${FONT_FAMILY}"`;
   ctx.textAlign = 'left';
   ctx.fillText(`${symbol} 報酬率分析`, padding.left, 45);
 
-  ctx.font = `bold 24px ${FONT_FAMILY}`;
+  ctx.font = `bold 24px "${FONT_FAMILY}"`;
   ctx.fillStyle = totalPct >= 0 ? '#ef4444' : '#22c55e';
   ctx.textAlign = 'right';
   ctx.fillText(`${totalPct >= 0 ? '+' : ''}${totalPct.toFixed(2)}%`, width - padding.right, 45);
@@ -367,7 +367,7 @@ export async function renderProfitChart(
 
   // 基準線標籤
   ctx.fillStyle = '#6b7280';
-  ctx.font = `14px ${FONT_FAMILY}`;
+  ctx.font = `14px "${FONT_FAMILY}"`;
   ctx.textAlign = 'left';
   ctx.fillText(`起點: ${initialPrice.toFixed(2)}`, padding.left + 5, initialY - 10);
 
@@ -396,7 +396,7 @@ export async function renderProfitChart(
 
   // 時間軸標籤
   ctx.fillStyle = '#9ca3af';
-  ctx.font = `14px ${FONT_FAMILY}`;
+  ctx.font = `14px "${FONT_FAMILY}"`;
   ctx.textAlign = 'center';
   const labelCount = 5;
   for (let i = 0; i < labelCount; i++) {
