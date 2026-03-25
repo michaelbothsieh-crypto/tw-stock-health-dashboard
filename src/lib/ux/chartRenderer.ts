@@ -28,47 +28,22 @@ function getOtFont() {
 }
 
 /**
- * 使用 opentype.js 將文字繪製為路徑 (避免中文亂碼/方塊)
+ * 繪製文字 (支援中文回退)
  */
-function drawTextAsPath(ctx: any, text: string, x: number, y: number, fontSize: number, color: string, options: { textAlign?: 'left' | 'right' | 'center' } = {}) {
-  const font = getOtFont();
-  if (!font) {
-    ctx.fillStyle = color;
-    ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
-    ctx.fillText(text, x, y);
-    return;
-  }
-
+function drawText(ctx: any, text: string, x: number, y: number, fontSize: number, color: string, options: { textAlign?: 'left' | 'right' | 'center', isBold?: boolean } = {}) {
   const align = options.textAlign || 'left';
-  let drawX = x;
+  const weight = options.isBold ? 'bold' : 'normal';
   
-  if (align !== 'left') {
-    const width = font.getAdvanceWidth(text, fontSize);
-    if (align === 'right') drawX = x - width;
-    else if (align === 'center') drawX = x - width / 2;
-  }
-
-  // 使用 opentype 獲取路徑並手動繪製到 Canvas
-  const path = font.getPath(text, drawX, y, fontSize);
+  ctx.save();
   ctx.fillStyle = color;
-  
-  // 透過 opentype 的 path 對象獲取命令並手動繪製
-  ctx.beginPath();
-  for (const cmd of path.commands) {
-    if (cmd.type === 'M') {
-      ctx.moveTo(cmd.x, cmd.y);
-    } else if (cmd.type === 'L') {
-      ctx.lineTo(cmd.x, cmd.y);
-    } else if (cmd.type === 'C') {
-      ctx.bezierCurveTo(cmd.x1, cmd.y1, cmd.x2, cmd.y2, cmd.x, cmd.y);
-    } else if (cmd.type === 'Q') {
-      ctx.quadraticCurveTo(cmd.x1, cmd.y1, cmd.x, cmd.y);
-    } else if (cmd.type === 'Z') {
-      ctx.closePath();
-    }
-  }
-  ctx.fill();
+  ctx.textAlign = align;
+  // 這裡加入系統中文字型回退：PingFang TC (Mac), Microsoft JhengHei (Win), Noto Sans TC (Linux)
+  ctx.font = `${weight} ${fontSize}px ${FONT_FAMILY}, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif`;
+  ctx.fillText(text, x, y);
+  ctx.restore();
 }
+
+// 修改原有的呼叫點，改用 drawText
 
 // 字型只需要註冊一次（module-level singleton）
 // fontData.ts 內嵌真正的 NotoSans-Bold.otf base64，無需 filesystem 或 HTTP
@@ -363,14 +338,14 @@ export async function renderRankChart(
     ctx.fillStyle = color;
     ctx.fillRect(Math.min(centerX, endX), y, Math.abs(endX - centerX), barHeight);
 
-    // 繪製代號與名稱 (使用路徑繪製避免中文問題)
-    drawTextAsPath(ctx, d.displayName, padding.left - 10, y + barHeight / 2 + 6, 16, '#e5e7eb', { textAlign: 'right' });
+    // 繪製代號與名稱 (支援中文回退)
+    drawText(ctx, d.displayName, padding.left - 10, y + barHeight / 2 + 6, 16, '#e5e7eb', { textAlign: 'right', isBold: true });
     
-    drawTextAsPath(ctx, `${d.count} hits`, padding.left - 10, y + barHeight / 2 + 22, 12, '#9ca3af', { textAlign: 'right' });
+    drawText(ctx, `${d.count} hits`, padding.left - 10, y + barHeight / 2 + 22, 12, '#9ca3af', { textAlign: 'right' });
 
     // 繪製百分比文字
     const pctText = `${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%`;
-    drawTextAsPath(ctx, pctText, d.pct >= 0 ? endX + 10 : endX - 10, y + barHeight / 2 + 6, 16, color, { textAlign: d.pct >= 0 ? 'left' : 'right' });
+    drawText(ctx, pctText, d.pct >= 0 ? endX + 10 : endX - 10, y + barHeight / 2 + 6, 16, color, { textAlign: d.pct >= 0 ? 'left' : 'right', isBold: true });
   });
 
   return canvas.toBuffer('image/png');
@@ -402,7 +377,7 @@ export async function renderMultiRoiChart(
   const colors = ['#3b82f6', '#f59e0b', '#10b981', '#a855f7', '#ec4899', '#06b6d4'];
 
   // 標題
-  drawTextAsPath(ctx, `ROI Comparison (${period})`, padding.left, 45, 28, '#ffffff');
+  drawText(ctx, `ROI Comparison (${period})`, padding.left, 45, 28, '#ffffff', { isBold: true });
 
   // 計算所有系列的百分比數據與名稱
   const normalizedSeries = await Promise.all(series.map(async (s, idx) => {
@@ -490,13 +465,13 @@ export async function renderMultiRoiChart(
     ctx.fillStyle = s.color;
     ctx.fillRect(x, y, 15, 15);
     
-    // 代號與名稱 (使用路徑繪製避免中文問題)
-    drawTextAsPath(ctx, s.displayName, x + 25, y + 13, 14, '#ffffff');
+    // 代號與名稱 (支援中文回退)
+    drawText(ctx, s.displayName, x + 25, y + 13, 14, '#ffffff', { isBold: true });
     
     // 最終報酬率
     const pctColor = s.finalPct >= 0 ? '#ef4444' : '#22c55e';
     const pctText = `${s.finalPct >= 0 ? '+' : ''}${s.finalPct.toFixed(2)}%`;
-    drawTextAsPath(ctx, pctText, x + 25, y + 30, 12, pctColor);
+    drawText(ctx, pctText, x + 25, y + 30, 12, pctColor);
   });
 
   // 時間軸 (取第一條線作為基準)
@@ -544,11 +519,11 @@ export async function renderProfitChart(
   const displayName = name ? `${symbol} ${name}` : symbol;
   const totalPct = ((currentPrice - initialPrice) / initialPrice) * 100;
   
-  drawTextAsPath(ctx, `${displayName} ROI Analysis (${period})`, padding.left, 45, 28, '#ffffff');
+  drawText(ctx, `${displayName} ROI Analysis (${period})`, padding.left, 45, 28, '#ffffff', { isBold: true });
 
   const pctColor = totalPct >= 0 ? '#ef4444' : '#22c55e';
   const pctText = `${totalPct >= 0 ? '+' : ''}${totalPct.toFixed(2)}%`;
-  drawTextAsPath(ctx, pctText, width - padding.right, 45, 24, pctColor, { textAlign: 'right' });
+  drawText(ctx, pctText, width - padding.right, 45, 24, pctColor, { textAlign: 'right', isBold: true });
 
   if (history.length < 2) return canvas.toBuffer('image/png');
 
