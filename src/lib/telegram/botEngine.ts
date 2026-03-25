@@ -672,24 +672,33 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       return null; 
       }
       }
-async function fetchPriceOnly(symbol: string): Promise<number | null> {
+async function fetchPriceOnly(symbol: string): Promise<{ price: number | null, finalSymbol: string }> {
+   let yahooSymbol = symbol.toUpperCase();
    try {
-      const isUs = /^[A-Z]{1,5}$/.test(symbol);
-      let yahooSymbol = symbol;
-      if (!isUs) {
-         // 修正台股代號推算：1, 2, 3, 4, 5, 6, 8 開頭都可能是上櫃 (.TWO)，這裡改用更寬鬆的判斷或 Snapshot 邏輯
-         // 為了保險，我們優先檢查是否為常見的上櫃開頭
-         const isTPEX = /^[34568]/.test(symbol) || symbol.toUpperCase().endsWith("B");
-         yahooSymbol = isTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
+      const isUs = /^[A-Z]{1,5}$/.test(yahooSymbol);
+      if (!isUs && !yahooSymbol.includes(".")) {
+         // 台股代號自動補後綴，1-4, 5, 6, 8 開頭都可能是上市或上櫃
+         const isTPEXHeuristic = /^[34568]/.test(yahooSymbol) || yahooSymbol.endsWith("B");
+         yahooSymbol = isTPEXHeuristic ? `${yahooSymbol}.TWO` : `${yahooSymbol}.TW`;
       }
-      
-      // 改用 chart API 抓取最後一筆價格，與 /roi 邏輯一致，更穩定
-      const res = await yahooFinance.chart(yahooSymbol, { period1: new Date(Date.now() - 86400 * 7 * 1000) });
-      const lastQuote = res.quotes[res.quotes.length - 1];
-      return lastQuote?.close || lastQuote?.adjclose || null;
+
+      // 策略 1: 使用 quote API (最快)
+      const quote = await yahooFinance.quote(yahooSymbol).catch(() => null);
+      const quoteRes: any = Array.isArray(quote) ? quote[0] : quote;
+      if (quoteRes?.regularMarketPrice) {
+         return { price: quoteRes.regularMarketPrice, finalSymbol: yahooSymbol };
+      }
+
+      // 策略 2: 備援使用 chart API (較穩)
+      const chartRes = await yahooFinance.chart(yahooSymbol, { period1: new Date(Date.now() - 86400 * 7 * 1000) }).catch(() => null);
+      if (chartRes && chartRes.quotes && chartRes.quotes.length > 0) {
+         const lastQuote = chartRes.quotes[chartRes.quotes.length - 1];
+         return { price: lastQuote.close || lastQuote.adjclose || null, finalSymbol: yahooSymbol };
+      }
+
+      return { price: null, finalSymbol: yahooSymbol };
    } catch (error) {
-      console.error(`[BotEngine] fetchPriceOnly error for ${symbol}:`, error);
-      return null;
+      return { price: null, finalSymbol: yahooSymbol };
    }
 }
 
@@ -783,11 +792,11 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          const chartData: { symbol: string; pct: number; count: number }[] = [];
          const results = await Promise.all(ranks.map(async (r, index) => {
             try {
-               // 改用輕量級抓取，只拿價格，速度快且不易 Timeout
-               const currentPrice = await fetchPriceOnly(r.symbol);
+               // 改用強化後的輕量級抓取
+               const { price: currentPrice, finalSymbol } = await fetchPriceOnly(r.symbol);
                
                if (currentPrice === null) {
-                  return `${index + 1}. <b>${r.symbol}</b> (查 ${r.count} 次) - 報價抓取失敗`;
+                  return `${index + 1}. <b>${r.symbol}</b> (查 ${r.count} 次) - 報價抓取失敗 (${finalSymbol})`;
                }
 
                const diff = currentPrice - r.initialPrice;
