@@ -1,5 +1,8 @@
 import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
 import { NOTO_SANS_BOLD_B64 } from './fontData';
+import { getCompanyNameZh } from '@/lib/companyName';
+import * as opentype from 'opentype.js';
+import path from 'path';
 
 export interface ChartDataPoint {
   date: string;
@@ -8,6 +11,54 @@ export interface ChartDataPoint {
   low: number;
   close: number;
   volume: number;
+}
+
+// 字型快取
+let _otFont: opentype.Font | null = null;
+function getOtFont() {
+  if (_otFont) return _otFont;
+  try {
+    const fontPath = path.join(process.cwd(), 'public/fonts/NotoSans-Bold.ttf');
+    _otFont = opentype.loadSync(fontPath);
+    return _otFont;
+  } catch (e) {
+    console.error('Failed to load opentype font:', e);
+    return null;
+  }
+}
+
+/**
+ * 使用 opentype.js 將文字繪製為路徑 (避免中文亂碼/方塊)
+ */
+function drawTextAsPath(ctx: any, text: string, x: number, y: number, fontSize: number, color: string, options: { textAlign?: 'left' | 'right' | 'center' } = {}) {
+  const font = getOtFont();
+  if (!font) {
+    // Fallback to fillText if font not loaded
+    ctx.fillStyle = color;
+    ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
+    ctx.fillText(text, x, y);
+    return;
+  }
+
+  const align = options.textAlign || 'left';
+  let drawX = x;
+  
+  if (align !== 'left') {
+    const width = font.getAdvanceWidth(text, fontSize);
+    if (align === 'right') drawX = x - width;
+    else if (align === 'center') drawX = x - width / 2;
+  }
+
+  const path = font.getPath(text, drawX, y, fontSize);
+  ctx.fillStyle = color;
+  
+  // napi-rs/canvas 的 ctx 可以直接執行 opentype path 的 draw
+  // 或者手動轉換
+  const svgPath = path.toPathData(2); 
+  // 這裡我們需要一個簡單的方法將 opentype path 畫到 canvas ctx 上
+  // opentype 的 path 對象有 draw(ctx) 方法
+  path.fill = color;
+  path.draw(ctx);
 }
 
 // 字型只需要註冊一次（module-level singleton）
@@ -262,11 +313,17 @@ export async function renderRankChart(
 
   if (data.length === 0) return canvas.toBuffer('image/png');
 
+  // 獲取所有中文名稱 (台股)
+  const dataWithNames = await Promise.all(data.map(async d => {
+    const name = await getCompanyNameZh(d.symbol);
+    return { ...d, displayName: name ? `${d.symbol} ${name}` : d.symbol };
+  }));
+
   // 計算比例
-  const maxPct = Math.max(...data.map(d => Math.abs(d.pct)), 5);
+  const maxPct = Math.max(...dataWithNames.map(d => Math.abs(d.pct)), 5);
   const getX = (pct: number) => padding.left + (chartWidth / 2) + (pct / (maxPct * 1.1)) * (chartWidth / 2);
   const barHeight = 30;
-  const gap = (chartHeight - (data.length * barHeight)) / (data.length + 1);
+  const gap = (chartHeight - (dataWithNames.length * barHeight)) / (dataWithNames.length + 1);
 
   // 繪製中心軸
   ctx.strokeStyle = '#404040';
@@ -276,7 +333,7 @@ export async function renderRankChart(
   ctx.lineTo(padding.left + chartWidth / 2, height - padding.bottom);
   ctx.stroke();
 
-  data.forEach((d, i) => {
+  dataWithNames.forEach((d, i) => {
     const y = padding.top + gap + i * (barHeight + gap);
     const centerX = padding.left + chartWidth / 2;
     const endX = getX(d.pct);
@@ -286,22 +343,14 @@ export async function renderRankChart(
     ctx.fillStyle = color;
     ctx.fillRect(Math.min(centerX, endX), y, Math.abs(endX - centerX), barHeight);
 
-    // 繪製代號與查詢次數
-    ctx.fillStyle = '#e5e7eb';
-    ctx.font = `bold 16px ${FONT_FAMILY}`;
-    ctx.textAlign = 'right';
-    ctx.fillText(d.symbol, padding.left - 10, y + barHeight / 2 + 6);
+    // 繪製代號與名稱 (使用路徑繪製避免中文問題)
+    drawTextAsPath(ctx, d.displayName, padding.left - 10, y + barHeight / 2 + 6, 16, '#e5e7eb', { textAlign: 'right' });
     
-    ctx.font = `12px ${FONT_FAMILY}`;
-    ctx.fillStyle = '#9ca3af';
-    ctx.fillText(`${d.count} hits`, padding.left - 10, y + barHeight / 2 + 22);
+    drawTextAsPath(ctx, `${d.count} hits`, padding.left - 10, y + barHeight / 2 + 22, 12, '#9ca3af', { textAlign: 'right' });
 
     // 繪製百分比文字
-    ctx.fillStyle = color;
-    ctx.font = `bold 16px ${FONT_FAMILY}`;
-    ctx.textAlign = d.pct >= 0 ? 'left' : 'right';
-    const textX = d.pct >= 0 ? endX + 10 : endX - 10;
-    ctx.fillText(`${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%`, textX, y + barHeight / 2 + 6);
+    const pctText = `${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%`;
+    drawTextAsPath(ctx, pctText, d.pct >= 0 ? endX + 10 : endX - 10, y + barHeight / 2 + 6, 16, color, { textAlign: d.pct >= 0 ? 'left' : 'right' });
   });
 
   return canvas.toBuffer('image/png');
@@ -333,24 +382,27 @@ export async function renderMultiRoiChart(
   const colors = ['#3b82f6', '#f59e0b', '#10b981', '#a855f7', '#ec4899', '#06b6d4'];
 
   // 標題
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `bold 28px ${FONT_FAMILY}`;
-  ctx.textAlign = 'left';
-  ctx.fillText(`ROI Comparison (${period})`, padding.left, 45);
+  drawTextAsPath(ctx, `ROI Comparison (${period})`, padding.left, 45, 28, '#ffffff');
 
-  // 計算所有系列的百分比數據
-  const normalizedSeries = series.map((s, idx) => {
+  // 計算所有系列的百分比數據與名稱
+  const normalizedSeries = await Promise.all(series.map(async (s, idx) => {
     const data = s.data.map(d => ({
       date: d.date,
       pct: ((d.close - s.initialPrice) / s.initialPrice) * 100
     }));
+
+    // 獲取中文名稱 (台股)
+    const name = await getCompanyNameZh(s.symbol);
+    const displayName = name ? `${s.symbol} ${name}` : s.symbol;
+
     return {
       symbol: s.symbol,
+      displayName,
       data,
       color: colors[idx % colors.length],
       finalPct: data.length > 0 ? data[data.length - 1].pct : 0
     };
-  });
+  }));
 
   if (normalizedSeries.length === 0) return canvas.toBuffer('image/png');
 
@@ -418,15 +470,13 @@ export async function renderMultiRoiChart(
     ctx.fillStyle = s.color;
     ctx.fillRect(x, y, 15, 15);
     
-    // 代號
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `bold 14px ${FONT_FAMILY}`;
-    ctx.fillText(s.symbol, x + 25, y + 13);
+    // 代號與名稱 (使用路徑繪製避免中文問題)
+    drawTextAsPath(ctx, s.displayName, x + 25, y + 13, 14, '#ffffff');
     
     // 最終報酬率
-    ctx.fillStyle = s.finalPct >= 0 ? '#ef4444' : '#22c55e';
-    ctx.font = `12px ${FONT_FAMILY}`;
-    ctx.fillText(`${s.finalPct >= 0 ? '+' : ''}${s.finalPct.toFixed(2)}%`, x + 25, y + 30);
+    const pctColor = s.finalPct >= 0 ? '#ef4444' : '#22c55e';
+    const pctText = `${s.finalPct >= 0 ? '+' : ''}${s.finalPct.toFixed(2)}%`;
+    drawTextAsPath(ctx, pctText, x + 25, y + 30, 12, pctColor);
   });
 
   // 時間軸 (取第一條線作為基準)
@@ -470,16 +520,15 @@ export async function renderProfitChart(
   const chartHeight = height - padding.top - padding.bottom;
 
   // 標題與數據
+  const name = await getCompanyNameZh(symbol);
+  const displayName = name ? `${symbol} ${name}` : symbol;
   const totalPct = ((currentPrice - initialPrice) / initialPrice) * 100;
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `bold 28px ${FONT_FAMILY}`;
-  ctx.textAlign = 'left';
-  ctx.fillText(`${symbol} ROI Analysis (${period})`, padding.left, 45);
+  
+  drawTextAsPath(ctx, `${displayName} ROI Analysis (${period})`, padding.left, 45, 28, '#ffffff');
 
-  ctx.font = `bold 24px ${FONT_FAMILY}`;
-  ctx.fillStyle = totalPct >= 0 ? '#ef4444' : '#22c55e';
-  ctx.textAlign = 'right';
-  ctx.fillText(`${totalPct >= 0 ? '+' : ''}${totalPct.toFixed(2)}%`, width - padding.right, 45);
+  const pctColor = totalPct >= 0 ? '#ef4444' : '#22c55e';
+  const pctText = `${totalPct >= 0 ? '+' : ''}${totalPct.toFixed(2)}%`;
+  drawTextAsPath(ctx, pctText, width - padding.right, 45, 24, pctColor, { textAlign: 'right' });
 
   if (history.length < 2) return canvas.toBuffer('image/png');
 
