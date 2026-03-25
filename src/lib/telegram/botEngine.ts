@@ -810,21 +810,33 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       }
       
       try {
-         const history = await yahooFinance.historical(yahooSymbol, {
+         // 使用 chart API 代替 historical，通常對缺失數據更強健
+         const chartResult = await yahooFinance.chart(yahooSymbol, {
             period1: startDate,
             period2: new Date(),
+            interval: '1d',
          });
 
-         if (!history || history.length === 0) return { text: `找不到 ${yahooSymbol} 在 ${periodRaw} 的歷史資料。` };
+         const historyRaw = chartResult.quotes || [];
+         // 過濾掉價格缺失的資料點
+         const history = historyRaw
+            .filter(h => h.date && (h.adjclose !== null || h.close !== null))
+            .map(h => ({
+               date: h.date,
+               close: h.adjclose ?? h.close ?? 0
+            }))
+            .filter(h => h.close > 0);
+
+         if (!history || history.length === 0) return { text: `找不到 ${yahooSymbol} 在 ${periodRaw} 的有效歷史資料。` };
          
          const initial = history[0];
-         const initialPrice = initial.adjClose || initial.close;
+         const initialPrice = initial.close;
          const currentPrice = live.close;
          const diff = currentPrice - initialPrice;
          const pct = (diff / initialPrice) * 100;
          
          const startStr = initial.date.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
-         const chartBuffer = await renderProfitChart(symbol, history.map(h => ({ date: h.date, close: h.adjClose || h.close })), initialPrice, currentPrice).catch(() => null);
+         const chartBuffer = await renderProfitChart(symbol, history, initialPrice, currentPrice).catch(() => null);
          
          return {
             text: `📈 <b>${symbol} 報酬率分析</b>\n\n` +
@@ -835,6 +847,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             chartBuffer
          };
       } catch (err: any) {
+         console.error(`[BotEngine] /profit Error for ${yahooSymbol}:`, err);
          return { text: `抓取歷史資料失敗: ${err.message}` };
       }
    }
