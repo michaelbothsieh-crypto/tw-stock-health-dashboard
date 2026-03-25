@@ -752,34 +752,49 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
    }
 
    if (command === "/rank") {
-      if (!options?.chatId) return { text: "無法辨識群組 ID，請在群組中使用。" };
-      const ranks = await getTopRankedStocks(options.chatId);
-      if (ranks.length === 0) return { text: "目前尚未有股票查詢紀錄。" };
+      try {
+         if (!options?.chatId) return { text: "無法辨識群組 ID，請在群組中使用。" };
+         const ranks = await getTopRankedStocks(options.chatId);
+         if (ranks.length === 0) return { text: "目前尚未有股票查詢紀錄。" };
 
-      const lines: string[] = ["🏆 <b>本群熱門股票表現 (Top 10)</b>", ""];
-      
-      const chartData: { symbol: string; pct: number; count: number }[] = [];
-      const results = await Promise.all(ranks.map(async (r, index) => {
-         const isUs = /^[A-Z]{1,5}$/.test(r.symbol);
-         const live = isUs 
-            ? await fetchLiveUsStockCard(r.symbol, options.baseUrl)
-            : await fetchLiveStockCard(r.symbol, options.baseUrl);
+         const lines: string[] = ["🏆 <b>本群熱門股票表現 (Top 10)</b>", ""];
          
-         const currentPrice = live?.close || 0;
-         const diff = currentPrice - r.initialPrice;
-         const pct = r.initialPrice !== 0 ? (diff / r.initialPrice) * 100 : 0;
-         const dateStr = new Date(r.initialTimestamp).toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' });
-         
-         chartData.push({ symbol: r.symbol, pct, count: r.count });
-         return `${index + 1}. <b>${r.symbol}</b> (查 ${r.count} 次)\n   ${dateStr}: ${formatPrice(r.initialPrice, 2)} → 現價: ${formatPrice(currentPrice, 2)} (${formatSignedPct(pct, 2)})`;
-      }));
+         const chartData: { symbol: string; pct: number; count: number }[] = [];
+         const results = await Promise.all(ranks.map(async (r, index) => {
+            try {
+               const isUs = /^[A-Z]{1,5}$/.test(r.symbol);
+               const live = isUs 
+                  ? await fetchLiveUsStockCard(r.symbol, options.baseUrl)
+                  : await fetchLiveStockCard(r.symbol, options.baseUrl);
+               
+               const currentPrice = live?.close || 0;
+               const diff = currentPrice - r.initialPrice;
+               const pct = r.initialPrice !== 0 ? (diff / r.initialPrice) * 100 : 0;
+               
+               // 改用環境無關的日期處理，避免 zh-TW locale 遺失導致崩潰
+               const d = new Date(r.initialTimestamp);
+               const dateStr = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`;
+               
+               chartData.push({ symbol: r.symbol, pct, count: r.count });
+               return `${index + 1}. <b>${r.symbol}</b> (查 ${r.count} 次)\n   ${dateStr}: ${formatPrice(r.initialPrice, 2)} → 現價: ${formatPrice(currentPrice, 2)} (${formatSignedPct(pct, 2)})`;
+            } catch (e) {
+               return `${index + 1}. <b>${r.symbol}</b> (數據抓取失敗)`;
+            }
+         }));
 
-      // 按報酬率排序圖表數據 (從高到低)
-      chartData.sort((a, b) => b.pct - a.pct);
-      const chartBuffer = await renderRankChart(chartData).catch(() => null);
+         // 按報酬率排序圖表數據 (從高到低)
+         chartData.sort((a, b) => b.pct - a.pct);
+         const chartBuffer = await renderRankChart(chartData).catch((err) => {
+            console.error("[BotEngine] renderRankChart Error:", err);
+            return null;
+         });
 
-      lines.push(...results);
-      return { text: lines.join("\n"), chartBuffer };
+         lines.push(...results);
+         return { text: lines.join("\n"), chartBuffer };
+      } catch (err: any) {
+         console.error("[BotEngine] /rank major failure:", err);
+         return { text: `排行榜產生失敗: ${err.message}` };
+      }
    }
 
    if (command === "/debug_rank") {
