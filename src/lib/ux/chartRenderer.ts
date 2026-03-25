@@ -308,6 +308,142 @@ export async function renderRankChart(
 }
 
 /**
+ * 繪製多檔股票報酬率對比圖
+ */
+export async function renderMultiRoiChart(
+  series: { symbol: string; data: { date: Date; close: number }[]; initialPrice: number }[],
+  options: { width?: number; height?: number } = {}
+): Promise<Buffer> {
+  ensureFonts();
+  const width = options.width ?? 1000;
+  const height = options.height ?? 600;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+
+  // 背景
+  ctx.fillStyle = '#121212';
+  ctx.fillRect(0, 0, width, height);
+
+  const padding = { top: 80, right: 150, bottom: 60, left: 80 };
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+
+  // 顏色盤
+  const colors = ['#3b82f6', '#f59e0b', '#10b981', '#a855f7', '#ec4899', '#06b6d4'];
+
+  // 標題
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold 28px ${FONT_FAMILY}`;
+  ctx.textAlign = 'left';
+  ctx.fillText('ROI Comparison Analysis', padding.left, 45);
+
+  // 計算所有系列的百分比數據
+  const normalizedSeries = series.map((s, idx) => {
+    const data = s.data.map(d => ({
+      date: d.date,
+      pct: ((d.close - s.initialPrice) / s.initialPrice) * 100
+    }));
+    return {
+      symbol: s.symbol,
+      data,
+      color: colors[idx % colors.length],
+      finalPct: data.length > 0 ? data[data.length - 1].pct : 0
+    };
+  });
+
+  if (normalizedSeries.length === 0) return canvas.toBuffer('image/png');
+
+  // 找範圍
+  const allPcts = normalizedSeries.flatMap(s => s.data.map(d => d.pct));
+  const maxPct = Math.max(...allPcts, 5) * 1.1;
+  const minPct = Math.min(...allPcts, -5) * 1.1;
+  const pctRange = maxPct - minPct;
+
+  const maxLen = Math.max(...normalizedSeries.map(s => s.data.length));
+  const getX = (i: number, len: number) => padding.left + (i * chartWidth) / (len - 1);
+  const getY = (pct: number) => padding.top + (maxPct - pct) * (chartHeight / pctRange);
+
+  // 繪製水平格線與 0% 基準線
+  ctx.lineWidth = 1;
+  ctx.textAlign = 'right';
+  ctx.font = `12px ${FONT_FAMILY}`;
+  for (let i = 0; i <= 10; i++) {
+    const val = maxPct - (i * pctRange) / 10;
+    const y = getY(val);
+    
+    ctx.strokeStyle = Math.abs(val) < 0.1 ? '#ffffff' : '#262626';
+    ctx.setLineDash(Math.abs(val) < 0.1 ? [] : [5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(padding.left, y);
+    ctx.lineTo(width - padding.right, y);
+    ctx.stroke();
+    
+    ctx.fillStyle = '#6b7280';
+    ctx.fillText(`${val.toFixed(1)}%`, padding.left - 10, y + 4);
+  }
+  ctx.setLineDash([]);
+
+  // 繪製每一條線
+  normalizedSeries.forEach(s => {
+    ctx.strokeStyle = s.color;
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    s.data.forEach((d, i) => {
+      const x = getX(i, s.data.length);
+      const y = getY(d.pct);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // 繪製末端小圓點
+    if (s.data.length > 0) {
+      const last = s.data[s.data.length - 1];
+      ctx.fillStyle = s.color;
+      ctx.beginPath();
+      ctx.arc(getX(s.data.length - 1, s.data.length), getY(last.pct), 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
+
+  // 繪製圖例 (Legend)
+  ctx.textAlign = 'left';
+  normalizedSeries.forEach((s, i) => {
+    const x = width - padding.right + 20;
+    const y = padding.top + i * 35;
+    
+    // 色塊
+    ctx.fillStyle = s.color;
+    ctx.fillRect(x, y, 15, 15);
+    
+    // 代號
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `bold 14px ${FONT_FAMILY}`;
+    ctx.fillText(s.symbol, x + 25, y + 13);
+    
+    // 最終報酬率
+    ctx.fillStyle = s.finalPct >= 0 ? '#ef4444' : '#22c55e';
+    ctx.font = `12px ${FONT_FAMILY}`;
+    ctx.fillText(`${s.finalPct >= 0 ? '+' : ''}${s.finalPct.toFixed(2)}%`, x + 25, y + 30);
+  });
+
+  // 時間軸 (取第一條線作為基準)
+  const ref = normalizedSeries[0].data;
+  ctx.fillStyle = '#9ca3af';
+  ctx.textAlign = 'center';
+  const labelCount = 5;
+  for (let i = 0; i < labelCount; i++) {
+    const idx = Math.floor((i * (ref.length - 1)) / (labelCount - 1));
+    const x = getX(idx, ref.length);
+    const date = ref[idx].date.toLocaleDateString('en-CA', { month: '2-digit', day: '2-digit' });
+    ctx.fillText(date, x, height - padding.bottom + 25);
+  }
+
+  return canvas.toBuffer('image/png');
+}
+
+/**
  * 繪製報酬率線圖
  */
 export async function renderProfitChart(

@@ -9,6 +9,7 @@ import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
 import { fetchFugleQuote } from "@/lib/providers/fugleQuote";
 import { recordStockSearch, getTopRankedStocks } from "./rankStore";
 import { subMonths, subYears, parseISO, startOfDay, endOfDay } from "date-fns";
+import { redis as redisInstance } from "../providers/redisCache";
 
 // 建立反向查詢表加速名稱解析
 const reverseStockNames: Record<string, string> = {};
@@ -233,8 +234,11 @@ function escapeHtml(input: string): string {
 
 function getSnapshotBaseUrl(overrideBaseUrl?: string): string | null {
    if (overrideBaseUrl) return overrideBaseUrl.replace(/\/+$/, "");
-   const explicit = process.env.BOT_BASE_URL || process.env.APP_BASE_URL;
-   if (explicit) return explicit.replace(/\/+$/, "");
+   const explicit = process.env.BOT_BASE_URL || process.env.APP_BASE_URL || process.env.VERCEL_URL;
+   if (explicit) {
+      const url = explicit.startsWith("http") ? explicit : `https://${explicit}`;
+      return url.replace(/\/+$/, "");
+   }
    return null;
 }
 
@@ -779,7 +783,6 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
    }
 
    if (command === "/debug_rank") {
-      const { redis: redisInstance } = require("../providers/redisCache");
       const redisStatus = redisInstance ? "✅ 已連線" : "❌ 未連線 (請檢查環境變數)";
       return { 
          text: `🔍 <b>排行榜診斷資訊</b>\n\n` +
@@ -839,7 +842,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       }));
 
       const validResults = results.filter((r): r is NonNullable<typeof r> => r !== null);
-      if (validResults.length === 0) return { text: `找不到指定股票在 ${periodRaw} 的有效資料。` };
+      if (validResults.length === 0) return { text: `找不到「${tickerRaw}」中任何一檔股票的有效報價。請檢查代號是否正確（例：2330,NVDA）。` };
 
       // 情況 A：單檔 - 使用原有的詳細線圖 (絕對價格)
       if (validResults.length === 1) {
