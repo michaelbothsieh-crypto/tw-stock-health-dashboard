@@ -18,61 +18,56 @@ let _otFont: opentype.Font | null = null;
 function getOtFont() {
   if (_otFont) return _otFont;
   try {
-    const fontPath = path.join(process.cwd(), 'public/fonts/NotoSans-Bold.ttf');
-    _otFont = opentype.loadSync(fontPath);
+    // 優先使用內建的 Base64 數據，因為它一定存在且已知內容
+    const buf = Buffer.from(NOTO_SANS_BOLD_B64, 'base64');
+    _otFont = opentype.parse(buf.buffer);
     return _otFont;
   } catch (e) {
-    console.error('Failed to load opentype font:', e);
+    console.error('Failed to parse embedded font with opentype:', e);
     return null;
   }
 }
 
 /**
- * 繪製文字 (支援路徑繪製與方塊防護)
+ * 繪製文字 (智能過濾方塊與路徑繪製)
  */
 function drawText(ctx: any, text: string, x: number, y: number, fontSize: number, color: string, options: { textAlign?: 'left' | 'right' | 'center', isBold?: boolean, symbolFallback?: string } = {}) {
   const align = options.textAlign || 'left';
   const font = getOtFont();
-
-  // 檢查是否含有中文字元
-  const hasChinese = /[\u4e00-\u9fa5]/.test(text);
-
-  // 如果沒有中文，或者沒載入到 OTF，直接用 fillText
-  if (!hasChinese || !font) {
+  
+  // 如果沒有載入到字型，直接用 fillText
+  if (!font) {
     ctx.save();
     ctx.fillStyle = color;
     ctx.textAlign = align;
     ctx.font = `${options.isBold ? 'bold' : 'normal'} ${fontSize}px ${FONT_FAMILY}, sans-serif`;
-    ctx.fillText(text, x, y);
+    ctx.fillText(options.symbolFallback || text, x, y);
     ctx.restore();
     return;
   }
 
-  // 處理中文：嘗試用 opentype 畫路徑
   try {
+    // 1. 檢查字型支援度：逐字檢查 glyph
+    const glyphs = font.stringToGlyphs(text);
+    // index 0 通常是 .notdef (方塊)
+    const hasUnsupported = glyphs.some(g => g.index === 0);
+
+    // 2. 如果包含不支援的字元，且提供了 fallback (通常是代碼)，則優先顯示 fallback
+    let finalInfoToDraw = text;
+    if (hasUnsupported && options.symbolFallback) {
+      finalInfoToDraw = options.symbolFallback;
+    }
+
+    // 3. 計算繪製位置
     let drawX = x;
     if (align !== 'left') {
-      const width = font.getAdvanceWidth(text, fontSize);
+      const width = font.getAdvanceWidth(finalInfoToDraw, fontSize);
       if (align === 'right') drawX = x - width;
       else if (align === 'center') drawX = x - width / 2;
     }
 
-    // 檢查字型是否真的含有這些字元的 Glyph
-    const glyphs = font.stringToGlyphs(text);
-    const hasAllGlyphs = glyphs.every(g => g.unicode !== undefined && g.index > 0);
-
-    if (!hasAllGlyphs && options.symbolFallback) {
-      // 如果字型不支援某些中文字，降級顯示代碼
-      ctx.save();
-      ctx.fillStyle = color;
-      ctx.textAlign = align;
-      ctx.font = `${options.isBold ? 'bold' : 'normal'} ${fontSize}px ${FONT_FAMILY}, sans-serif`;
-      ctx.fillText(options.symbolFallback, x, y);
-      ctx.restore();
-      return;
-    }
-
-    const path = font.getPath(text, drawX, y, fontSize);
+    // 4. 使用路徑繪製最終確定的內容 (一定是該字型支援的內容)
+    const path = font.getPath(finalInfoToDraw, drawX, y, fontSize);
     ctx.save();
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -86,9 +81,11 @@ function drawText(ctx: any, text: string, x: number, y: number, fontSize: number
     ctx.fill();
     ctx.restore();
   } catch (e) {
-    // 最終回退
+    // 最終防線：若路徑繪製失敗，顯示 fallback 文字
     ctx.save();
+    ctx.fillStyle = color;
     ctx.textAlign = align;
+    ctx.font = `${options.isBold ? 'bold' : 'normal'} ${fontSize}px ${FONT_FAMILY}, sans-serif`;
     ctx.fillText(options.symbolFallback || text, x, y);
     ctx.restore();
   }
@@ -380,13 +377,13 @@ export async function renderRankChart(
     ctx.fillRect(Math.min(centerX, endX), y, Math.abs(endX - centerX), barHeight);
 
     // 繪製代號與名稱 (支援中文回退)
-    drawText(ctx, d.displayName, padding.left - 10, y + barHeight / 2 + 6, 16, '#e5e7eb', { textAlign: 'right', isBold: true });
+    drawText(ctx, d.displayName, padding.left - 10, y + barHeight / 2 + 6, 16, '#e5e7eb', { textAlign: 'right', isBold: true, symbolFallback: d.symbol });
     
     drawText(ctx, `${d.count} hits`, padding.left - 10, y + barHeight / 2 + 22, 12, '#9ca3af', { textAlign: 'right' });
 
     // 繪製百分比文字
     const pctText = `${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%`;
-    drawText(ctx, pctText, d.pct >= 0 ? endX + 10 : endX - 10, y + barHeight / 2 + 6, 16, color, { textAlign: d.pct >= 0 ? 'left' : 'right', isBold: true });
+    drawText(ctx, pctText, d.pct >= 0 ? endX + 10 : endX - 10, y + barHeight / 2 + 6, 16, color, { textAlign: d.pct >= 0 ? 'left' : 'right', isBold: true, symbolFallback: pctText });
   });
 
   return canvas.toBuffer('image/png');
@@ -418,7 +415,7 @@ export async function renderMultiRoiChart(
   const colors = ['#3b82f6', '#f59e0b', '#10b981', '#a855f7', '#ec4899', '#06b6d4'];
 
   // 標題
-  drawText(ctx, `ROI Comparison (${period})`, padding.left, 45, 28, '#ffffff', { isBold: true });
+  drawText(ctx, `ROI Comparison (${period})`, padding.left, 45, 28, '#ffffff', { isBold: true, symbolFallback: `ROI Comparison (${period})` });
 
   // 計算所有系列的百分比數據與名稱
   const normalizedSeries = await Promise.all(series.map(async (s, idx) => {
@@ -507,12 +504,12 @@ export async function renderMultiRoiChart(
     ctx.fillRect(x, y, 15, 15);
     
     // 代號與名稱 (支援中文回退)
-    drawText(ctx, s.displayName, x + 25, y + 13, 14, '#ffffff', { isBold: true });
+    drawText(ctx, s.displayName, x + 25, y + 13, 14, '#ffffff', { isBold: true, symbolFallback: s.symbol });
     
     // 最終報酬率
     const pctColor = s.finalPct >= 0 ? '#ef4444' : '#22c55e';
     const pctText = `${s.finalPct >= 0 ? '+' : ''}${s.finalPct.toFixed(2)}%`;
-    drawText(ctx, pctText, x + 25, y + 30, 12, pctColor);
+    drawText(ctx, pctText, x + 25, y + 30, 12, pctColor, { symbolFallback: pctText });
   });
 
   // 時間軸 (取第一條線作為基準)
@@ -560,11 +557,11 @@ export async function renderProfitChart(
   const displayName = name ? `${symbol} ${name}` : symbol;
   const totalPct = ((currentPrice - initialPrice) / initialPrice) * 100;
   
-  drawText(ctx, `${displayName} ROI Analysis (${period})`, padding.left, 45, 28, '#ffffff', { isBold: true });
+  drawText(ctx, `${displayName} ROI Analysis (${period})`, padding.left, 45, 28, '#ffffff', { isBold: true, symbolFallback: `${symbol} ROI Analysis (${period})` });
 
   const pctColor = totalPct >= 0 ? '#ef4444' : '#22c55e';
   const pctText = `${totalPct >= 0 ? '+' : ''}${totalPct.toFixed(2)}%`;
-  drawText(ctx, pctText, width - padding.right, 45, 24, pctColor, { textAlign: 'right', isBold: true });
+  drawText(ctx, pctText, width - padding.right, 45, 24, pctColor, { textAlign: 'right', isBold: true, symbolFallback: pctText });
 
   if (history.length < 2) return canvas.toBuffer('image/png');
 
