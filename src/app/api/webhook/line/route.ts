@@ -272,38 +272,40 @@ const reply = await generateBotReply(userText, { baseUrl: origin, chatId });
           .replace(/&#39;/g, "'")
           .replace(/\*/g, "");
         const messages: line.messagingApi.Message[] = [];
-        const isStockCmd = userText.startsWith("/tw") || userText.startsWith("/us") || userText.startsWith("/whatis");
-
         
-        // 只有當成功產生圖表 (reply.chartBuffer 存在) 時才發送圖片訊息
-        if (isStockCmd && reply.chartBuffer) {
-          const parts = userText.trim().split(/\s+/);
-          const query = parts.slice(1).join(" ").trim();
+        const isRoiOrRank = userText.startsWith("/roi") || userText.startsWith("/rank");
+        const secureBase = getSecureBaseUrl(origin);
+
+        // 處理動態圖表 (Buffer)
+        if (reply.chartBuffer) {
+          const { setCache } = await import("@/lib/providers/redisCache");
+          const cacheId = Math.random().toString(36).substring(2, 15);
+          // 快取 10 分鐘，將 Buffer 轉為 Base64 存入 Redis
+          await setCache(`line:chart:${cacheId}`, reply.chartBuffer.toString("base64"), 600);
           
-          if (query) {
-             const resolvedTicker = (userText.startsWith("/tw") || userText.startsWith("/whatis")) ? resolveCodeFromInputLocal(query) : query.toUpperCase();
-             const secureBase = getSecureBaseUrl(origin);
-             
-             if (resolvedTicker) {
-                const chartUrl = `${secureBase}/api/stock/${encodeURIComponent(resolvedTicker)}/chart?mobile=1`;
-                messages.push({
-                  type: "image",
-                  originalContentUrl: chartUrl,
-                  previewImageUrl: chartUrl,
-                } as line.messagingApi.ImageMessage);
-             }
-          }
+          const chartUrl = `${secureBase}/api/telegram/chart-proxy?id=${cacheId}`;
+          messages.push({
+            type: "image",
+            originalContentUrl: chartUrl,
+            previewImageUrl: chartUrl,
+          } as line.messagingApi.ImageMessage);
         }
 
-        messages.push({
-          type: "text",
-          text: cleanReply,
-        });
+        // 如果不是 ROI 或 Rank，或者圖片沒產生成功，才發送文字訊息
+        // 針對 ROI 和 Rank，若有圖就只發圖；若沒圖（失敗）才發文字
+        if (!isRoiOrRank || !reply.chartBuffer) {
+          messages.push({
+            type: "text",
+            text: cleanReply,
+          });
+        }
 
-        await client.replyMessage({
-          replyToken: event.replyToken,
-          messages,
-        });
+        if (messages.length > 0) {
+          await client.replyMessage({
+            replyToken: event.replyToken,
+            messages,
+          });
+        }
 // 移除 console.log("[LINE Webhook] Successfully replied to ${userText}");
       } catch (eventErr) {
         console.error("[LINE Webhook] Error processing specific event:", eventErr);
