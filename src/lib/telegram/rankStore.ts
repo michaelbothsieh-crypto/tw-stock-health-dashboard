@@ -69,7 +69,11 @@ export async function getTopRankedStocks(chatId: string | number): Promise<Stock
 
     // 2. 批量取得初始價格 (HMGET)
     const symbols = ranks.map(r => r.symbol);
-    const rawInitials = await redis.hmget(initialKey, ...symbols) as unknown as (string | null)[];
+    const hmgetRes = await redis.hmget(initialKey, ...symbols);
+    // 相容性處理：Upstash 有時回傳陣列，有時回傳 Record<string, string>
+    const rawInitials = Array.isArray(hmgetRes) 
+      ? hmgetRes as (string | null)[] 
+      : symbols.map(s => (hmgetRes as Record<string, string | null>)[s]);
 
     // 3. 組合結果
     const results: StockRankRecord[] = [];

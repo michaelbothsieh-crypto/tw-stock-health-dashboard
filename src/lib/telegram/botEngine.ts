@@ -870,7 +870,8 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
          progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
       }
 
-      const reply = await generateBotReply(text, { ...options, chatId });
+      const chatIdStr = String(chatId);
+      const reply = await generateBotReply(text, { ...options, chatId: chatIdStr });
       if (!reply) {
          if (progressMessageId) await deleteMessage(chatId, progressMessageId);
          return;
