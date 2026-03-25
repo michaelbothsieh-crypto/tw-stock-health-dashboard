@@ -82,10 +82,13 @@ export async function getTopRankedStocks(chatId: string | number): Promise<Stock
     // 2. 批量取得初始價格 (HMGET)
     const symbols = ranks.map(r => r.symbol);
     const hmgetRes = await redis.hmget(initialKey, ...symbols);
+    
+    console.log(`[rankStore] HMGET result for ${id}:`, JSON.stringify(hmgetRes));
+
     // 相容性處理：Upstash 有時回傳陣列，有時回傳 Record<string, string>
     const rawInitials = Array.isArray(hmgetRes) 
-      ? hmgetRes as (string | null)[] 
-      : symbols.map(s => (hmgetRes as Record<string, string | null>)[s]);
+      ? hmgetRes as (string | any)[] 
+      : symbols.map(s => (hmgetRes as Record<string, any>)[s]);
 
     // 3. 組合結果
     const results: StockRankRecord[] = [];
@@ -93,15 +96,19 @@ export async function getTopRankedStocks(chatId: string | number): Promise<Stock
       const initialJson = rawInitials ? rawInitials[i] : null;
       if (initialJson) {
          try {
-           const initial = JSON.parse(initialJson);
-           results.push({
-             symbol: ranks[i].symbol,
-             count: ranks[i].count,
-             initialPrice: initial.price,
-             initialTimestamp: initial.timestamp,
-           });
+           // 關鍵修復：判斷是否需要 JSON.parse
+           const initial = typeof initialJson === 'string' ? JSON.parse(initialJson) : initialJson;
+           
+           if (initial && typeof initial.price === 'number') {
+             results.push({
+               symbol: ranks[i].symbol,
+               count: ranks[i].count,
+               initialPrice: initial.price,
+               initialTimestamp: initial.timestamp || Date.now(),
+             });
+           }
          } catch (e) {
-           // Skip if invalid JSON
+           console.error(`[rankStore] Failed to parse initial data for ${ranks[i].symbol}:`, e);
          }
       }
     }
