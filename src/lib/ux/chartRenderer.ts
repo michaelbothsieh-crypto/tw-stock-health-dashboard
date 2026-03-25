@@ -37,8 +37,8 @@ function drawText(ctx: any, text: string, x: number, y: number, fontSize: number
   ctx.save();
   ctx.fillStyle = color;
   ctx.textAlign = align;
-  // 這裡加入系統中文字型回退：PingFang TC (Mac), Microsoft JhengHei (Win), Noto Sans TC (Linux)
-  ctx.font = `${weight} ${fontSize}px ${FONT_FAMILY}, "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif`;
+  // 關鍵：將中文字型放在最前面，讓 NotoSans 僅處理拉丁字元
+  ctx.font = `${weight} ${fontSize}px "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", ${FONT_FAMILY}, sans-serif`;
   ctx.fillText(text, x, y);
   ctx.restore();
 }
@@ -52,19 +52,9 @@ const FONT_FAMILY = 'NotoSans';
 
 function ensureFonts() {
   if (_fontsRegistered) return;
-  // 1. 註冊基礎 NotoSans (Latin)
+  // 註冊基礎 NotoSans (Latin)
   const buf = Buffer.from(NOTO_SANS_BOLD_B64, 'base64');
   GlobalFonts.register(buf, FONT_FAMILY);
-
-  // 2. 嘗試註冊較大的 TTF (可能含 CJK)
-  try {
-    const ttfPath = path.join(process.cwd(), 'public/fonts/NotoSans-Bold.ttf');
-    const ttfBuf = require('fs').readFileSync(ttfPath);
-    GlobalFonts.register(ttfBuf, 'NotoSansCJK');
-    console.log('[ChartRenderer] Registered NotoSansCJK from public/fonts');
-  } catch (e) {
-    console.warn('[ChartRenderer] Failed to register NotoSansCJK:', e);
-  }
   _fontsRegistered = true;
 }
 
