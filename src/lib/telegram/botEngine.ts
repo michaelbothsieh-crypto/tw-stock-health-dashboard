@@ -536,13 +536,26 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       let yahooSymbol = snapshot?.normalizedTicker?.yahoo;
       if (symbol === "8299") yahooSymbol = "8299.TWO";
       if (!yahooSymbol || yahooSymbol === symbol) {
-         // 修正推算邏輯：5、6、8 開頭，或是以 B 結尾（債券 ETF）通常是在 TPEX (.TWO)
-         const isTPEX = symbol.startsWith("8") || symbol.startsWith("6") || symbol.startsWith("5") || symbol.toUpperCase().endsWith("B");
-         yahooSymbol = isTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
+         // 修正推算邏輯：4, 5, 8 開頭，或是 3 開頭 (排除大立光 3008)，或是以 B 結尾（債券 ETF）通常是在 TPEX (.TWO)
+         // 6 系列上市櫃重疊非常嚴重，這裡先保守一點
+         const isProbablyTPEX = symbol.startsWith("8") || symbol.startsWith("5") || symbol.startsWith("4") || (symbol.startsWith("3") && symbol !== "3008") || symbol.toUpperCase().endsWith("B");
+         yahooSymbol = isProbablyTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
       }
 
       // 2. 如果 Fugle 沒抓到，Fallback 到 Yahoo Finance（15-20 分鐘延遲）
-      const rtQuoteRaw = fugleQuote ? null : await yahooFinance.quote(yahooSymbol).catch(() => null);
+      let rtQuoteRaw = fugleQuote ? null : await yahooFinance.quote(yahooSymbol).catch(() => null);
+      
+      // 如果第一次嘗試失敗，且是台股，則嘗試另一種後綴
+      if (!rtQuoteRaw && !fugleQuote && /[0-9]/.test(symbol)) {
+         const alternativeYahooSymbol = yahooSymbol.endsWith(".TW") 
+            ? yahooSymbol.replace(".TW", ".TWO") 
+            : yahooSymbol.replace(".TWO", ".TW");
+         rtQuoteRaw = await yahooFinance.quote(alternativeYahooSymbol).catch(() => null);
+         if (rtQuoteRaw) {
+            yahooSymbol = alternativeYahooSymbol; // 更新為正確的 symbol
+         }
+      }
+
       const rtQuote: any = fugleQuote
         ? {
             regularMarketPrice: fugleQuote.price,
@@ -677,15 +690,34 @@ async function fetchPriceOnly(symbol: any): Promise<{ price: number | null, fina
    try {
       if (!yahooSymbol) return { price: null, finalSymbol: "" };
       const isUs = /^[A-Z]{1,5}$/.test(yahooSymbol);
+      const isTWNumber = /^[0-9]{4,6}$/.test(yahooSymbol);
+      
       if (!isUs && !yahooSymbol.includes(".")) {
-         // 台股代號自動補後綴，1-4, 5, 6, 8 開頭都可能是上市或上櫃
-         const isTPEXHeuristic = /^[34568]/.test(yahooSymbol) || yahooSymbol.endsWith("B");
-         yahooSymbol = isTPEXHeuristic ? `${yahooSymbol}.TWO` : `${yahooSymbol}.TW`;
+         // 台股代號自動補後綴
+         // 修正：31-37, 4, 5, 8 開頭較多上櫃，但 6, 2, 1 等開頭上市較多
+         // 這裡我們先猜一個，失敗了再換
+         const isProbablyTPEX = /^[458]/.test(yahooSymbol) || (yahooSymbol.startsWith("3") && yahooSymbol !== "3008") || yahooSymbol.endsWith("B");
+         yahooSymbol = isProbablyTPEX ? `${yahooSymbol}.TWO` : `${yahooSymbol}.TW`;
       }
 
       // 策略 1: 使用 quote API (最快)
-      const quote = await yahooFinance.quote(yahooSymbol).catch(() => null);
-      const quoteRes: any = Array.isArray(quote) ? quote[0] : quote;
+      let quote = await yahooFinance.quote(yahooSymbol).catch(() => null);
+      let quoteRes: any = Array.isArray(quote) ? quote[0] : quote;
+      
+      // 如果是台股且失敗了，嘗試反向後綴
+      if (!quoteRes?.regularMarketPrice && isTWNumber) {
+         const alternativeSymbol = yahooSymbol.endsWith(".TW") 
+            ? yahooSymbol.replace(".TW", ".TWO") 
+            : yahooSymbol.replace(".TWO", ".TW");
+         
+         const altQuote = await yahooFinance.quote(alternativeSymbol).catch(() => null);
+         const altQuoteRes: any = Array.isArray(altQuote) ? altQuote[0] : altQuote;
+         
+         if (altQuoteRes?.regularMarketPrice) {
+            return { price: altQuoteRes.regularMarketPrice, finalSymbol: alternativeSymbol };
+         }
+      }
+
       if (quoteRes?.regularMarketPrice) {
          return { price: quoteRes.regularMarketPrice, finalSymbol: yahooSymbol };
       }
