@@ -291,14 +291,11 @@ const reply = await generateBotReply(userText, { baseUrl: origin, chatId });
           } as line.messagingApi.ImageMessage);
         }
 
-        // 如果不是 ROI 或 Rank，或者圖片沒產生成功，才發送文字訊息
-        // 針對 ROI 和 Rank，若有圖就只發圖；若沒圖（失敗）才發文字
-        if (!isRoiOrRank || !reply.chartBuffer) {
-          messages.push({
-            type: "text",
-            text: cleanReply,
-          });
-        }
+        // 總是發送文字訊息
+        messages.push({
+          type: "text",
+          text: cleanReply,
+        });
 
         if (messages.length > 0) {
           await client.replyMessage({
