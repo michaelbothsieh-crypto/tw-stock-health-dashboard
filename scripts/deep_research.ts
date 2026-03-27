@@ -1,5 +1,5 @@
 import { Groq } from "groq-sdk";
-import { subDays } from "date-fns";
+import { renderResearchImage } from "../src/lib/ux/researchRenderer";
 
 /**
  * 深入研調腳本 (由 GitHub Actions 執行)
@@ -59,7 +59,7 @@ ${context}
 3. 💬 **社群精選觀點** (摘錄 3-5 個代表性的社群論點，並標註來源類型如 Reddit 或 X)
 4. 💡 **分析師總結** (結合社群風向與已知訊息的最後綜合建議)
 
-請使用 HTML 格式標籤（僅限 <b>, <i>, <a>, <code>, <pre>），不要使用 Markdown 的星號。`;
+請直接輸出內容，不要包含額外的對話。`;
 
   const completion = await groq.chat.completions.create({
     messages: [{ role: "user", content: prompt }],
@@ -70,19 +70,19 @@ ${context}
   return completion.choices[0].message.content;
 }
 
-async function sendTelegram(chatId: string, text: string) {
+async function sendTelegramPhoto(chatId: string, imageBuffer: Buffer, caption: string) {
   if (!TELEGRAM_BOT_TOKEN) return;
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-  await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-      disable_web_page_preview: true
-    })
-  });
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
+  
+  const uint8Array = new Uint8Array(imageBuffer);
+  const imageBlob = new Blob([uint8Array], { type: "image/png" });
+  const formData = new FormData();
+  formData.append("chat_id", chatId);
+  formData.append("photo", imageBlob, "research_report.png");
+  formData.append("caption", caption);
+  formData.append("parse_mode", "HTML");
+
+  await fetch(url, { method: "POST", body: formData });
 }
 
 async function deleteTelegramMessage(chatId: string, messageId: string) {
@@ -122,26 +122,25 @@ async function main() {
   
   try {
     const results = await tavilySearch(`${ticker} stock social media sentiment reddit x youtube last 30 days`);
-    const report = await groqSummarize(ticker, results);
+    const reportText = await groqSummarize(ticker, results);
     
-    const finalReport = `🔍 <b>${ticker} 深度研調報告 (Last 30 Days)</b>\n\n${report}`;
-
     if (platform === "TG") {
-      await sendTelegram(chatId, finalReport);
+      const imageBuffer = await renderResearchImage(ticker, reportText || "");
+      const caption = `📊 <b>${ticker} 深度研調報告已完成</b>\n掃描範圍：Reddit, X, 財經新聞 (30天)`;
+      await sendTelegramPhoto(chatId, imageBuffer, caption);
       if (msgIdToDel) {
         await deleteTelegramMessage(chatId, msgIdToDel);
       }
     } else if (platform === "LINE") {
+      const finalReport = `🔍 ${ticker} 深度研調報告 (Last 30 Days)\n\n${reportText}`;
       await sendLine(chatId, finalReport);
     }
     
     console.log("Research completed and sent.");
   } catch (err: any) {
     console.error("Research failed:", err);
-    const errMsg = `❌ 研調失敗: ${err.message}`;
-    if (platform === "TG") await sendTelegram(chatId, errMsg);
-    else if (platform === "LINE") await sendLine(chatId, errMsg);
   }
 }
 
 main();
+
