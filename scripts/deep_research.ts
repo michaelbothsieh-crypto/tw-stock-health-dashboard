@@ -1,5 +1,5 @@
-import { Groq } from "groq-sdk";
 import { renderResearchImage } from "../src/lib/ux/researchRenderer";
+import { callLLMWithFallback } from "../src/lib/ai/base";
 
 /**
  * 深入研調腳本 (由 GitHub Actions 執行)
@@ -11,7 +11,6 @@ const chatId = process.argv[3];
 const platform = process.argv[4] || "TG";
 const msgIdToDel = process.argv[5]; // 僅 TG 使用，完成後刪除「研調中」訊息
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY || process.env.GROK_API_KEY;
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
@@ -42,10 +41,7 @@ async function tavilySearch(query: string) {
   }
 }
 
-async function groqSummarize(ticker: string, searchResults: any[]) {
-  if (!GROQ_API_KEY) throw new Error("Missing GROQ_API_KEY");
-  
-  const groq = new Groq({ apiKey: GROQ_API_KEY });
+async function aiSummarize(ticker: string, searchResults: any[]) {
   const context = searchResults.map((r, i) => `[Source ${i+1}]: ${r.title}\nURL: ${r.url}\nContent: ${r.content}`).join("\n\n");
 
   const prompt = `你是一位專業的財經分析師。請針對股票「${ticker}」過去 30 天在社群平台 (Reddit, X, YouTube, HN) 及財經新聞上的討論進行深度研調總結。
@@ -61,13 +57,8 @@ ${context}
 
 請直接輸出內容，不要包含額外的對話。`;
 
-  const completion = await groq.chat.completions.create({
-    messages: [{ role: "user", content: prompt }],
-    model: "llama-3.3-70b-versatile",
-    temperature: 0.2,
-  });
-
-  return completion.choices[0].message.content;
+  // 使用具有容錯與動態切換模型能力的新元件
+  return await callLLMWithFallback<string>(prompt, { temperature: 0.2, timeout: 30000 });
 }
 
 async function sendTelegramPhoto(chatId: string, imageBuffer: Buffer, caption: string) {
@@ -122,7 +113,7 @@ async function main() {
   
   try {
     const results = await tavilySearch(`${ticker} stock social media sentiment reddit x youtube last 30 days`);
-    const reportText = await groqSummarize(ticker, results);
+    const reportText = await aiSummarize(ticker, results);
     
     if (platform === "TG") {
       const imageBuffer = await renderResearchImage(ticker, reportText || "");
