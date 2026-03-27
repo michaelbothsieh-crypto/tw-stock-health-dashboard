@@ -947,13 +947,19 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          initialPrice: r.initialPrice
       })), periodRaw).catch(() => null);
 
-      const textParts = validResults.map(r => {
+      const resultsWithRoi = validResults.map(r => {
          const pct = ((r.live.close! - r.initialPrice) / r.initialPrice) * 100;
-         return `${r.symbol}: <b>${formatSignedPct(pct, 2)}</b>`;
+         return { ...r, pct };
+      }).sort((a, b) => b.pct - a.pct);
+
+      const textLines = resultsWithRoi.map(r => {
+         const name = r.live.nameZh && r.live.nameZh !== r.symbol ? r.live.nameZh : "";
+         const label = name ? `${name}(${r.symbol})` : r.symbol;
+         return `${label}: <b>${formatSignedPct(r.pct, 2)}</b>`;
       });
 
       return {
-         text: `📊 <b>多檔股票報酬率對比 (${periodRaw})</b>\n\n` + textParts.join("\n"),
+         text: `📊 <b>多檔股票報酬率對比 (${periodRaw})</b>\n\n` + textLines.join("\n"),
          chartBuffer
       };
    }
