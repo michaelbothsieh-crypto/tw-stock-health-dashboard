@@ -1,0 +1,29 @@
+name: Deep Research Workflow
+
+on:
+  repository_dispatch:
+    types: [deep-research]
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Deep Research Script
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+        run: |
+          npx tsx scripts/deep_research.ts "${{ github.event.client_payload.ticker }}" "${{ github.event.client_payload.chatId }}" "${{ github.event.client_payload.platform }}" "${{ github.event.client_payload.msgIdToDel }}"
