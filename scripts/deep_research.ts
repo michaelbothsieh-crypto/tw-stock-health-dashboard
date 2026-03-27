@@ -63,7 +63,7 @@ ${context}
 
   const completion = await groq.chat.completions.create({
     messages: [{ role: "user", content: prompt }],
-    model: "llama-3.3-70b-specdec",
+    model: "llama-3.3-70b-versatile",
     temperature: 0.2,
   });
 
