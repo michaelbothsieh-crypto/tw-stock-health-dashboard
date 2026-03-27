@@ -46,7 +46,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, reason: "Ignored: not a stock-specific command" });
     }
 
-    console.log(`[TelegramWebhook] Processing command: ${command} with text: ${userText}`);
+    // Proceed exactly as before
 
     // 只有白名單內的指令才會走到這裡：註冊 ID 並處理
     await registerChatId(chat.id);

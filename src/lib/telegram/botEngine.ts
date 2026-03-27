@@ -1056,8 +1056,6 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
             const errorMsg = `❌ 啟動 GitHub Actions 失敗：\n${dispatchResult.error || "未知錯誤"}`;
             await sendMessage(chatId, errorMsg);
             console.error("[BotEngine] GitHub Dispatch Failed:", errorMsg);
-         } else {
-            console.log("[BotEngine] GitHub Dispatch Success for /deep");
          }
          return;
       }

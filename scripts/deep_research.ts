@@ -60,12 +60,19 @@ async function runLast30DaysSkill(ticker: string): Promise<string> {
 }
 
 async function aiSummarize(ticker: string, researchContent: string) {
-  const prompt = `你是一位專業的財經分析師。請針對股票「${ticker}」過去 30 天在社群平台 (Reddit, X, YouTube) 及財經新聞上的討論進行深度研調總結。
+  const prompt = `你是一位專業的財經分析師。請針對股票「${ticker}」過去 30 天在各大社群與網路的深度討論進行總結。
 
-以下是使用專屬 last30days 研調元件抓取回來的最新精華資訊：
+以下是剛抓取回來的精華資訊（也可能包含 Tavily 的新聞備援資料）：
+<BEGIN_DATA>
 ${researchContent}
+</END_DATA>
 
-請提供一份繁體中文報告，包含以下結構：
+【⚠️ 絕對防捏造禁令】：
+1. 你的分析「必須完全且僅能」依據上方 <BEGIN_DATA> 內的資訊。
+2. 若上方的資料為空、全部都是錯誤，或者只包含 "*To be synthesized by assistant*"，請停止猜測！你必須直接在報告中表明：「由於社群平台目前沒有針對此股票近期有意義的討論，或遭到網路爬蟲阻擋，因此本次無法提供可靠的社群情緒與論點分析。」
+3. 嚴禁憑空捏造不存在的 Reddit 用戶 (例如 stockanalyst2020) 或 X 用戶 (例如 finance_insider)，也嚴禁猜測最新的財報發布。請保持 100% 誠實，沒資料就說沒資料。
+
+請提供一份客觀且專業的繁體中文報告，建議包含以下結構（若沒有資料，請直接回答無資料的免責聲明）：
 1. 📈 **整體社群情緒** (看多/看空/中立，並說明原因)
 2. 🔥 **熱議焦點 (Top 3)** (列出過去 30 天討論度最高的三個技術點、利多或利空訊息)
 3. 💬 **社群精選觀點** (摘錄 3-5 個代表性的社群論點，並標註來源類型如 Reddit 或 X)
@@ -135,9 +142,11 @@ async function main() {
     // 1. 使用 last30days-skill 元件爬取並整理 Markdown 格式
     let researchMarkdown = await runLast30DaysSkill(ticker);
     
-    // 如果 last30days 因為缺乏 API Key 被 Reddit 阻擋而抓不到東西，自動降級切換到 Tavily 繼續抓！
-    if (researchMarkdown.includes("Reddit: 0 threads, X: 0 posts") || researchMarkdown.includes("無法抓取")) {
-      console.log("last30days-skill returned empty results due to missing keys or 403 blocks. Falling back to Tavily...");
+    // 如果抓出來的文本極短，或根本沒有網址，代表 100% 被擋了或沒有資料
+    const isEmptyData = researchMarkdown.length < 300 || !researchMarkdown.includes("http");
+    
+    if (isEmptyData) {
+      console.log("last30days-skill returned virtually empty results (likely 403 Blocked). Triggering Tavily fallback...");
       const fallbackResults = await tavilySearch(`${ticker} 股票 社群討論 最新消息`);
       const fallbackContext = fallbackResults.map((r: any, i: number) => `[Fallback ${i+1}]: ${r.title}\nURL: ${r.url}\nContent: ${r.content}`).join("\n\n");
       researchMarkdown += `\n\n[Tavily 備援擴充資料]\n${fallbackContext}`;
