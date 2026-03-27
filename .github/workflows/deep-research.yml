@@ -11,6 +11,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # 這裡就是把您的專屬新元件接進來的關鍵！
+      - name: Checkout last30days-skill component
+        uses: actions/checkout@v4
+        with:
+          repository: mvanhorn/last30days-skill
+          path: last30days-skill
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
