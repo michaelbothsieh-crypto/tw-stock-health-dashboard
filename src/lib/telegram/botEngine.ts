@@ -1047,14 +1047,17 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
          const query = text.split(/\s+/).slice(1).join(" ").trim();
          const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
          
-         // 更新原本的進度訊息，包含 symbol 資訊
-         await editMessage(chatId, progressMessageId!, `🔍 <b>${symbol} 深度研調啟動</b>\n正在掃描社群風向 (Reddit, X, 30天數據)...\n完成後將在此回傳報告 (約 2-3 分鐘)。`);
+         // 確保無論如何都能發出「已啟動」的提示
+         await replyOrEdit(chatId, progressMessageId, reply.text);
          
          const dispatchResult = await triggerDeepResearchGHAction(symbol, chatIdStr, "TG", progressMessageId || undefined);
          
          if (!dispatchResult.ok) {
             const errorMsg = `❌ 啟動 GitHub Actions 失敗：\n${dispatchResult.error || "未知錯誤"}`;
-            await editMessage(chatId, progressMessageId!, errorMsg);
+            await sendMessage(chatId, errorMsg);
+            console.error("[BotEngine] GitHub Dispatch Failed:", errorMsg);
+         } else {
+            console.log("[BotEngine] GitHub Dispatch Success for /deep");
          }
          return;
       }
