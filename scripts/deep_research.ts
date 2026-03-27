@@ -1,4 +1,4 @@
-import { renderResearchImage } from "../src/lib/ux/researchRenderer";
+import { renderResearchHtml } from "../src/lib/ux/researchHtmlBuilder";
 import { callLLMWithFallback } from "../src/lib/ai/base";
 import { execSync } from "child_process";
 
@@ -77,19 +77,23 @@ ${researchContent}
   return await callLLMWithFallback<string>(prompt, { temperature: 0.2, timeout: 30000 });
 }
 
-async function sendTelegramPhoto(chatId: string, imageBuffer: Buffer, caption: string) {
+async function sendTelegramDocument(chatId: string, documentBuffer: Buffer, caption: string) {
   if (!TELEGRAM_BOT_TOKEN) return;
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument`;
   
-  const uint8Array = new Uint8Array(imageBuffer);
-  const imageBlob = new Blob([uint8Array], { type: "image/png" });
+  const uint8Array = new Uint8Array(documentBuffer);
+  const docBlob = new Blob([uint8Array], { type: "text/html" });
   const formData = new FormData();
   formData.append("chat_id", chatId);
-  formData.append("photo", imageBlob, "research_report.png");
+  formData.append("document", docBlob, `DeepResearch_${new Date().toISOString().split('T')[0]}.html`);
   formData.append("caption", caption);
   formData.append("parse_mode", "HTML");
 
-  await fetch(url, { method: "POST", body: formData });
+  const res = await fetch(url, { method: "POST", body: formData });
+  const response = await res.json();
+  if (!res.ok) {
+    console.error("Telegram sendDocument failed:", response);
+  }
 }
 
 async function deleteTelegramMessage(chatId: string, messageId: string) {
@@ -143,9 +147,9 @@ async function main() {
     const reportText = await aiSummarize(ticker, researchMarkdown);
     
     if (platform === "TG") {
-      const imageBuffer = await renderResearchImage(ticker, reportText || "");
-      const caption = `📊 <b>${ticker} 深度研調報告已完成</b>\n掃描範圍：Reddit, X, 財經新聞 (30天)`;
-      await sendTelegramPhoto(chatId, imageBuffer, caption);
+      const htmlBuffer = await renderResearchHtml(ticker, reportText || "");
+      const caption = `📊 <b>${ticker} 深度研調報告已完成</b>\n備註：點擊上方 HTML 檔案開啟漂亮網頁版報告！`;
+      await sendTelegramDocument(chatId, htmlBuffer, caption);
       if (msgIdToDel) {
         await deleteTelegramMessage(chatId, msgIdToDel);
       }
