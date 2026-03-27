@@ -439,22 +439,36 @@ export async function renderMultiRoiChart(
 
     return {
       symbol: s.symbol,
-      displayName,
       data,
-      color: colors[idx % colors.length],
       finalPct: data.length > 0 ? data[data.length - 1].pct : 0
     };
   }));
 
-  if (normalizedSeries.length === 0) return canvas.toBuffer('image/png');
+  // 1. 按報酬率遞減排序
+  normalizedSeries.sort((a, b) => b.finalPct - a.finalPct);
+
+  // 2. 處理名稱顯示與顏色分配
+  const seriesWithStyle = await Promise.all(normalizedSeries.map(async (s, idx) => {
+    const isTW = /^[0-9]+$/.test(s.symbol);
+    const name = await getCompanyNameZh(s.symbol);
+    const displayName = (isTW && name) ? `${name}(${s.symbol})` : s.symbol;
+
+    return {
+      ...s,
+      displayName,
+      color: colors[idx % colors.length]
+    };
+  }));
+
+  if (seriesWithStyle.length === 0) return canvas.toBuffer('image/png');
 
   // 找範圍
-  const allPcts = normalizedSeries.flatMap(s => s.data.map(d => d.pct));
+  const allPcts = seriesWithStyle.flatMap(s => s.data.map(d => d.pct));
   const maxPct = Math.max(...allPcts, 5) * 1.1;
   const minPct = Math.min(...allPcts, -5) * 1.1;
   const pctRange = maxPct - minPct;
 
-  const maxLen = Math.max(...normalizedSeries.map(s => s.data.length));
+  const maxLen = Math.max(...seriesWithStyle.map(s => s.data.length));
   const getX = (i: number, len: number) => padding.left + (i * chartWidth) / (len - 1);
   const getY = (pct: number) => padding.top + (maxPct - pct) * (chartHeight / pctRange);
 
@@ -479,7 +493,7 @@ export async function renderMultiRoiChart(
   ctx.setLineDash([]);
 
   // 繪製每一條線
-  normalizedSeries.forEach(s => {
+  seriesWithStyle.forEach(s => {
     ctx.strokeStyle = s.color;
     ctx.lineWidth = 3;
     ctx.lineJoin = 'round';
@@ -504,7 +518,7 @@ export async function renderMultiRoiChart(
 
   // 繪製圖例 (Legend)
   ctx.textAlign = 'left';
-  normalizedSeries.forEach((s, i) => {
+  seriesWithStyle.forEach((s, i) => {
     const x = width - padding.right + 20;
     const y = padding.top + i * 35;
     
@@ -522,7 +536,7 @@ export async function renderMultiRoiChart(
   });
 
   // 時間軸 (取第一條線作為基準)
-  const ref = normalizedSeries[0].data;
+  const ref = seriesWithStyle[0].data;
   ctx.fillStyle = '#9ca3af';
   ctx.textAlign = 'center';
   const labelCount = 5;
