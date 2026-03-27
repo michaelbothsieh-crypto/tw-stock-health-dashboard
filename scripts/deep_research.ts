@@ -1,5 +1,6 @@
 import { renderResearchImage } from "../src/lib/ux/researchRenderer";
 import { callLLMWithFallback } from "../src/lib/ai/base";
+import { execSync } from "child_process";
 
 /**
  * 深入研調腳本 (由 GitHub Actions 執行)
@@ -11,43 +12,31 @@ const chatId = process.argv[3];
 const platform = process.argv[4] || "TG";
 const msgIdToDel = process.argv[5]; // 僅 TG 使用，完成後刪除「研調中」訊息
 
-const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
-async function tavilySearch(query: string) {
-  if (!TAVILY_API_KEY) {
-    console.error("Missing TAVILY_API_KEY");
-    return [];
-  }
+async function runLast30DaysSkill(ticker: string): Promise<string> {
+  console.log(`Running last30days-skill for ${ticker}...`);
   try {
-    const res = await fetch("https://api.tavily.com/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key: TAVILY_API_KEY,
-        query,
-        search_depth: "advanced",
-        include_domains: ["reddit.com", "x.com", "twitter.com", "news.ycombinator.com", "youtube.com", "bloomberg.com", "reuters.com", "wsj.com", "cnbc.com", "finance.yahoo.com"],
-        max_results: 10,
-        days: 30
-      })
+    // 呼叫 Github Checkout 下載回來的 last30days 新元件
+    const output = execSync(`python3 last30days-skill/scripts/last30days.py "${ticker} 股票" --emit=md --quick`, {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "inherit"], // 將錯誤與進度直接吐到 GHA 的日誌裡
+      env: process.env
     });
-    const data = await res.json();
-    return data.results || [];
-  } catch (e) {
-    console.error("Tavily search failed:", e);
-    return [];
+    return output;
+  } catch (error: any) {
+    console.error("last30days-skill failed:", error.message);
+    if (error.stdout) console.error("STDOUT:", error.stdout);
+    return "無法抓取最近 30 天的資料。";
   }
 }
 
-async function aiSummarize(ticker: string, searchResults: any[]) {
-  const context = searchResults.map((r, i) => `[Source ${i+1}]: ${r.title}\nURL: ${r.url}\nContent: ${r.content}`).join("\n\n");
+async function aiSummarize(ticker: string, researchContent: string) {
+  const prompt = `你是一位專業的財經分析師。請針對股票「${ticker}」過去 30 天在社群平台 (Reddit, X, YouTube) 及財經新聞上的討論進行深度研調總結。
 
-  const prompt = `你是一位專業的財經分析師。請針對股票「${ticker}」過去 30 天在社群平台 (Reddit, X, YouTube, HN) 及財經新聞上的討論進行深度研調總結。
-
-資料來源內容如下：
-${context}
+以下是使用專屬 last30days 研調元件抓取回來的最新精華資訊：
+${researchContent}
 
 請提供一份繁體中文報告，包含以下結構：
 1. 📈 **整體社群情緒** (看多/看空/中立，並說明原因)
@@ -112,8 +101,11 @@ async function main() {
   console.log(`Starting deep research for ${ticker}...`);
   
   try {
-    const results = await tavilySearch(`${ticker} stock social media sentiment reddit x youtube last 30 days`);
-    const reportText = await aiSummarize(ticker, results);
+    // 1. 使用 last30days-skill 元件爬取並整理 Markdown 格式
+    const researchMarkdown = await runLast30DaysSkill(ticker);
+    
+    // 2. 透過內建 Fallback AI 進行最終總結
+    const reportText = await aiSummarize(ticker, researchMarkdown);
     
     if (platform === "TG") {
       const imageBuffer = await renderResearchImage(ticker, reportText || "");
