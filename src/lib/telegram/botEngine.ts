@@ -1027,36 +1027,42 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
    const [commandRaw] = text.trim().split(/\s+/);
    const command = commandRaw.toLowerCase().split("@")[0];
 
-   // 先送進度訊息，讓使用者知道已收到指令
+   // 1. 立即送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
-   try {
-      if (command === "/tw" || command === "/us" || command === "/whatis" || command === "/rank" || command === "/roi" || command === "/deep") {
-         await ensureTelegramCommandsSynced();
-         progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
-      }
+   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/deep"].includes(command)) {
+      progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
+   }
 
+   try {
       const chatIdStr = String(chatId);
       const reply = await generateBotReply(text, { ...options, chatId: chatIdStr });
+      
       if (!reply) {
          if (progressMessageId) await deleteMessage(chatId, progressMessageId);
          return;
       }
 
+      // 2. 特殊處理 /deep：觸發 GitHub Action
+      if (command === "/deep") {
+         const query = text.split(/\s+/).slice(1).join(" ").trim();
+         const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
+         
+         // 更新原本的進度訊息，包含 symbol 資訊
+         await editMessage(chatId, progressMessageId!, `🔍 <b>${symbol} 深度研調啟動</b>\n正在掃描社群風向 (Reddit, X, 30天數據)...\n完成後將在此回傳報告 (約 2-3 分鐘)。`);
+         
+         const dispatchResult = await triggerDeepResearchGHAction(symbol, chatIdStr, "TG", progressMessageId || undefined);
+         
+         if (!dispatchResult.ok) {
+            const errorMsg = `❌ 啟動 GitHub Actions 失敗：\n${dispatchResult.error || "未知錯誤"}`;
+            await editMessage(chatId, progressMessageId!, errorMsg);
+         }
+         return;
+      }
+
+      // 3. 一般指令回覆 (圖表或文字)
       if (reply.chartBuffer) {
          await replyWithCard(chatId, progressMessageId, reply.text, reply.chartBuffer);
       } else {
-         // 特殊處理 /deep：觸發 GitHub Action 並把進度訊息 ID 傳過去
-         if (command === "/deep") {
-            const query = text.split(/\s+/).slice(1).join(" ").trim();
-            const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
-            const dispatchResult = await triggerDeepResearchGHAction(symbol, String(chatId), "TG", progressMessageId || undefined);
-            
-            if (!dispatchResult.ok) {
-               const errorMsg = `❌ 啟動 GitHub Actions 失敗：\n${dispatchResult.error || "未知錯誤"}`;
-               await replyOrEdit(chatId, progressMessageId, errorMsg);
-               return;
-            }
-         }
          await replyOrEdit(chatId, progressMessageId, reply.text);
       }
    } catch (error) {
