@@ -334,7 +334,7 @@ export async function renderRankChart(
   ctx.fillStyle = '#121212';
   ctx.fillRect(0, 0, width, height);
 
-  const padding = { top: 60, right: 100, bottom: 40, left: 120 };
+  const padding = { top: 60, right: 120, bottom: 40, left: 140 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
@@ -349,12 +349,19 @@ export async function renderRankChart(
   // 獲取所有中文名稱 (台股)
   const dataWithNames = await Promise.all(data.map(async d => {
     const name = await getCompanyNameZh(d.symbol);
-    return { ...d, displayName: name ? `${d.symbol} ${name}` : d.symbol };
+    // 限制顯示名稱長度，避免擠壓到中心軸
+    let display = name ? `${d.symbol} ${name}` : d.symbol;
+    if (display.length > 12) display = display.substring(0, 11) + '...';
+    return { ...d, displayName: display };
   }));
 
   // 計算比例
-  const maxPct = Math.max(...dataWithNames.map(d => Math.abs(d.pct)), 5);
-  const getX = (pct: number) => padding.left + (chartWidth / 2) + (pct / (maxPct * 1.1)) * (chartWidth / 2);
+  const allAbsPcts = dataWithNames.map(d => Math.abs(d.pct));
+  let maxPct = Math.max(...allAbsPcts, 5);
+  // 如果數值很大，增加邊距緩衝以免文字超出畫布
+  maxPct *= 1.25; 
+
+  const getX = (pct: number) => padding.left + (chartWidth / 2) + (pct / maxPct) * (chartWidth / 2);
   const barHeight = 30;
   const gap = (chartHeight - (dataWithNames.length * barHeight)) / (dataWithNames.length + 1);
 
@@ -377,13 +384,15 @@ export async function renderRankChart(
     ctx.fillRect(Math.min(centerX, endX), y, Math.abs(endX - centerX), barHeight);
 
     // 繪製代號與名稱 (支援中文回退)
-    drawText(ctx, d.displayName, padding.left - 10, y + barHeight / 2 + 6, 16, '#e5e7eb', { textAlign: 'right', isBold: true, symbolFallback: d.symbol });
+    drawText(ctx, d.displayName, padding.left - 10, y + barHeight / 2 + 6, 15, '#e5e7eb', { textAlign: 'right', isBold: true, symbolFallback: d.symbol });
     
-    drawText(ctx, `${d.count} hits`, padding.left - 10, y + barHeight / 2 + 22, 12, '#9ca3af', { textAlign: 'right' });
+    drawText(ctx, `${d.count} hits`, padding.left - 10, y + barHeight / 2 + 22, 11, '#9ca3af', { textAlign: 'right' });
 
     // 繪製百分比文字
     const pctText = `${d.pct >= 0 ? '+' : ''}${d.pct.toFixed(2)}%`;
-    drawText(ctx, pctText, d.pct >= 0 ? endX + 10 : endX - 10, y + barHeight / 2 + 6, 16, color, { textAlign: d.pct >= 0 ? 'left' : 'right', isBold: true, symbolFallback: pctText });
+    // 稍微調整文字位置與大小，並根據正負調整對齊
+    const textX = d.pct >= 0 ? endX + 8 : endX - 8;
+    drawText(ctx, pctText, textX, y + barHeight / 2 + 6, 15, color, { textAlign: d.pct >= 0 ? 'left' : 'right', isBold: true, symbolFallback: pctText });
   });
 
   return canvas.toBuffer('image/png');
