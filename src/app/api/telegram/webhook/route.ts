@@ -42,9 +42,11 @@ export async function POST(req: Request) {
     const ALLOWED_COMMANDS = ["/tw", "/us", "/whatis", "/deep", "/daily", "/stock", "/watchlist", "/setlist", "/start", "/help", "/rank", "/roi", "/debug_rank"];
     
     if (!ALLOWED_COMMANDS.includes(command)) {
-      // 若非專屬指令（例如 /nlm, /pic），直接結束並保持沉默
+      console.log(`[TelegramWebhook] Ignored command: ${command}`);
       return NextResponse.json({ ok: true, reason: "Ignored: not a stock-specific command" });
     }
+
+    console.log(`[TelegramWebhook] Processing command: ${command} with text: ${userText}`);
 
     // 只有白名單內的指令才會走到這裡：註冊 ID 並處理
     await registerChatId(chat.id);
