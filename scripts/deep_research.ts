@@ -12,8 +12,35 @@ const chatId = process.argv[3];
 const platform = process.argv[4] || "TG";
 const msgIdToDel = process.argv[5]; // 僅 TG 使用，完成後刪除「研調中」訊息
 
+const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+
+async function tavilySearch(query: string) {
+  if (!TAVILY_API_KEY) {
+    console.warn("Missing TAVILY_API_KEY for fallback");
+    return [];
+  }
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        query,
+        search_depth: "advanced",
+        include_domains: ["reddit.com", "x.com", "news.ycombinator.com", "youtube.com", "bloomberg.com", "cnbc.com", "finance.yahoo.com"],
+        max_results: 10,
+        days: 30
+      })
+    });
+    const data = await res.json();
+    return data.results || [];
+  } catch (e) {
+    console.error("Tavily search fallback failed:", e);
+    return [];
+  }
+}
 
 async function runLast30DaysSkill(ticker: string): Promise<string> {
   console.log(`Running last30days-skill for ${ticker}...`);
@@ -102,8 +129,16 @@ async function main() {
   
   try {
     // 1. 使用 last30days-skill 元件爬取並整理 Markdown 格式
-    const researchMarkdown = await runLast30DaysSkill(ticker);
+    let researchMarkdown = await runLast30DaysSkill(ticker);
     
+    // 如果 last30days 因為缺乏 API Key 被 Reddit 阻擋而抓不到東西，自動降級切換到 Tavily 繼續抓！
+    if (researchMarkdown.includes("Reddit: 0 threads, X: 0 posts") || researchMarkdown.includes("無法抓取")) {
+      console.log("last30days-skill returned empty results due to missing keys or 403 blocks. Falling back to Tavily...");
+      const fallbackResults = await tavilySearch(`${ticker} 股票 社群討論 最新消息`);
+      const fallbackContext = fallbackResults.map((r: any, i: number) => `[Fallback ${i+1}]: ${r.title}\nURL: ${r.url}\nContent: ${r.content}`).join("\n\n");
+      researchMarkdown += `\n\n[Tavily 備援擴充資料]\n${fallbackContext}`;
+    }
+
     // 2. 透過內建 Fallback AI 進行最終總結
     const reportText = await aiSummarize(ticker, researchMarkdown);
     
