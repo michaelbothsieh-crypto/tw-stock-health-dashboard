@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as line from "@line/bot-sdk";
 
-import { generateBotReply, resolveCodeFromInputLocal } from "@/lib/telegram/botEngine";
+import { generateBotReply, resolveCodeFromInputLocal, triggerDeepResearchGHAction } from "@/lib/telegram/botEngine";
 
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "",
@@ -296,6 +296,13 @@ const reply = await generateBotReply(userText, { baseUrl: origin, chatId });
           type: "text",
           text: cleanReply,
         });
+
+        // 特殊處理 /deep：觸發 GitHub Action
+        if (userText.startsWith("/deep")) {
+          const query = userText.split(/\s+/).slice(1).join(" ").trim();
+          const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
+          await triggerDeepResearchGHAction(symbol, chatId, "LINE");
+        }
 
         if (messages.length > 0) {
           await client.replyMessage({

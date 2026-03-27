@@ -205,6 +205,34 @@ async function editMessage(chatId: string | number, messageId: number, text: str
    } catch (error) { return false; }
 }
 
+export async function triggerDeepResearchGHAction(ticker: string, chatId: string, platform: string, msgIdToDel?: number) {
+   const token = process.env.GH_PAT || process.env.GITHUB_TOKEN;
+   const repo = process.env.GITHUB_REPOSITORY || "michaelbothsieh-crypto/tw-stock-health-dashboard";
+   if (!token) {
+      console.error("Missing GITHUB_TOKEN for dispatch");
+      return false;
+   }
+   const url = `https://api.github.com/repos/${repo}/dispatches`;
+   try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Accept": "application/vnd.github.v3+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          event_type: "deep-research",
+          client_payload: { ticker, chatId, platform, msgIdToDel: msgIdToDel ? String(msgIdToDel) : null }
+        })
+      });
+      return res.ok;
+   } catch (e) {
+      console.error("GH Dispatch failed:", e);
+      return false;
+   }
+}
+
 async function replyOrEdit(chatId: number, progressMessageId: number | null, text: string) {
    if (progressMessageId !== null) {
       const ok = await editMessage(chatId, progressMessageId, text);
@@ -256,6 +284,7 @@ async function ensureTelegramCommandsSynced() {
                { command: "tw", description: "查詢台股個股（例：/tw 2330）" },
                { command: "us", description: "查詢美股個股（例：/us NVDA）" },
                { command: "whatis", description: "分析公司做什麼及近期新聞（例：/whatis 2330）" },
+               { command: "deep", description: "深入研調社群與新聞風向 (需 2-3 分鐘)" },
                { command: "rank", description: "列出本群熱門股票及查詢至今報酬率" },
                { command: "roi", description: "計算指定時間段報酬率（例：/roi 2330 1m）" },
                { command: "debug_rank", description: "診斷排行榜連動問題" },
@@ -743,6 +772,21 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
    const command = commandRaw.toLowerCase().split("@")[0];
    const query = argParts.join(" ").trim();
 
+   if (command === "/deep") {
+      if (!query) return { text: "請輸入代號進行深入研調，例如: /deep 2330" };
+      
+      const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
+      const chatId = options?.chatId;
+      const platform = options?.baseUrl?.includes("line") ? "LINE" : "TG";
+      
+      // 這裡由 handleTelegramMessage 傳入的 progressMessageId 會被用來作為 msgIdToDel
+      // 注意: generateBotReply 只是生成內容，真正發送 GH Dispatch 的邏輯建議放在這裡或 handle 處
+      // 為了方便控制，我們在這裡先定義觸發邏輯。
+      return { 
+         text: `🔍 <b>${symbol} 深度研調系統已啟動</b>\n正在掃描社群風向 (Reddit, X, 30天數據)...\n完成後將在此回傳報告 (約需 2-3 分鐘)。` 
+      };
+   }
+
    if (command === "/tw") {
       if (!query) return { text: "請輸入股票代號，例如: /tw 2330" };
       const liveCard = await fetchLiveStockCard(query, options?.baseUrl);
@@ -982,7 +1026,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
    // 先送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
    try {
-      if (command === "/tw" || command === "/us" || command === "/whatis" || command === "/rank" || command === "/roi") {
+      if (command === "/tw" || command === "/us" || command === "/whatis" || command === "/rank" || command === "/roi" || command === "/deep") {
          await ensureTelegramCommandsSynced();
          progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
       }
@@ -997,6 +1041,12 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
       if (reply.chartBuffer) {
          await replyWithCard(chatId, progressMessageId, reply.text, reply.chartBuffer);
       } else {
+         // 特殊處理 /deep：觸發 GitHub Action 並把進度訊息 ID 傳過去
+         if (command === "/deep") {
+            const query = text.split(/\s+/).slice(1).join(" ").trim();
+            const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
+            await triggerDeepResearchGHAction(symbol, String(chatId), "TG", progressMessageId || undefined);
+         }
          await replyOrEdit(chatId, progressMessageId, reply.text);
       }
    } catch (error) {
