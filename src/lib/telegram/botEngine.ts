@@ -828,8 +828,12 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
                // 改用強化後的輕量級抓取
                const { price: currentPrice, finalSymbol } = await fetchPriceOnly(r.symbol);
                
+               const isTW = /^[0-9]+$/.test(r.symbol);
+               const name = twStockNames[r.symbol];
+               const label = (isTW && name) ? `${name}(${r.symbol})` : r.symbol;
+
                if (currentPrice === null) {
-                  return `${index + 1}. <b>${r.symbol}</b> (查 ${r.count} 次) - 報價抓取失敗 (${finalSymbol})`;
+                  return `${index + 1}. <b>${label}</b> (查 ${r.count} 次) - 報價抓取失敗 (${finalSymbol})`;
                }
 
                const diff = currentPrice - r.initialPrice;
@@ -839,7 +843,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
                const dateStr = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}`;
                
                chartData.push({ symbol: r.symbol, pct, count: r.count });
-               return `${index + 1}. <b>${r.symbol}</b> (查 ${r.count} 次)\n   ${dateStr}: ${formatPrice(r.initialPrice, 2)} → 現價: ${formatPrice(currentPrice, 2)} (${formatSignedPct(pct, 2)})`;
+               return `${index + 1}. <b>${label}</b> (查 ${r.count} 次)\n   ${dateStr}: ${formatPrice(r.initialPrice, 2)} → 現價: ${formatPrice(currentPrice, 2)} (${formatSignedPct(pct, 2)})`;
             } catch (e: any) {
                return `${index + 1}. <b>${r.symbol}</b> (處理失敗: ${e.message})`;
             }
