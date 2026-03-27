@@ -953,8 +953,9 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       }).sort((a, b) => b.pct - a.pct);
 
       const textLines = resultsWithRoi.map(r => {
+         const isTW = /^[0-9]+$/.test(r.symbol);
          const name = r.live.nameZh && r.live.nameZh !== r.symbol ? r.live.nameZh : "";
-         const label = name ? `${name}(${r.symbol})` : r.symbol;
+         const label = (isTW && name) ? `${name}(${r.symbol})` : r.symbol;
          return `${label}: <b>${formatSignedPct(r.pct, 2)}</b>`;
       });
 
