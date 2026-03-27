@@ -205,12 +205,12 @@ async function editMessage(chatId: string | number, messageId: number, text: str
    } catch (error) { return false; }
 }
 
-export async function triggerDeepResearchGHAction(ticker: string, chatId: string, platform: string, msgIdToDel?: number) {
+export async function triggerDeepResearchGHAction(ticker: string, chatId: string, platform: string, msgIdToDel?: number): Promise<{ ok: boolean; error?: string }> {
    const token = process.env.GH_PAT || process.env.GITHUB_TOKEN;
    const repo = process.env.GITHUB_REPOSITORY || "michaelbothsieh-crypto/tw-stock-health-dashboard";
    if (!token) {
       console.error("Missing GITHUB_TOKEN for dispatch");
-      return false;
+      return { ok: false, error: "Missing GITHUB_TOKEN" };
    }
    const url = `https://api.github.com/repos/${repo}/dispatches`;
    try {
@@ -226,10 +226,14 @@ export async function triggerDeepResearchGHAction(ticker: string, chatId: string
           client_payload: { ticker, chatId, platform, msgIdToDel: msgIdToDel ? String(msgIdToDel) : null }
         })
       });
-      return res.ok;
-   } catch (e) {
+      if (res.status === 204 || res.status === 200) {
+         return { ok: true };
+      }
+      const errorText = await res.text().catch(() => "Unknown GitHub error");
+      return { ok: false, error: `GH Error ${res.status}: ${errorText}` };
+   } catch (e: any) {
       console.error("GH Dispatch failed:", e);
-      return false;
+      return { ok: false, error: e.message };
    }
 }
 
@@ -1045,7 +1049,13 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
          if (command === "/deep") {
             const query = text.split(/\s+/).slice(1).join(" ").trim();
             const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
-            await triggerDeepResearchGHAction(symbol, String(chatId), "TG", progressMessageId || undefined);
+            const dispatchResult = await triggerDeepResearchGHAction(symbol, String(chatId), "TG", progressMessageId || undefined);
+            
+            if (!dispatchResult.ok) {
+               const errorMsg = `❌ 啟動 GitHub Actions 失敗：\n${dispatchResult.error || "未知錯誤"}`;
+               await replyOrEdit(chatId, progressMessageId, errorMsg);
+               return;
+            }
          }
          await replyOrEdit(chatId, progressMessageId, reply.text);
       }
