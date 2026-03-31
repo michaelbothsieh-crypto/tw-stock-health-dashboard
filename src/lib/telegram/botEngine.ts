@@ -8,6 +8,7 @@ import { renderStockChart, ChartDataPoint, renderRankChart, renderProfitChart, r
 import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
 import { fetchFugleQuote } from "@/lib/providers/fugleQuote";
 import { recordStockSearch, getTopRankedStocks } from "./rankStore";
+import { getTvLatestNewsHeadline } from "../providers/tradingViewFetch";
 import { subMonths, subYears, parseISO, startOfDay, endOfDay } from "date-fns";
 import { redis as redisInstance } from "../providers/redisCache";
 
@@ -515,12 +516,16 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
       } catch {
          card.chartBuffer = null;
       }
-card.p1d = snapshot?.predictions?.upProb1D;
-card.shortDir = buildTrendByProb(card.p1d);
-card.strategySignal = snapshot?.strategy?.signal || "觀察";
-card.confidence = snapshot?.strategy?.confidence;
-card.newsLine = extractNewsLineFromSnapshot(snapshot);
-card.industry = snapshot?.normalizedTicker?.industry || snapshot?.normalizedTicker?.sector || "";
+      card.p1d = snapshot?.predictions?.upProb1D;
+      card.shortDir = buildTrendByProb(card.p1d);
+      card.strategySignal = snapshot?.strategy?.signal || "觀察";
+      card.confidence = snapshot?.strategy?.confidence;
+      
+      // 優先使用 TradingView 的新聞標題
+      const tvNews = await getTvLatestNewsHeadline(symbol);
+      card.newsLine = tvNews ? buildNewsLine(tvNews, 96) : extractNewsLineFromSnapshot(snapshot);
+      
+      card.industry = snapshot?.normalizedTicker?.industry || snapshot?.normalizedTicker?.sector || "";
 card.recentNews = [
   ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
   ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
@@ -696,8 +701,13 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.shortDir = buildTrendByProb(card.p1d);
       card.strategySignal = snapshot?.strategy?.signal || "觀察";
       card.confidence = snapshot?.strategy?.confidence;
-      card.newsLine = extractNewsLineFromSnapshot(snapshot);
+
+      // 優先使用 TradingView 的新聞標題
+      const tvNews = await getTvLatestNewsHeadline(symbol);
+      card.newsLine = tvNews ? buildNewsLine(tvNews, 96) : extractNewsLineFromSnapshot(snapshot);
+
       card.insiderSells = Array.isArray(snapshot?.insiderTransfers) ? snapshot.insiderTransfers : [];
+
       card.trustLots = snapshot?.signals?.flow?.trustLots || 0;
       card.shortLots = snapshot?.signals?.flow?.shortLots || 0;
       card.marginLots = snapshot?.signals?.flow?.marginLots || 0;
