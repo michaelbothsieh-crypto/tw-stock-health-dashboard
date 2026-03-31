@@ -1,4 +1,4 @@
-import { createCanvas, GlobalFonts } from '@napi-rs/canvas';
+import { createCanvas, GlobalFonts, loadImage } from '@napi-rs/canvas';
 import { NOTO_SANS_BOLD_B64 } from './fontData';
 import { getCompanyNameZh } from '@/lib/companyName';
 import * as opentype from 'opentype.js';
@@ -11,6 +11,43 @@ export interface ChartDataPoint {
   low: number;
   close: number;
   volume: number;
+}
+
+/**
+ * 將多個圖片 Buffer 垂直拼接成一張圖
+ */
+export async function combineImages(buffers: (Buffer | null)[]): Promise<Buffer | null> {
+  const validBuffers = buffers.filter((b): b is Buffer => b !== null);
+  if (validBuffers.length === 0) return null;
+  if (validBuffers.length === 1) return validBuffers[0];
+
+  try {
+    const images = await Promise.all(validBuffers.map(b => loadImage(b)));
+    
+    // 計算總高度與最大寬度
+    let totalHeight = 0;
+    let maxWidth = 0;
+    for (const img of images) {
+      totalHeight += img.height;
+      if (img.width > maxWidth) maxWidth = img.width;
+    }
+
+    const canvas = createCanvas(maxWidth, totalHeight);
+    const ctx = canvas.getContext('2d');
+
+    let currentY = 0;
+    for (const img of images) {
+      // 若寬度不一致則居中繪製 (通常 Finviz 寬度是一樣的)
+      const x = (maxWidth - img.width) / 2;
+      ctx.drawImage(img, x, currentY);
+      currentY += img.height;
+    }
+
+    return canvas.toBuffer('image/png');
+  } catch (e) {
+    console.error('[ChartRenderer] combineImages error:', e);
+    return null;
+  }
 }
 
 // 字型快取

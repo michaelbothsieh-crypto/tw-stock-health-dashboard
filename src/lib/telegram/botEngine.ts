@@ -4,7 +4,7 @@ import { getTacticalPlaybook } from "../ai/playbookAgent";
 import { getStockWhatIs } from "../ai/whatisAgent";
 import { getFilteredInsiderTransfers } from "../providers/twseInsiderFetch";
 import { twStockNames } from "../../data/twStockNames";
-import { renderStockChart, ChartDataPoint, renderRankChart, renderProfitChart, renderMultiRoiChart } from "../ux/chartRenderer";
+import { renderStockChart, ChartDataPoint, renderRankChart, renderProfitChart, renderMultiRoiChart, combineImages } from "../ux/chartRenderer";
 import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
 import { fetchFugleQuote } from "@/lib/providers/fugleQuote";
 import { recordStockSearch, getTopRankedStocks } from "./rankStore";
@@ -845,9 +845,11 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          return { text: "找不到該股票資料，請確認代號是否正確（例：AAPL、NVDA）。" };
       }
 
-      // 多檔並行查詢（最多 5 檔），不附圖
+      // 多檔並行查詢（最多 5 檔），合併圖檔回傳
       const cards = await Promise.all(tickers.map(t => fetchLiveUsStockCard(t, options?.baseUrl)));
       const parts: string[] = [];
+      const buffers: Buffer[] = [];
+      
       for (let i = 0; i < tickers.length; i++) {
          const card = cards[i];
          if (!card) {
@@ -857,9 +859,17 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
                await recordStockSearch(options.chatId, card.symbol, card.close).catch(() => null);
             }
             parts.push(buildStockCardLines(card, card.snapshotVerdict || "觀察中"));
+            if (card.chartBuffer) {
+               buffers.push(card.chartBuffer);
+            }
          }
       }
-      return { text: parts.join("\n\n" + escapeHtml("──────────") + "\n\n"), chartBuffer: null };
+      
+      const combinedChart = await combineImages(buffers);
+      return { 
+         text: parts.join("\n\n" + escapeHtml("──────────") + "\n\n"), 
+         chartBuffer: combinedChart 
+      };
    }
 
    if (command === "/rank") {
