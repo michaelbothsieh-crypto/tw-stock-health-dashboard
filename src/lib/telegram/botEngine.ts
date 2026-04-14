@@ -987,6 +987,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
                .filter(h => h.close > 0);
             
             if (history.length === 0) return null;
+            // 這裡使用歷史的第一筆作為 initialPrice，並使用目前市場最新報價作為 currentPrice
             return { symbol, live, history, initialPrice: history[0].close };
          } catch { return null; }
       }));
