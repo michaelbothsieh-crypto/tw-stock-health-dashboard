@@ -987,8 +987,8 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
                .filter(h => h.close > 0);
             
             if (history.length === 0) return null;
-            // 這裡使用歷史的第一筆作為 initialPrice，並使用目前市場最新報價作為 currentPrice
-            return { symbol, live, history, initialPrice: history[0].close };
+            // 強制使用歷史序列還原後的頭尾數值計算，確保基準完全一致
+            return { symbol, live, history, initialPrice: history[0].close, lastPrice: history[history.length - 1].close };
          } catch { return null; }
       }));
 
@@ -997,11 +997,10 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
 
       // 情況 A：單檔 - 使用原有的詳細線圖 (絕對價格)
       if (validResults.length === 1) {
-         const { symbol, live, history, initialPrice } = validResults[0];
-         const currentPrice = live.close!;
-         const pct = ((currentPrice - initialPrice) / initialPrice) * 100;
+         const { symbol, live, history, initialPrice, lastPrice } = validResults[0];
+         const pct = ((lastPrice - initialPrice) / initialPrice) * 100;
          const startStr = history[0].date.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
-         const chartBuffer = await renderProfitChart(symbol, history, initialPrice, currentPrice, periodRaw).catch(() => null);
+         const chartBuffer = await renderProfitChart(symbol, history, initialPrice, lastPrice, periodRaw).catch(() => null);
          
          const isTW = /^[0-9]+[A-Z]?$/i.test(symbol);
          const name = twStockNames[symbol] || (live.nameZh && live.nameZh !== symbol ? live.nameZh : "");
@@ -1011,7 +1010,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             text: `📈 <b>${label} 報酬率分析</b>\n\n` +
                   `起點: ${startStr}\n` +
                   `當時收盤: ${formatPrice(initialPrice, 2)}\n` +
-                  `現在價格: ${formatPrice(currentPrice, 2)}\n\n` +
+                  `現在價格: ${formatPrice(lastPrice, 2)}\n\n` +
                   `總報酬率: <b>${formatSignedPct(pct, 2)}</b>`,
             chartBuffer
          };
@@ -1025,7 +1024,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       })), periodRaw).catch(() => null);
 
       const resultsWithRoi = validResults.map(r => {
-         const pct = ((r.live.close! - r.initialPrice) / r.initialPrice) * 100;
+         const pct = ((r.lastPrice - r.initialPrice) / r.initialPrice) * 100;
          return { ...r, pct };
       }).sort((a, b) => b.pct - a.pct);
 
