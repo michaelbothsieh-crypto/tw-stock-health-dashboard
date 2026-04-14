@@ -1003,8 +1003,12 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          const startStr = history[0].date.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
          const chartBuffer = await renderProfitChart(symbol, history, initialPrice, currentPrice, periodRaw).catch(() => null);
          
+         const isTW = /^[0-9]+[A-Z]?$/i.test(symbol);
+         const name = twStockNames[symbol] || (live.nameZh && live.nameZh !== symbol ? live.nameZh : "");
+         const label = (isTW && name) ? `${name}(${symbol})` : symbol;
+         
          return {
-            text: `📈 <b>${symbol} 報酬率分析</b>\n\n` +
+            text: `📈 <b>${label} 報酬率分析</b>\n\n` +
                   `起點: ${startStr}\n` +
                   `當時收盤: ${formatPrice(initialPrice, 2)}\n` +
                   `現在價格: ${formatPrice(currentPrice, 2)}\n\n` +
