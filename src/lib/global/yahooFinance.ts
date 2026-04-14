@@ -4,6 +4,7 @@ export interface YahooBar {
   high: number;
   low: number;
   close: number;
+  adjclose: number;
   volume: number;
 }
 
@@ -22,11 +23,13 @@ export async function fetchYahooFinanceBars(symbol: string, days: number = 100):
 
     const timestamps = result.timestamp;
     const quote = result.indicators?.quote?.[0];
+    const adjClose = result.indicators?.adjclose?.[0]?.adjclose;
 
     if (!timestamps || !quote?.close) return [];
 
     return timestamps.map((ts: number, i: number) => {
       const close = quote.close[i];
+      const adj = adjClose?.[i] ?? close;
       if (close === null || close === undefined) return null;
       return {
         date: new Date(ts * 1000).toISOString().split('T')[0],
@@ -34,6 +37,7 @@ export async function fetchYahooFinanceBars(symbol: string, days: number = 100):
         high: quote.high?.[i] ?? close,
         low: quote.low?.[i] ?? close,
         close,
+        adjclose: adj,
         volume: quote.volume?.[i] ?? 0,
       };
     }).filter(Boolean) as YahooBar[];
