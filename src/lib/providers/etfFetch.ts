@@ -1,5 +1,5 @@
 import { yf as yahooFinance } from "./yahooFinanceClient";
-import { startOfYear, endOfDay } from "date-fns";
+import { startOfYear, endOfDay, subYears } from "date-fns";
 import { twStockNames } from "../../data/twStockNames";
 
 export interface EtfHolding {
@@ -22,15 +22,32 @@ export interface EtfFetchResult {
 }
 
 async function tryQuoteSummary(symbol: string) {
-  // 加入 defaultKeyStatistics 這是台股 ETF 績效較常出現的地方
   return await yahooFinance.quoteSummary(symbol, {
-    modules: ["topHoldings", "price", "summaryDetail", "fundProfile", "fundPerformance", "defaultKeyStatistics"]
+    modules: ["topHoldings", "price", "summaryDetail", "fundProfile", "defaultKeyStatistics"]
   }).catch(() => null);
 }
 
 async function tryQuote(symbol: string) {
   const res = await yahooFinance.quote(symbol).catch(() => null);
   return Array.isArray(res) ? res[0] : res;
+}
+
+async function calculateManualReturn(symbol: string, startDate: Date): Promise<number | null> {
+  try {
+    const chartRes = await yahooFinance.chart(symbol, {
+      period1: startDate,
+      period2: new Date(),
+      interval: "1d"
+    }).catch(() => null);
+    
+    const quotes = chartRes?.quotes || [];
+    const validQuotes = quotes.filter(q => q.close !== null);
+    if (validQuotes.length < 2) return null;
+    
+    const startPrice = validQuotes[0].close!;
+    const lastPrice = validQuotes[validQuotes.length - 1].close!;
+    return ((lastPrice - startPrice) / startPrice) * 100;
+  } catch { return null; }
 }
 
 function formatHoldingName(yahooName: string, symbol: string): string {
@@ -52,8 +69,6 @@ function formatHoldingName(yahooName: string, symbol: string): string {
     marketTag = "(UK)";
   } else if (upperSymbol.endsWith(".DE")) {
     marketTag = "(DE)";
-  } else if (upperSymbol.endsWith(".SG")) {
-    marketTag = "(SG)";
   } else if (!upperSymbol.includes(".")) {
     marketTag = "(US)";
   }
@@ -87,17 +102,15 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
   const etfName = localName || summary?.price?.longName || quote?.longName || quote?.shortName || pureCode;
   const isEtfLike = quote?.quoteType === "ETF" || quote?.quoteType === "MUTUALFUND" || !!summary?.topHoldings || !!localName;
 
-  // 強化版績效抓取：依序嘗試不同欄位 (針對台美股差異)
-  let dividendYield = (summary?.summaryDetail?.trailingAnnualDividendYield as number) || (summary?.summaryDetail?.yield as number);
-  
-  // 如果是台股 0.00%，有可能是 Yahoo 資料缺失或純粹未配息
-  let oneYearReturn = (summary?.fundPerformance?.performanceOverview?.oneYearAnnualRollingReturn as number) || 
-                     (summary?.defaultKeyStatistics?.ytdReturn as number) ||
-                     (summary?.defaultKeyStatistics?.fiveYearAvgReturn as number);
+  // 手動計算 1 年報酬率 (更準確)
+  const oneYearReturn = await calculateManualReturn(currentSymbol, subYears(new Date(), 1));
+  const dividendYield = (summary?.summaryDetail?.trailingAnnualDividendYield as number | any) || (summary?.summaryDetail?.yield as number | any);
 
+  // 提取日期 (嘗試多個來源)
+  let rawDate = summary?.topHoldings?.lastMarketDate || summary?.summaryDetail?.lastMarketDate || quote?.regularMarketTime;
   let asOfDateStr = "";
-  if (summary?.topHoldings?.lastMarketDate) {
-    const d = new Date(summary.topHoldings.lastMarketDate as any);
+  if (rawDate) {
+    const d = new Date(rawDate as any);
     asOfDateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('zh-TW') : "";
   }
 

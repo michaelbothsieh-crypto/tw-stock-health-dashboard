@@ -800,7 +800,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
 
          const lines = [
             `📊 <b>${result.name} (${result.symbol})</b>`,
-            popularityTag,
+            popularityTag.trim(),
             statsLines.length > 0 ? statsLines.join(" ｜ ") : "",
             "",
             "<b>【前十大持股】</b>",
@@ -817,7 +817,8 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          }
          lines.push(`💡 YTD 代表持股年初至今的漲跌幅。`);
 
-         return { text: lines.join("\n"), chartBuffer: null };
+         const finalMsg = lines.filter(l => l !== undefined && l !== null && l !== "").join("\n");
+         return { text: finalMsg, chartBuffer: null };
       } catch (err) {
          console.error("[BotEngine] /etf Error:", err);
          return { text: "抱歉，查詢 ETF 資料時發生錯誤。", chartBuffer: null };
