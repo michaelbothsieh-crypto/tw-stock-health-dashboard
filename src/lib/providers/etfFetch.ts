@@ -85,14 +85,14 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
   const isEtfLike = quote?.quoteType === "ETF" || quote?.quoteType === "MUTUALFUND" || !!summary?.topHoldings || !!localName;
 
   // 1. 抓取額外資訊
-  const dividendYield = summary?.summaryDetail?.trailingAnnualDividendYield;
-  const oneYearReturn = summary?.fundPerformance?.performanceOverview?.oneYearAnnualRollingReturn;
-
-  let asOfDateStr = "";
-  if (summary?.topHoldings?.lastMarketDate) {
-    const d = new Date(summary.topHoldings.lastMarketDate);
-    asOfDateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('zh-TW') : "";
-  }
+  const dividendYield = summary?.summaryDetail?.trailingAnnualDividendYield as number | undefined;
+  const oneYearReturn = summary?.fundPerformance?.performanceOverview?.oneYearAnnualRollingReturn as number | undefined;
+// 提取資料截止日期
+let asOfDateStr = "";
+if (summary?.topHoldings?.lastMarketDate) {
+  const d = new Date(summary.topHoldings.lastMarketDate as any);
+  asOfDateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('zh-TW') : "";
+}
 
   if (!quote && !localName) {
     return { symbol: pureCode, name: pureCode, holdings: [], isEtf: false, status: "not_found" };
