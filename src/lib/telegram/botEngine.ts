@@ -982,7 +982,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       tickerRaw = tickerRaw.replace(/[,，]+$/, "").trim();
       periodRaw = periodRaw.replace(/[,，]+$/, "").trim();
 
-      const tickers = tickerRaw.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean).slice(0, 5);
+      const tickers = tickerRaw.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean).slice(0, 10);
       
       let startDate: Date;
       const period = periodRaw.toLowerCase();
