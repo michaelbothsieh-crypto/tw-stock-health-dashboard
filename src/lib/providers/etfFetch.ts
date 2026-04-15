@@ -19,7 +19,6 @@ export interface EtfFetchResult {
 }
 
 async function tryQuoteSummary(symbol: string) {
-  // 增加 fundProfile 以利判定主動型基金
   return await yahooFinance.quoteSummary(symbol, {
     modules: ["topHoldings", "price", "summaryDetail", "fundProfile"]
   }).catch(() => null);
@@ -30,6 +29,51 @@ async function tryQuote(symbol: string) {
   return Array.isArray(res) ? res[0] : res;
 }
 
+/**
+ * 判定市場標籤並處理名稱
+ */
+function formatHoldingName(yahooName: string, symbol: string): string {
+  const upperSymbol = symbol.toUpperCase();
+  let marketTag = "";
+  let displayName = yahooName;
+
+  // 1. 判定市場標籤
+  if (upperSymbol.endsWith(".TW") || upperSymbol.endsWith(".TWO")) {
+    marketTag = "(TW)";
+    // 台股優先用本地中文名
+    const pureCode = upperSymbol.split(".")[0];
+    if (twStockNames[pureCode]) {
+      displayName = twStockNames[pureCode];
+    }
+  } else if (upperSymbol.endsWith(".T")) {
+    marketTag = "(JP)";
+  } else if (upperSymbol.endsWith(".HK")) {
+    marketTag = "(HK)";
+  } else if (upperSymbol.endsWith(".SS") || upperSymbol.endsWith(".SZ")) {
+    marketTag = "(CN)";
+  } else if (upperSymbol.endsWith(".L")) {
+    marketTag = "(UK)";
+  } else if (upperSymbol.endsWith(".DE")) {
+    marketTag = "(DE)";
+  } else if (upperSymbol.endsWith(".SG")) {
+    marketTag = "(SG)";
+  } else if (!upperSymbol.includes(".")) {
+    marketTag = "(US)";
+  }
+
+  // 2. 簡單清理名稱 (移除冗餘的 Co Ltd, Inc 等)
+  const cleanName = displayName
+    .replace(/ Co Ltd/gi, "")
+    .replace(/ Ltd/gi, "")
+    .replace(/ Inc/gi, "")
+    .replace(/ Corp/gi, "")
+    .replace(/ Ordinary Shares/gi, "")
+    .replace(/ Class [A-Z]/gi, "")
+    .trim();
+
+  return `${cleanName} ${marketTag}`.trim();
+}
+
 export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResult> {
   const pureCode = symbol.split(".")[0];
   const localName = twStockNames[pureCode];
@@ -38,15 +82,12 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
   let summary = await tryQuoteSummary(currentSymbol);
   let quote = await tryQuote(currentSymbol);
 
-  // Fallback 1: 嘗試反向後綴 (TW <-> TWO)
   if (!quote && /^[0-9]/.test(pureCode)) {
     const altSymbol = currentSymbol.endsWith(".TW") 
       ? currentSymbol.replace(".TW", ".TWO") 
       : currentSymbol.replace(".TWO", ".TW");
-    
     const altSummary = await tryQuoteSummary(altSymbol);
     const altQuote = await tryQuote(altSymbol);
-    
     if (altQuote) {
       summary = altSummary;
       quote = altQuote;
@@ -54,10 +95,7 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
     }
   }
 
-  const etfName = summary?.price?.longName || quote?.longName || quote?.shortName || localName || pureCode;
-  
-  // 判定是否為 ETF 或基金
-  // Yahoo 的 quoteType 有可能是 'ETF' 或 'MUTUALFUND'
+  const etfName = localName || summary?.price?.longName || quote?.longName || quote?.shortName || pureCode;
   const isEtfLike = quote?.quoteType === "ETF" || quote?.quoteType === "MUTUALFUND" || !!summary?.topHoldings || !!localName;
 
   if (!quote && !localName) {
@@ -66,8 +104,6 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
 
   try {
     const holdings = summary?.topHoldings?.holdings;
-    
-    // 如果沒有持股資料
     if (!holdings || !Array.isArray(holdings) || holdings.length === 0) {
       return { 
         symbol: pureCode, 
@@ -79,7 +115,6 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
       };
     }
 
-    // 有持股資料，開始計算 YTD
     const now = new Date();
     const jan1st = startOfYear(now);
     
@@ -87,9 +122,8 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
       let hSymbol = h.symbol;
       if (!hSymbol) return null;
 
-      // 修正台股持股代號格式 (有時 Yahoo 回傳的持股代號會掉後綴)
       if (/^[0-9]{4}$/.test(hSymbol)) {
-        hSymbol = `${hSymbol}.TW`; // 預設先補上市，後續計算會自動嘗試
+        hSymbol = `${hSymbol}.TW`;
       }
 
       let ytdReturn: number | null = null;
@@ -114,7 +148,7 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
 
       return {
         symbol: hSymbol,
-        name: h.holdingName || hSymbol,
+        name: formatHoldingName(h.holdingName || hSymbol, hSymbol),
         percent: (h.holdingPercent || 0) * 100,
         ytdReturn
       };
