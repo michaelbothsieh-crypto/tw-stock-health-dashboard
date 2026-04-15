@@ -438,74 +438,37 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
    const symbol = ticker.toUpperCase();
    const baseUrl = getSnapshotBaseUrl(overrideBaseUrl);
    if (!baseUrl) return null;
+
    try {
       const controller = new AbortController();
-      const snapTimer = setTimeout(() => controller.abort(), 30000);
-      const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`, { signal: controller.signal }).finally(() => clearTimeout(snapTimer));
-      if (!snapRes.ok) return null;
-      const snapshot = await snapRes.json();
+      const snapTimer = setTimeout(() => controller.abort(), 15000);
+      
+      // 1. 嘗試抓取內部 Snapshot
+      const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`, { signal: controller.signal }).catch(() => null);
+      let snapshot = snapRes && snapRes.ok ? await snapRes.json() : null;
+      if (snapTimer) clearTimeout(snapTimer);
 
+      // 2. 抓取 Yahoo 即時報價 (作為基礎或補充)
       const rtQuoteRaw = await yahooFinance.quote(symbol).catch(() => null);
       const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
 
-      let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
-      let processedBars = bars.map((b: any) => ({
-         date: b.date || "",
-         open: Number(b.open || b.close || 0),
-         high: Number(b.high || b.close || 0),
-         low: Number(b.low || b.close || 0),
-         close: Number(b.close || 0),
-         volume: Number(b.volume || b.Trading_Volume || 0)
-      }));
+      // 如果兩邊都抓不到資料，才算失敗
+      if (!snapshot && !rtQuote) return null;
 
       const card: StockCard = {
          symbol,
-         nameZh: String(snapshot?.normalizedTicker?.companyNameZh || snapshot?.normalizedTicker?.name || symbol),
-         close: null, chgPct: null, chgAbs: null, volume: null, volumeVs5dPct: null, flowNet: null, flowUnit: "股",
+         nameZh: String(snapshot?.normalizedTicker?.companyNameZh || rtQuote?.longName || rtQuote?.shortName || symbol),
+         close: rtQuote?.regularMarketPrice || null, 
+         chgPct: rtQuote?.regularMarketChangePercent || null, 
+         chgAbs: rtQuote?.regularMarketChange || null, 
+         volume: rtQuote?.regularMarketVolume || null, 
+         volumeVs5dPct: null, flowNet: null, flowUnit: "股",
          shortDir: "中立", strategySignal: "觀察", confidence: null, p1d: null, p3d: null, p5d: null,
-         support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "snapshot", insiderSells: [],
+         support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [],
          chartBuffer: null,
       };
 
-      const todayStr = new Date().toLocaleDateString('en-CA');
-
-      if (processedBars.length >= 2) {
-         const latest = processedBars[processedBars.length - 1];
-         const prev = processedBars[processedBars.length - 2];
-         card.close = latest.close;
-         card.chgAbs = latest.close - prev.close;
-         card.chgPct = prev.close !== 0 ? (card.chgAbs / prev.close) * 100 : 0;
-         const volInfo = calcVolumeVs5d(processedBars);
-         card.volume = volInfo.volume;
-         card.volumeVs5dPct = volInfo.volumeVs5dPct;
-      }
-
-      if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
-         card.close = rtQuote.regularMarketPrice;
-         card.chgPct = typeof rtQuote.regularMarketChangePercent === "number" ? rtQuote.regularMarketChangePercent : card.chgPct;
-         card.chgAbs = typeof rtQuote.regularMarketChange === "number" ? rtQuote.regularMarketChange : card.chgAbs;
-         card.volume = rtQuote.regularMarketVolume || card.volume;
-
-         if (card.close !== null) {
-            const lastBar = processedBars[processedBars.length - 1];
-            const rtHigh = typeof rtQuote.regularMarketDayHigh === "number" ? rtQuote.regularMarketDayHigh : card.close;
-            const rtLow = typeof rtQuote.regularMarketDayLow === "number" ? rtQuote.regularMarketDayLow : card.close;
-            const rtOpen = typeof rtQuote.regularMarketOpen === "number" ? rtQuote.regularMarketOpen : card.close;
-            if (lastBar && lastBar.date === todayStr) {
-               processedBars[processedBars.length - 1] = { ...lastBar, close: card.close, high: Math.max(lastBar.high, rtHigh), low: Math.min(lastBar.low, rtLow), volume: card.volume || lastBar.volume };
-            } else {
-               processedBars = [...processedBars, { date: todayStr, open: rtOpen, high: rtHigh, low: rtLow, close: card.close, volume: card.volume || 0 }];
-            }
-         }
-         const volInfo = calcVolumeVs5d([...processedBars.slice(0, -1), { volume: card.volume }]);
-         card.volumeVs5dPct = volInfo.volumeVs5dPct;
-      }
-
-      const key = calcSupportResistance(processedBars);
-      card.support = snapshot?.keyLevels?.supportLevel || key.support;
-      card.resistance = snapshot?.keyLevels?.breakoutLevel || key.resistance;
-
-      // 美股直接用 Finviz 圖片
+      // 3. 處理圖表 (美股優先用 Finviz)
       try {
          const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
          const chartRes = await fetch(finvizUrl, {
@@ -515,35 +478,25 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
             const ab = await chartRes.arrayBuffer();
             card.chartBuffer = Buffer.from(ab);
          }
-      } catch {
-         card.chartBuffer = null;
+      } catch { }
+
+      if (snapshot) {
+         // 如果有 Snapshot，填入更詳細的分析數據
+         card.p1d = snapshot?.predictions?.upProb1D;
+         card.shortDir = buildTrendByProb(card.p1d);
+         card.strategySignal = snapshot?.strategy?.signal || "觀察";
+         card.confidence = snapshot?.strategy?.confidence;
+         card.support = snapshot?.keyLevels?.supportLevel;
+         card.resistance = snapshot?.keyLevels?.breakoutLevel;
+         card.snapshotPlaybookCaption = snapshot?.playbook?.telegramCaption || snapshot?.playbook?.tacticalScript || undefined;
+         card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
       }
-      card.p1d = snapshot?.predictions?.upProb1D;
-      card.shortDir = buildTrendByProb(card.p1d);
-      card.strategySignal = snapshot?.strategy?.signal || "觀察";
-      card.confidence = snapshot?.strategy?.confidence;
       
-      // 優先使用 TradingView 的新聞標題
       const tvNews = await getTvLatestNewsHeadline(symbol);
-      card.newsLine = tvNews ? buildNewsLine(tvNews, 96) : extractNewsLineFromSnapshot(snapshot);
-      
-      card.industry = snapshot?.normalizedTicker?.industry || snapshot?.normalizedTicker?.sector || "";
-card.recentNews = [
-  ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
-  ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
-  ...(Array.isArray(snapshot?.news?.topNews) ? snapshot.news.topNews : []),
-  ...(Array.isArray(snapshot?.news?.timeline) ? snapshot.news.timeline : []),
-  ...(Array.isArray(snapshot?.news?.items) ? snapshot.news.items : []),
-].map(n => n?.title || "").filter(Boolean).slice(0, 10);
+      card.newsLine = tvNews ? buildNewsLine(tvNews, 96) : (snapshot ? extractNewsLineFromSnapshot(snapshot) : "—");
 
-card.snapshotPlaybookCaption = snapshot?.playbook?.telegramCaption || snapshot?.playbook?.tacticalScript || undefined;
-card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
-card.flowScore = snapshot?.signals?.flow?.flowScore ?? undefined;
-card.macroRisk = snapshot?.crashWarning?.score ?? undefined;
-card.yahooSymbol = symbol;
-
-return card;
-} catch (error) { return null; }
+      return card;
+   } catch (error) { return null; }
 }
 async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Promise<StockCard | null> {
    const symbol = resolveCodeFromInputLocal(query);
