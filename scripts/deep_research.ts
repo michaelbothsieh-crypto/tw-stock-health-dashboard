@@ -1,4 +1,6 @@
 import { renderResearchHtml } from "../src/lib/ux/researchHtmlBuilder";
+import { renderResearchImage } from "../src/lib/ux/researchRenderer";
+import { setCache } from "../src/lib/providers/redisCache";
 import { callLLMWithFallback } from "../src/lib/ai/base";
 import { execSync } from "child_process";
 
@@ -15,6 +17,7 @@ const msgIdToDel = process.argv[5]; // 僅 TG 使用，完成後刪除「研調�
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+const APP_BASE_URL = process.env.APP_BASE_URL || "https://tw-stock-health-dashboard.vercel.app";
 
 async function tavilySearch(query: string) {
   if (!TAVILY_API_KEY) {
@@ -113,20 +116,32 @@ async function deleteTelegramMessage(chatId: string, messageId: string) {
   });
 }
 
-async function sendLine(to: string, text: string) {
+async function sendLine(to: string, text: string, imageBuffer?: Buffer) {
   if (!LINE_CHANNEL_ACCESS_TOKEN) return;
   const url = "https://api.line.me/v2/bot/message/push";
   const cleanText = text.replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
+  
+  const messages: any[] = [{ type: "text", text: cleanText }];
+
+  if (imageBuffer) {
+    const cacheId = Math.random().toString(36).substring(2, 15);
+    // 快取 10 分鐘，將 Buffer 轉為 Base64 存入 Redis
+    await setCache(`line:chart:${cacheId}`, imageBuffer.toString("base64"), 600);
+    const chartUrl = `${APP_BASE_URL.replace(/\/+$/, "")}/api/telegram/chart-proxy?id=${cacheId}`;
+    messages.push({
+      type: "image",
+      originalContentUrl: chartUrl,
+      previewImageUrl: chartUrl,
+    });
+  }
+
   await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`
     },
-    body: JSON.stringify({
-      to,
-      messages: [{ type: "text", text: cleanText }]
-    })
+    body: JSON.stringify({ to, messages })
   });
 }
 
@@ -163,8 +178,9 @@ async function main() {
         await deleteTelegramMessage(chatId, msgIdToDel);
       }
     } else if (platform === "LINE") {
+      const imageBuffer = await renderResearchImage(ticker, reportText || "");
       const finalReport = `🔍 ${ticker} 深度研調報告 (Last 30 Days)\n\n${reportText}`;
-      await sendLine(chatId, finalReport);
+      await sendLine(chatId, finalReport, imageBuffer);
     }
     
     console.log("Research completed and sent.");
@@ -174,4 +190,3 @@ async function main() {
 }
 
 main();
-

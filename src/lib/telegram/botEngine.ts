@@ -1,3 +1,4 @@
+import { fetchEtfTopHoldings } from "../providers/etfFetch";
 import { fetchLatestReport } from "./reportFetcher";
 import { getAllChatIds } from "./chatStore";
 import { getTacticalPlaybook } from "../ai/playbookAgent";
@@ -288,8 +289,9 @@ async function ensureTelegramCommandsSynced() {
             commands: [
                { command: "tw", description: "查詢台股個股（例：/tw 2330）" },
                { command: "us", description: "查詢美股個股（例：/us NVDA）" },
+               { command: "etf", description: "查詢 ETF 持股及 YTD 表現（例：/etf 0050）" },
                { command: "whatis", description: "分析公司做什麼及近期新聞（例：/whatis 2330）" },
-               { command: "deep", description: "深入研調社群與新聞風向 (需 2-3 分鐘)" },
+               { command: "research", description: "深入研調社群與新聞風向 (需 2-3 分鐘)" },
                { command: "rank", description: "列出本群熱門股票及查詢至今報酬率" },
                { command: "roi", description: "計算指定時間段報酬率（例：/roi 2330 1m）" },
                { command: "debug_rank", description: "診斷排行榜連動問題" },
@@ -786,19 +788,49 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
    const command = commandRaw.toLowerCase().split("@")[0];
    const query = argParts.join(" ").trim();
 
-   if (command === "/deep") {
-      if (!query) return { text: "請輸入代號進行深入研調，例如: /deep 2330" };
+   if (command === "/research") {
+      if (!query) return { text: `請輸入代號進行深入研調，例如: ${command} 2330` };
       
       const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
-      const chatId = options?.chatId;
-      const platform = options?.baseUrl?.includes("line") ? "LINE" : "TG";
-      
-      // 這裡由 handleTelegramMessage 傳入的 progressMessageId 會被用來作為 msgIdToDel
-      // 注意: generateBotReply 只是生成內容，真正發送 GH Dispatch 的邏輯建議放在這裡或 handle 處
-      // 為了方便控制，我們在這裡先定義觸發邏輯。
+      // ... (keep rest of logic)
       return { 
          text: `🔍 <b>${symbol} 深度研調系統已啟動</b>\n正在掃描社群風向 (Reddit, X, 30天數據)...\n完成後將在此回傳報告 (約需 2-3 分鐘)。` 
       };
+   }
+
+   if (command === "/etf") {
+      if (!query) return { text: "請輸入 ETF 代號，例如: /etf 0050 或 /etf QQQ" };
+      
+      const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
+      let yahooSymbol = symbol;
+      if (/^[0-9]+$/.test(symbol)) {
+         // TW ETF 推算
+         const isProbablyTPEX = /^[458]/.test(symbol) || (symbol.startsWith("3") && symbol !== "3008") || symbol.toUpperCase().endsWith("B");
+         yahooSymbol = isProbablyTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
+      }
+
+      try {
+         const holdings = await fetchEtfTopHoldings(yahooSymbol);
+         if (holdings.length === 0) return { text: `找不到「${symbol}」的持股資料，請確認是否為 ETF。` };
+
+         const lines = [
+            `📊 <b>${symbol} 前十大持股與 YTD 表現</b>`,
+            "",
+         ];
+
+         holdings.forEach((h, index) => {
+            const ytdText = h.ytdReturn !== null ? `(${formatSignedPct(h.ytdReturn, 2)})` : "(無資料)";
+            lines.push(`${index + 1}. ${h.name} - ${h.percent.toFixed(2)}% ${ytdText}`);
+         });
+
+         lines.push("");
+         lines.push(`💡 YTD 代表年初至今的累積漲跌幅。`);
+
+         return { text: lines.join("\n"), chartBuffer: null };
+      } catch (err) {
+         console.error("[BotEngine] /etf Error:", err);
+         return { text: "抱歉，查詢 ETF 資料時發生錯誤。", chartBuffer: null };
+      }
    }
 
    if (command === "/tw") {
@@ -1053,7 +1085,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
 
    // 1. 立即送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
-   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/deep"].includes(command)) {
+   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/research", "/etf"].includes(command)) {
       progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
    }
 
@@ -1066,8 +1098,8 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
          return;
       }
 
-      // 2. 特殊處理 /deep：觸發 GitHub Action
-      if (command === "/deep") {
+      // 2. 特殊處理 /research：觸發 GitHub Action
+      if (command === "/research") {
          const query = text.split(/\s+/).slice(1).join(" ").trim();
          const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
          

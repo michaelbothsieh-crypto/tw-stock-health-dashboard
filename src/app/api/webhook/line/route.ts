@@ -122,6 +122,8 @@ export async function POST(req: NextRequest) {
                   "您可以透過以下指令與我互動：\n\n" +
                   "📊 股票查詢：\n" +
                   "輸入 /tw <代號> (例：/tw 2330)\n" +
+                  "輸入 /etf <代號> (例：/etf 0050)\n" +
+                  "輸入 /research <代號> (深入研調)\n" +
                   "輸入 /rank (熱門排行)\n" +
                   "輸入 /roi <代號> <時間> (績效分析)\n\n" +
                   "🎥 影片工具：\n" +
@@ -297,8 +299,8 @@ const reply = await generateBotReply(userText, { baseUrl: origin, chatId });
           text: cleanReply,
         });
 
-        // 特殊處理 /deep：觸發 GitHub Action
-        if (userText.startsWith("/deep")) {
+        // 特殊處理 /research：觸發 GitHub Action
+        if (userText.startsWith("/research")) {
           const query = userText.split(/\s+/).slice(1).join(" ").trim();
           const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
           await triggerDeepResearchGHAction(symbol, chatId, "LINE");
