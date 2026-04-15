@@ -16,14 +16,15 @@ export interface EtfFetchResult {
   isEtf: boolean;
   status: "success" | "no_holdings" | "not_found" | "api_error";
   asOfDate?: string;
-  dividendYield?: number | null; // 殖利率
-  oneYearReturn?: number | null; // 1年報酬率
+  dividendYield?: number | null;
+  oneYearReturn?: number | null;
   errorMsg?: string;
 }
 
 async function tryQuoteSummary(symbol: string) {
+  // 加入 defaultKeyStatistics 這是台股 ETF 績效較常出現的地方
   return await yahooFinance.quoteSummary(symbol, {
-    modules: ["topHoldings", "price", "summaryDetail", "fundProfile", "fundPerformance"]
+    modules: ["topHoldings", "price", "summaryDetail", "fundProfile", "fundPerformance", "defaultKeyStatistics"]
   }).catch(() => null);
 }
 
@@ -51,6 +52,8 @@ function formatHoldingName(yahooName: string, symbol: string): string {
     marketTag = "(UK)";
   } else if (upperSymbol.endsWith(".DE")) {
     marketTag = "(DE)";
+  } else if (upperSymbol.endsWith(".SG")) {
+    marketTag = "(SG)";
   } else if (!upperSymbol.includes(".")) {
     marketTag = "(US)";
   }
@@ -84,15 +87,19 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
   const etfName = localName || summary?.price?.longName || quote?.longName || quote?.shortName || pureCode;
   const isEtfLike = quote?.quoteType === "ETF" || quote?.quoteType === "MUTUALFUND" || !!summary?.topHoldings || !!localName;
 
-  // 1. 抓取額外資訊
-  const dividendYield = summary?.summaryDetail?.trailingAnnualDividendYield as number | undefined;
-  const oneYearReturn = summary?.fundPerformance?.performanceOverview?.oneYearAnnualRollingReturn as number | undefined;
-// 提取資料截止日期
-let asOfDateStr = "";
-if (summary?.topHoldings?.lastMarketDate) {
-  const d = new Date(summary.topHoldings.lastMarketDate as any);
-  asOfDateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('zh-TW') : "";
-}
+  // 強化版績效抓取：依序嘗試不同欄位 (針對台美股差異)
+  let dividendYield = (summary?.summaryDetail?.trailingAnnualDividendYield as number) || (summary?.summaryDetail?.yield as number);
+  
+  // 如果是台股 0.00%，有可能是 Yahoo 資料缺失或純粹未配息
+  let oneYearReturn = (summary?.fundPerformance?.performanceOverview?.oneYearAnnualRollingReturn as number) || 
+                     (summary?.defaultKeyStatistics?.ytdReturn as number) ||
+                     (summary?.defaultKeyStatistics?.fiveYearAvgReturn as number);
+
+  let asOfDateStr = "";
+  if (summary?.topHoldings?.lastMarketDate) {
+    const d = new Date(summary.topHoldings.lastMarketDate as any);
+    asOfDateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('zh-TW') : "";
+  }
 
   if (!quote && !localName) {
     return { symbol: pureCode, name: pureCode, holdings: [], isEtf: false, status: "not_found" };

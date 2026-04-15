@@ -768,11 +768,12 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             return { text: `找不到「${symbol}」的資料，請確認代號是否正確。` };
          }
 
-         // 增加排行標籤
+         // 增加排行標籤 (優化比對邏輯)
          let popularityTag = "";
          if (options?.chatId) {
             const ranks = await getTopRankedStocks(options.chatId);
-            const myRankIndex = ranks.findIndex(r => r.symbol === symbol);
+            const pureTarget = symbol.split(".")[0].toUpperCase();
+            const myRankIndex = ranks.findIndex(r => r.symbol.split(".")[0].toUpperCase() === pureTarget);
             if (myRankIndex !== -1) {
                popularityTag = `🔥 全群熱門排行第 ${myRankIndex + 1} 名\n`;
             }
