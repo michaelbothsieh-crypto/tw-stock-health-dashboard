@@ -812,21 +812,32 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       }
 
       try {
-         const holdings = await fetchEtfTopHoldings(yahooSymbol);
-         if (holdings.length === 0) return { text: `找不到「${symbol}」的持股資料，請確認是否為 ETF。` };
+         const result = await fetchEtfTopHoldings(yahooSymbol);
+         const etfName = result.name;
+         
+         if (!result.isEtf && result.holdings.length === 0) {
+            return { text: `找不到「${symbol}」的資料，或該代號不屬於 ETF。` };
+         }
+
+         if (result.holdings.length === 0) {
+            return { 
+               text: `📊 <b>${etfName} (${symbol})</b>\n\n` +
+                     `目前 Yahoo Finance 尚未提供該 ETF (可能是主動型 ETF) 的持股明細。`
+            };
+         }
 
          const lines = [
-            `📊 <b>${symbol} 前十大持股與 YTD 表現</b>`,
+            `📊 <b>${etfName} (${symbol}) 前十大持股</b>`,
             "",
          ];
 
-         holdings.forEach((h, index) => {
+         result.holdings.forEach((h, index) => {
             const ytdText = h.ytdReturn !== null ? `(${formatSignedPct(h.ytdReturn, 2)})` : "(無資料)";
             lines.push(`${index + 1}. ${h.name} - ${h.percent.toFixed(2)}% ${ytdText}`);
          });
 
          lines.push("");
-         lines.push(`💡 YTD 代表年初至今的累積漲跌幅。`);
+         lines.push(`💡 YTD 代表持股年初至今的漲跌幅。`);
 
          return { text: lines.join("\n"), chartBuffer: null };
       } catch (err) {

@@ -1,5 +1,5 @@
 import { yf as yahooFinance } from "./yahooFinanceClient";
-import { subYears, startOfYear, endOfDay } from "date-fns";
+import { startOfYear, endOfDay } from "date-fns";
 
 export interface EtfHolding {
   symbol: string;
@@ -8,22 +8,34 @@ export interface EtfHolding {
   ytdReturn: number | null;
 }
 
-export async function fetchEtfTopHoldings(symbol: string): Promise<EtfHolding[]> {
+export interface EtfFetchResult {
+  name: string;
+  holdings: EtfHolding[];
+  isEtf: boolean;
+}
+
+export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResult> {
   try {
-    // 嘗試抓取 topHoldings，若失敗則回傳空陣列
-    const summary = await yahooFinance.quoteSummary(symbol, {
-      modules: ["topHoldings", "fundProfile"]
-    }).catch(() => null);
+    // 1. 同時抓取持股明細與基本報價資訊，確保即使沒持股也能拿到名稱
+    const [summary, quoteRes] = await Promise.all([
+      yahooFinance.quoteSummary(symbol, {
+        modules: ["topHoldings", "price", "summaryDetail"]
+      }).catch(() => null),
+      yahooFinance.quote(symbol).catch(() => null)
+    ]);
+
+    const quote: any = Array.isArray(quoteRes) ? quoteRes[0] : quoteRes;
+    const etfName = summary?.price?.longName || quote?.longName || quote?.shortName || symbol;
+    
+    // 判定是否為 ETF (Yahoo 的 quoteType 通常會標示 ETF)
+    const isEtf = quote?.quoteType === "ETF" || !!summary?.topHoldings;
 
     const holdings = summary?.topHoldings?.holdings;
     if (!holdings || !Array.isArray(holdings) || holdings.length === 0) {
-      // 備援：若無持股資料，檢查是否為 ETF
-      const profile = summary?.fundProfile;
-      if (!profile) return [];
-      return []; 
+      return { name: etfName, holdings: [], isEtf };
     }
-    // ... (rest of the logic)
-    // 2. Calculate YTD for each holding
+
+    // 2. 計算 YTD
     const now = new Date();
     const jan1st = startOfYear(now);
     
@@ -31,28 +43,25 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfHolding[]>
       let holdingSymbol = h.symbol;
       if (!holdingSymbol) return null;
 
-      // Calculate YTD
       let ytdReturn: number | null = null;
       try {
-        const [chartRes, quoteRes] = await Promise.all([
+        const [hChart, hQuoteRes] = await Promise.all([
           yahooFinance.chart(holdingSymbol, {
             period1: jan1st,
-            period2: endOfDay(new Date(jan1st.getTime() + 7 * 24 * 60 * 60 * 1000)), // First week of the year
+            period2: endOfDay(new Date(jan1st.getTime() + 10 * 24 * 60 * 60 * 1000)), // 增加緩衝天數
             interval: "1d"
           }).catch(() => null),
           yahooFinance.quote(holdingSymbol).catch(() => null)
         ]);
 
-        const history = chartRes?.quotes || [];
+        const history = hChart?.quotes || [];
         const startPrice = history.find(q => q.close !== null)?.close;
-        const currentPrice = (Array.isArray(quoteRes) ? quoteRes[0] : quoteRes)?.regularMarketPrice;
+        const currentPrice = (Array.isArray(hQuoteRes) ? hQuoteRes[0] : hQuoteRes)?.regularMarketPrice;
 
         if (startPrice && currentPrice) {
           ytdReturn = ((currentPrice - startPrice) / startPrice) * 100;
         }
-      } catch (err) {
-        console.error(`Failed to calculate YTD for ${holdingSymbol}`, err);
-      }
+      } catch (err) { }
 
       return {
         symbol: holdingSymbol,
@@ -62,9 +71,13 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfHolding[]>
       };
     }));
 
-    return results.filter((r): r is EtfHolding => r !== null);
+    return {
+      name: etfName,
+      holdings: results.filter((r): r is EtfHolding => r !== null),
+      isEtf: true
+    };
   } catch (err) {
     console.error(`Failed to fetch ETF holdings for ${symbol}`, err);
-    return [];
+    return { name: symbol, holdings: [], isEtf: false };
   }
 }
