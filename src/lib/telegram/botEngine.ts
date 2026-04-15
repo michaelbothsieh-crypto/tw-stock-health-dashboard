@@ -780,8 +780,10 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          }
 
          const statsLines = [];
-         if (result.dividendYield !== undefined && result.dividendYield !== null) {
+         if (result.dividendYield !== undefined && result.dividendYield !== null && result.dividendYield > 0) {
             statsLines.push(`💰 配息率：${(result.dividendYield * 100).toFixed(2)}%`);
+         } else {
+            statsLines.push(`💰 配息率：不配息`);
          }
          if (result.oneYearReturn !== undefined && result.oneYearReturn !== null) {
             statsLines.push(`📈 1年報酬率：${result.oneYearReturn.toFixed(2)}%`);
