@@ -179,6 +179,38 @@ async function sendPhoto(chatId: string | number, imageBuffer: Buffer, caption: 
    } catch (error) { return null; }
 }
 
+async function sendMediaGroup(chatId: string | number, imageBuffers: Buffer[], caption: string): Promise<number[] | null> {
+   const token = process.env.TELEGRAM_BOT_TOKEN;
+   if (!token) return null;
+   const url = `https://api.telegram.org/bot${token}/sendMediaGroup`;
+   try {
+      const formData = new FormData();
+      formData.append("chat_id", String(chatId));
+      
+      const media = imageBuffers.map((buf, i) => {
+         const uint8Array = new Uint8Array(buf);
+         const imageBlob = new Blob([uint8Array], { type: "image/png" });
+         const fileName = `chart_${i}.png`;
+         formData.append(fileName, imageBlob, fileName);
+         return {
+            type: "photo",
+            media: `attach://${fileName}`,
+            caption: i === 0 ? caption : undefined,
+            parse_mode: i === 0 ? "HTML" : undefined,
+         };
+      });
+      
+      formData.append("media", JSON.stringify(media));
+
+      const res = await fetch(url, { method: "POST", body: formData });
+      const payload = await res.json().catch(() => null);
+      if (Array.isArray(payload?.result)) {
+         return payload.result.map((m: any) => m.message_id);
+      }
+      return null;
+   } catch (error) { return null; }
+}
+
 async function deleteMessage(chatId: string | number, messageId: number): Promise<boolean> {
    const token = process.env.TELEGRAM_BOT_TOKEN;
    if (!token) return false;
@@ -217,8 +249,11 @@ async function replyOrEdit(chatId: number, progressMessageId: number | null, tex
    await sendMessage(chatId, text);
 }
 
-async function replyWithCard(chatId: number, progressMessageId: number | null, text: string, imageBuffer: Buffer | null) {
-   if (imageBuffer) {
+async function replyWithCard(chatId: number, progressMessageId: number | null, text: string, imageBuffer: Buffer | null, chartBuffers?: Buffer[]) {
+   if (chartBuffers && chartBuffers.length > 0) {
+      if (progressMessageId !== null) await deleteMessage(chatId, progressMessageId);
+      await sendMediaGroup(chatId, chartBuffers, text);
+   } else if (imageBuffer) {
       if (progressMessageId !== null) await deleteMessage(chatId, progressMessageId);
       if (text.length <= 1024) {
          await sendPhoto(chatId, imageBuffer, text);
@@ -730,7 +765,13 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipH
    }
 }
 
-export async function generateBotReply(text: string, options?: TelegramHandleOptions): Promise<{ text: string, chartBuffer?: Buffer | null } | null> {
+type BotReply = {
+   text: string;
+   chartBuffer?: Buffer | null;
+   chartBuffers?: Buffer[];
+};
+
+export async function generateBotReply(text: string, options?: TelegramHandleOptions): Promise<BotReply | null> {
    const trimmedText = text.trim();
    if (!trimmedText.startsWith("/")) return null;
 
@@ -848,16 +889,22 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          }
       }
 
-      const combinedChart = buffers.length > 0 ? await combineImages(buffers) : null;
-      if (!combinedChart && errorParts.length > 0) {
+      // 每 3 張合併一組
+      const chartBuffers: Buffer[] = [];
+      for (let i = 0; i < buffers.length; i += 3) {
+         const chunk = buffers.slice(i, i + 3);
+         const combined = await combineImages(chunk);
+         if (combined) chartBuffers.push(combined);
+      }
+
+      if (chartBuffers.length === 0 && errorParts.length > 0) {
          return { text: errorParts.join("\n") };
       }
 
       return { 
          text: errorParts.length > 0 ? errorParts.join("\n") : "", 
-         chartBuffer: combinedChart 
-      };
-   }
+         chartBuffers 
+      };   }
 
    if (command === "/whatis") {
       if (!query) return { text: "請輸入公司名稱或代號，例如:\n/whatis 2330\n/whatis 台積電\n/whatis OpenAI" };
@@ -919,16 +966,22 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          }
       }
 
-      const combinedChart = buffers.length > 0 ? await combineImages(buffers) : null;
-      if (!combinedChart && errorParts.length > 0) {
+      // 每 3 張合併一組
+      const chartBuffers: Buffer[] = [];
+      for (let i = 0; i < buffers.length; i += 3) {
+         const chunk = buffers.slice(i, i + 3);
+         const combined = await combineImages(chunk);
+         if (combined) chartBuffers.push(combined);
+      }
+
+      if (chartBuffers.length === 0 && errorParts.length > 0) {
          return { text: errorParts.join("\n") };
       }
 
       return { 
          text: errorParts.length > 0 ? errorParts.join("\n") : "", 
-         chartBuffer: combinedChart 
-      };
-   }
+         chartBuffers 
+      };   }
    if (command === "/rank") {
       try {
          if (!options?.chatId) return { text: "無法辨識群組 ID，請在群組中使用。" };
@@ -1121,11 +1174,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
       }
 
       // 3. 一般指令回覆 (圖表或文字)
-      if (reply.chartBuffer) {
-         await replyWithCard(chatId, progressMessageId, reply.text, reply.chartBuffer);
-      } else {
-         await replyOrEdit(chatId, progressMessageId, reply.text);
-      }
+      await replyWithCard(chatId, progressMessageId, reply.text, reply.chartBuffer || null, reply.chartBuffers);
    } catch (error) {
       console.error("[BotEngine] handleTelegramMessage Error:", error);
       if (progressMessageId) {
