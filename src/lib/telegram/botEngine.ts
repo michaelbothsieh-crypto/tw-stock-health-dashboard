@@ -316,10 +316,12 @@ export function resolveCodeFromInputLocal(input: string): string | null {
    // 3. 匹配 Value (中文名稱) - 完全匹配優先
    if (reverseStockNames[query]) return reverseStockNames[query];
 
-   // 4. 模糊匹配 (至少輸入兩個字才進行模糊匹配，避免 "台" 匹配到 "台泥")
-   if (query.length >= 2) {
-      for (const [code, name] of Object.entries(twStockNames)) {
-         if (name.includes(query)) return code;
+   // 4. 關鍵字匹配 (從輸入的句子中尋找是否有符合的股票名稱)
+   // 我們按名稱長度排序，優先匹配較長的名字 (如 "台達電" 優先於 "台達")
+   const sortedNames = Object.entries(twStockNames).sort((a, b) => b[1].length - a[1].length);
+   for (const [code, name] of sortedNames) {
+      if (name.length >= 2 && query.includes(name.toUpperCase())) {
+         return code;
       }
    }
 
