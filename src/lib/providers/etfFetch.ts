@@ -10,14 +10,19 @@ export interface EtfHolding {
 
 export async function fetchEtfTopHoldings(symbol: string): Promise<EtfHolding[]> {
   try {
-    // 1. Fetch Top Holdings
+    // 嘗試抓取 topHoldings，若失敗則回傳空陣列
     const summary = await yahooFinance.quoteSummary(symbol, {
-      modules: ["topHoldings"]
+      modules: ["topHoldings", "fundProfile"]
     }).catch(() => null);
 
     const holdings = summary?.topHoldings?.holdings;
-    if (!holdings || !Array.isArray(holdings)) return [];
-
+    if (!holdings || !Array.isArray(holdings) || holdings.length === 0) {
+      // 備援：若無持股資料，檢查是否為 ETF
+      const profile = summary?.fundProfile;
+      if (!profile) return [];
+      return []; 
+    }
+    // ... (rest of the logic)
     // 2. Calculate YTD for each holding
     const now = new Date();
     const jan1st = startOfYear(now);

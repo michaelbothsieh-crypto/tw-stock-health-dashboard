@@ -170,17 +170,21 @@ async function main() {
     // 2. 透過內建 Fallback AI 進行最終總結
     const reportText = await aiSummarize(ticker, researchMarkdown);
     
-    if (platform === "TG") {
+    if (platform === "TG" || platform === "LINE") {
       const htmlBuffer = await renderResearchHtml(ticker, reportText || "");
-      const caption = `📊 <b>${ticker} 深度研調報告已完成</b>\n備註：點擊上方 HTML 檔案開啟漂亮網頁版報告！`;
-      await sendTelegramDocument(chatId, htmlBuffer, caption);
-      if (msgIdToDel) {
-        await deleteTelegramMessage(chatId, msgIdToDel);
+      const caption = `📊 <b>${ticker} 深度研調報告已完成</b>`;
+      
+      if (platform === "TG") {
+        await sendTelegramDocument(chatId, htmlBuffer, caption);
+        if (msgIdToDel) {
+          await deleteTelegramMessage(chatId, msgIdToDel);
+        }
+      } else {
+        // Line 使用類似 TG 的方式發送，但 API 限制需注意
+        // 由於 Line 不支援直接傳送檔案訊息給一般用戶 (除非用 Flex/網頁連結)，
+        // 為了確保一定收得到，我們先改為傳送 HTML 內容網址或檔案連結
+        await sendLine(chatId, `🔍 <b>${ticker} 深度研調報告已完成</b>\n點擊下方連結閱讀報告：\n${APP_BASE_URL}/api/report/research?ticker=${ticker}`);
       }
-    } else if (platform === "LINE") {
-      const imageBuffer = await renderResearchImage(ticker, reportText || "");
-      const finalReport = `🔍 ${ticker} 深度研調報告 (Last 30 Days)\n\n${reportText}`;
-      await sendLine(chatId, finalReport, imageBuffer);
     }
     
     console.log("Research completed and sent.");
