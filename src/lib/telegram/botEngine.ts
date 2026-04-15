@@ -404,48 +404,67 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
 }
 
 
-async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string, skipHeavy = false): Promise<StockCard | null> {
+async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
    if (!/^[A-Z]{1,5}(\.[A-Z]{1,2})?$/i.test(ticker)) return null;
    const symbol = ticker.toUpperCase();
    const baseUrl = getSnapshotBaseUrl(overrideBaseUrl);
    if (!baseUrl) return null;
 
+   // 建立一個空的 Card
+   const card: StockCard = {
+      symbol,
+      nameZh: symbol,
+      close: null, chgPct: null, chgAbs: null, volume: null, 
+      volumeVs5dPct: null, flowNet: null, flowUnit: "股",
+      shortDir: "中立", strategySignal: "觀察", confidence: null, p1d: null, p3d: null, p5d: null,
+      support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "yahoo", insiderSells: [],
+      chartBuffer: null,
+      yahooSymbol: symbol,
+   };
+
    try {
-      const controller = new AbortController();
-      const snapTimer = setTimeout(() => controller.abort(), 15000);
-      
-      // 1. 嘗試抓取內部 Snapshot
-      const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`, { signal: controller.signal }).catch(() => null);
-      let snapshot = snapRes && snapRes.ok ? await snapRes.json() : null;
-      if (snapTimer) clearTimeout(snapTimer);
+      if (!skipQuote) {
+         const controller = new AbortController();
+         const snapTimer = setTimeout(() => controller.abort(), 15000);
+         
+         // 1. 嘗試抓取內部 Snapshot
+         const snapRes = await fetch(`${baseUrl}/api/stock/${symbol}/snapshot`, { signal: controller.signal }).catch(() => null);
+         let snapshot = snapRes && snapRes.ok ? await snapRes.json() : null;
+         if (snapTimer) clearTimeout(snapTimer);
 
-      // 2. 抓取 Yahoo 即時報價 (作為基礎或補充)
-      const rtQuoteRaw = await yahooFinance.quote(symbol).catch(() => null);
-      const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
+         // 2. 抓取 Yahoo 即時報價 (作為基礎或補充)
+         const rtQuoteRaw = await yahooFinance.quote(symbol).catch(() => null);
+         const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
 
-      // 如果兩邊都抓不到資料，才算失敗
-      if (!snapshot && !rtQuote) return null;
+         if (snapshot || rtQuote) {
+            let lastClose = rtQuote?.regularMarketPrice || null;
+            if (lastClose === null && snapshot?.data?.prices?.length > 0) {
+               const prices = snapshot.data.prices;
+               lastClose = prices[prices.length - 1].close;
+            }
 
-      // 優先使用 rtQuote 報價，如果沒有則從 snapshot 中抓取最後一個交易日的收盤價作為 fallback
-      let lastClose = rtQuote?.regularMarketPrice || null;
-      if (lastClose === null && snapshot?.data?.prices?.length > 0) {
-         const prices = snapshot.data.prices;
-         lastClose = prices[prices.length - 1].close;
+            card.nameZh = String(snapshot?.normalizedTicker?.companyNameZh || rtQuote?.longName || rtQuote?.shortName || symbol);
+            card.close = lastClose;
+            card.chgPct = rtQuote?.regularMarketChangePercent || null;
+            card.chgAbs = rtQuote?.regularMarketChange || null;
+            card.volume = rtQuote?.regularMarketVolume || null;
+            card.sourceLabel = snapshot ? "snapshot" : "yahoo";
+
+            if (snapshot) {
+               card.p1d = snapshot?.predictions?.upProb1D;
+               card.shortDir = buildTrendByProb(card.p1d);
+               card.strategySignal = snapshot?.strategy?.signal || "觀察";
+               card.confidence = snapshot?.strategy?.confidence;
+               card.support = snapshot?.keyLevels?.supportLevel;
+               card.resistance = snapshot?.keyLevels?.breakoutLevel;
+               card.snapshotPlaybookCaption = snapshot?.playbook?.telegramCaption || snapshot?.playbook?.tacticalScript || undefined;
+               card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
+               if (!skipHeavy) {
+                  card.newsLine = extractNewsLineFromSnapshot(snapshot);
+               }
+            }
+         }
       }
-
-      const card: StockCard = {
-         symbol,
-         nameZh: String(snapshot?.normalizedTicker?.companyNameZh || rtQuote?.longName || rtQuote?.shortName || symbol),
-         close: lastClose, 
-         chgPct: rtQuote?.regularMarketChangePercent || null, 
-         chgAbs: rtQuote?.regularMarketChange || null, 
-         volume: rtQuote?.regularMarketVolume || null, 
-         volumeVs5dPct: null, flowNet: null, flowUnit: "股",
-         shortDir: "中立", strategySignal: "觀察", confidence: null, p1d: null, p3d: null, p5d: null,
-         support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [],
-         chartBuffer: null,
-         yahooSymbol: symbol,
-      };
 
       // 3. 處理圖表 (美股優先用 Finviz)
       if (!skipHeavy) {
@@ -459,29 +478,17 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string, sk
                card.chartBuffer = Buffer.from(ab);
             }
          } catch { }
-      }
-
-      if (snapshot) {
-         // 如果有 Snapshot，填入更詳細的分析數據
-         card.p1d = snapshot?.predictions?.upProb1D;
-         card.shortDir = buildTrendByProb(card.p1d);
-         card.strategySignal = snapshot?.strategy?.signal || "觀察";
-         card.confidence = snapshot?.strategy?.confidence;
-         card.support = snapshot?.keyLevels?.supportLevel;
-         card.resistance = snapshot?.keyLevels?.breakoutLevel;
-         card.snapshotPlaybookCaption = snapshot?.playbook?.telegramCaption || snapshot?.playbook?.tacticalScript || undefined;
-         card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
-      }
-      
-      if (!skipHeavy) {
-         const tvNews = await getTvLatestNewsHeadline(symbol);
-         card.newsLine = tvNews ? buildNewsLine(tvNews, 96) : (snapshot ? extractNewsLineFromSnapshot(snapshot) : "—");
+         
+         if (!skipQuote && !skipHeavy) {
+            const tvNews = await getTvLatestNewsHeadline(symbol);
+            if (tvNews) card.newsLine = buildNewsLine(tvNews, 96);
+         }
       }
 
       return card;
-   } catch (error) { return null; }
+   } catch (error) { return card; }
 }
-async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipHeavy = false): Promise<StockCard | null> {
+async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
    const symbol = resolveCodeFromInputLocal(query);
    if (!symbol) {
       console.warn(`[BotEngine] resolveCodeFromInputLocal failed for query: ${query}`);
@@ -496,13 +503,17 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipH
       const snapUrl = `${baseUrl}/api/stock/${symbol}/snapshot?mode=lite`;
       const controller = new AbortController();
       const snapTimer = setTimeout(() => controller.abort(), 20000);
-      
-      // 1. 並行發送 Snapshot 與 Fugle 請求 (節省等待時間)
-      const [snapRes, fugleQuote] = await Promise.all([
-         fetch(snapUrl, { signal: controller.signal }).finally(() => clearTimeout(snapTimer)),
-         fetchFugleQuote(symbol)
-      ]);
-      
+
+      // 1. 並行發送 Snapshot 與 (可選的) Fugle 請求
+      const tasks: Promise<any>[] = [
+         fetch(snapUrl, { signal: controller.signal }).finally(() => clearTimeout(snapTimer))
+      ];
+      if (!skipQuote) {
+         tasks.push(fetchFugleQuote(symbol));
+      }
+
+      const [snapRes, fugleQuote] = await Promise.all(tasks);
+
       if (!snapRes.ok) {
          console.error(`[BotEngine] Snapshot API failed: ${snapUrl}, Status: ${snapRes.status}`);
          return null;
@@ -512,37 +523,37 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipH
       let yahooSymbol = snapshot?.normalizedTicker?.yahoo;
       if (symbol === "8299") yahooSymbol = "8299.TWO";
       if (!yahooSymbol || yahooSymbol === symbol) {
-         // 修正推算邏輯：4, 5, 8 開頭，或是 3 開頭 (排除大立光 3008)，或是以 B 結尾（債券 ETF）通常是在 TPEX (.TWO)
-         // 6 系列上市櫃重疊非常嚴重，這裡先保守一點
          const isProbablyTPEX = symbol.startsWith("8") || symbol.startsWith("5") || symbol.startsWith("4") || (symbol.startsWith("3") && symbol !== "3008") || symbol.toUpperCase().endsWith("B");
          yahooSymbol = isProbablyTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
       }
 
       // 2. 如果 Fugle 沒抓到，Fallback 到 Yahoo Finance（15-20 分鐘延遲）
-      let rtQuoteRaw = fugleQuote ? null : await yahooFinance.quote(yahooSymbol).catch(() => null);
-      
-      // 如果第一次嘗試失敗，且是台股，則嘗試另一種後綴
-      if (!rtQuoteRaw && !fugleQuote && /[0-9]/.test(symbol)) {
-         const alternativeYahooSymbol = yahooSymbol.endsWith(".TW") 
-            ? yahooSymbol.replace(".TW", ".TWO") 
-            : yahooSymbol.replace(".TWO", ".TW");
-         rtQuoteRaw = await yahooFinance.quote(alternativeYahooSymbol).catch(() => null);
-         if (rtQuoteRaw) {
-            yahooSymbol = alternativeYahooSymbol; // 更新為正確的 symbol
-         }
-      }
+      let rtQuote: any = null;
+      if (!skipQuote) {
+         let rtQuoteRaw = fugleQuote ? null : await yahooFinance.quote(yahooSymbol).catch(() => null);
 
-      const rtQuote: any = fugleQuote
-        ? {
-            regularMarketPrice: fugleQuote.price,
-            regularMarketChangePercent: fugleQuote.changePct,
-            regularMarketChange: fugleQuote.changeAbs,
-            regularMarketVolume: fugleQuote.volume,
-            regularMarketDayHigh: fugleQuote.high,
-            regularMarketDayLow: fugleQuote.low,
-            regularMarketOpen: fugleQuote.open,
-          }
-        : Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
+         if (!rtQuoteRaw && !fugleQuote && /[0-9]/.test(symbol)) {
+            const alternativeYahooSymbol = yahooSymbol.endsWith(".TW") 
+               ? yahooSymbol.replace(".TW", ".TWO") 
+               : yahooSymbol.replace(".TWO", ".TW");
+            rtQuoteRaw = await yahooFinance.quote(alternativeYahooSymbol).catch(() => null);
+            if (rtQuoteRaw) {
+               yahooSymbol = alternativeYahooSymbol; // 更新為正確的 symbol
+            }
+         }
+
+         rtQuote = fugleQuote
+           ? {
+               regularMarketPrice: fugleQuote.price,
+               regularMarketChangePercent: fugleQuote.changePct,
+               regularMarketChange: fugleQuote.changeAbs,
+               regularMarketVolume: fugleQuote.volume,
+               regularMarketDayHigh: fugleQuote.high,
+               regularMarketDayLow: fugleQuote.low,
+               regularMarketOpen: fugleQuote.open,
+             }
+           : Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
+      }
 
       let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
       let processedBars = bars.map((b: any) => ({
@@ -560,7 +571,8 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipH
          close: null, chgPct: null, chgAbs: null, volume: null, volumeVs5dPct: null, flowNet: null, flowUnit: "張",
          shortDir: "中立", strategySignal: "觀察", confidence: null, p1d: null, p3d: null, p5d: null,
          support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "snapshot", insiderSells: [],
-         chartBuffer: null
+         chartBuffer: null,
+         yahooSymbol
       };
 
       const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD
@@ -578,10 +590,8 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipH
       }
 
       // 2. 注入 Yahoo 即時報價 (最高優先權)
-      const marketOpen = isMarketOpen(symbol);
       if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
-         // 在盤後如果 Yahoo 給了一個相差很大的價格 (例如 > 5%)，則傾向相信 Snapshot (來自 FinMind)
-         // 這能防止有些 Yahoo Quote 在盤後誤傳盤後撮合價或 (bid+ask)/2
+         const marketOpen = isMarketOpen(symbol);
          const mismatch = !marketOpen && card.close !== null && Math.abs(rtQuote.regularMarketPrice - card.close) / card.close > 0.05;
 
          if (!mismatch) {
@@ -625,7 +635,8 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipH
       card.support = snapshot?.keyLevels?.supportLevel || key.support;
       card.resistance = snapshot?.keyLevels?.breakoutLevel || key.resistance;
 
-      if (!skipHeavy && processedBars.length >= 2) {
+      // 無論是否 skipHeavy，只要有資料就要畫圖 (因為多檔查詢需要圖)
+      if (processedBars.length >= 2) {
          try {
             card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
          } catch {
@@ -662,15 +673,14 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipH
       card.yahooSymbol = yahooSymbol;
       // 只有台股才能用 Fugle，非台股（美股）不標示延遲
       const isTWStock = /[0-9]/.test(symbol);
-      card.isPriceRealTime = isTWStock ? fugleQuote !== null : undefined;
+      card.isPriceRealTime = isTWStock ? (skipQuote ? false : (fugleQuote !== null)) : undefined;
 
       return card;
-      } catch (error) { 
+   } catch (error) {
       console.error("[BotEngine] fetchLiveStockCard Error:", error);
-      return null; 
-      }
-      }
-async function fetchPriceOnly(symbol: any): Promise<{ price: number | null, finalSymbol: string }> {
+      return null;
+   }
+}async function fetchPriceOnly(symbol: any): Promise<{ price: number | null, finalSymbol: string }> {
    let yahooSymbol = String(symbol || "").toUpperCase();
    try {
       if (!yahooSymbol) return { price: null, finalSymbol: "" };
@@ -819,11 +829,11 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          return { text: "找不到該股票資料。" };
       }
 
-      // 多檔並行查詢（最多 10 檔），合併圖檔回傳
-      const cards = await Promise.all(tickers.map(t => fetchLiveStockCard(t, options?.baseUrl, true)));
+      // 多檔並行查詢（最多 10 檔），合併圖檔回傳。啟用 skipHeavy=true, skipQuote=true 以加速。
+      const cards = await Promise.all(tickers.map(t => fetchLiveStockCard(t, options?.baseUrl, true, true)));
       const errorParts: string[] = [];
       const buffers: Buffer[] = [];
-      
+
       for (let i = 0; i < tickers.length; i++) {
          const card = cards[i];
          if (!card) {
@@ -837,12 +847,12 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             }
          }
       }
-      
+
       const combinedChart = buffers.length > 0 ? await combineImages(buffers) : null;
       if (!combinedChart && errorParts.length > 0) {
          return { text: errorParts.join("\n") };
       }
-      
+
       return { 
          text: errorParts.length > 0 ? errorParts.join("\n") : "", 
          chartBuffer: combinedChart 
@@ -851,11 +861,11 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
 
    if (command === "/whatis") {
       if (!query) return { text: "請輸入公司名稱或代號，例如:\n/whatis 2330\n/whatis 台積電\n/whatis OpenAI" };
-      
+
       try {
          // 1. 嘗試解析代號（優先尋找已知代號）
          const isUs = /^[A-Z]{1,5}$/i.test(query);
-         const liveCard = isUs 
+         const liveCard = isUs
             ? await fetchLiveUsStockCard(query, options?.baseUrl)
             : await fetchLiveStockCard(query, options?.baseUrl);
 
@@ -890,11 +900,11 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          return { text: `找不到「${tickers[0]}」的資料，請確認代號是否正確。` };
       }
 
-      // 多檔並行查詢（最多 10 檔），合併圖檔回傳
-      const cards = await Promise.all(tickers.map(t => fetchLiveUsStockCard(t, options?.baseUrl, true)));
+      // 多檔並行查詢（最多 10 檔），合併圖檔回傳。啟用 skipHeavy=true, skipQuote=true 以加速。
+      const cards = await Promise.all(tickers.map(t => fetchLiveUsStockCard(t, options?.baseUrl, true, true)));
       const errorParts: string[] = [];
       const buffers: Buffer[] = [];
-      
+
       for (let i = 0; i < tickers.length; i++) {
          const card = cards[i];
          if (!card) {
@@ -908,18 +918,17 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             }
          }
       }
-      
+
       const combinedChart = buffers.length > 0 ? await combineImages(buffers) : null;
       if (!combinedChart && errorParts.length > 0) {
          return { text: errorParts.join("\n") };
       }
-      
+
       return { 
          text: errorParts.length > 0 ? errorParts.join("\n") : "", 
          chartBuffer: combinedChart 
       };
    }
-
    if (command === "/rank") {
       try {
          if (!options?.chatId) return { text: "無法辨識群組 ID，請在群組中使用。" };
