@@ -882,7 +882,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
    if (command === "/us") {
       if (!query) return { text: "請輸入美股代號，例如:\n/us NVDA\n/us NVDA,AAPL,TSLA" };
 
-      const tickers = query.split(/[,，\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean).slice(0, 5);
+      const tickers = query.split(/[,，\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean).slice(0, 10);
 
       if (tickers.length === 1) {
          const liveCard = await fetchLiveUsStockCard(tickers[0], options?.baseUrl);
@@ -893,10 +893,10 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             const finalMsg = await buildStockCardWithAI(liveCard);
             return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
          }
-         return { text: "找不到該股票資料，請確認代號是否正確（例：AAPL、NVDA）。" };
+         return { text: `找不到「${tickers[0]}」的資料，請確認代號是否正確。` };
       }
 
-      // 多檔並行查詢（最多 5 檔），合併圖檔回傳
+      // 多檔並行查詢（最多 10 檔），合併圖檔回傳
       const cards = await Promise.all(tickers.map(t => fetchLiveUsStockCard(t, options?.baseUrl)));
       const parts: string[] = [];
       const buffers: Buffer[] = [];
@@ -904,7 +904,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       for (let i = 0; i < tickers.length; i++) {
          const card = cards[i];
          if (!card) {
-            parts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料`));
+            parts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料，請檢查代號是否有誤。`));
          } else {
             if (options?.chatId && card.close) {
                await recordStockSearch(options.chatId, card.symbol, card.close).catch(() => null);
@@ -916,7 +916,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          }
       }
       
-      const combinedChart = await combineImages(buffers);
+      const combinedChart = buffers.length > 0 ? await combineImages(buffers) : null;
       return { 
          text: parts.join("\n\n" + escapeHtml("──────────") + "\n\n"), 
          chartBuffer: combinedChart 
