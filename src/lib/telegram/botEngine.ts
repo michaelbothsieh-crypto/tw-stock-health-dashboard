@@ -404,7 +404,7 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
 }
 
 
-async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): Promise<StockCard | null> {
+async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string, skipHeavy = false): Promise<StockCard | null> {
    if (!/^[A-Z]{1,5}(\.[A-Z]{1,2})?$/i.test(ticker)) return null;
    const symbol = ticker.toUpperCase();
    const baseUrl = getSnapshotBaseUrl(overrideBaseUrl);
@@ -448,16 +448,18 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
       };
 
       // 3. 處理圖表 (美股優先用 Finviz)
-      try {
-         const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
-         const chartRes = await fetch(finvizUrl, {
-            headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" },
-         });
-         if (chartRes.ok) {
-            const ab = await chartRes.arrayBuffer();
-            card.chartBuffer = Buffer.from(ab);
-         }
-      } catch { }
+      if (!skipHeavy) {
+         try {
+            const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
+            const chartRes = await fetch(finvizUrl, {
+               headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" },
+            });
+            if (chartRes.ok) {
+               const ab = await chartRes.arrayBuffer();
+               card.chartBuffer = Buffer.from(ab);
+            }
+         } catch { }
+      }
 
       if (snapshot) {
          // 如果有 Snapshot，填入更詳細的分析數據
@@ -471,13 +473,15 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
          card.snapshotVerdict = snapshot?.playbook?.shortSummary || undefined;
       }
       
-      const tvNews = await getTvLatestNewsHeadline(symbol);
-      card.newsLine = tvNews ? buildNewsLine(tvNews, 96) : (snapshot ? extractNewsLineFromSnapshot(snapshot) : "—");
+      if (!skipHeavy) {
+         const tvNews = await getTvLatestNewsHeadline(symbol);
+         card.newsLine = tvNews ? buildNewsLine(tvNews, 96) : (snapshot ? extractNewsLineFromSnapshot(snapshot) : "—");
+      }
 
       return card;
    } catch (error) { return null; }
 }
-async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Promise<StockCard | null> {
+async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipHeavy = false): Promise<StockCard | null> {
    const symbol = resolveCodeFromInputLocal(query);
    if (!symbol) {
       console.warn(`[BotEngine] resolveCodeFromInputLocal failed for query: ${query}`);
@@ -621,7 +625,7 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.support = snapshot?.keyLevels?.supportLevel || key.support;
       card.resistance = snapshot?.keyLevels?.breakoutLevel || key.resistance;
 
-      if (processedBars.length >= 2) {
+      if (!skipHeavy && processedBars.length >= 2) {
          try {
             card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180);
          } catch {
@@ -636,9 +640,13 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string): Prom
       card.strategySignal = snapshot?.strategy?.signal || "觀察";
       card.confidence = snapshot?.strategy?.confidence;
 
-      // 優先使用 TradingView 的新聞標題
-      const tvNews = await getTvLatestNewsHeadline(symbol);
-      card.newsLine = tvNews ? buildNewsLine(tvNews, 96) : extractNewsLineFromSnapshot(snapshot);
+      if (!skipHeavy) {
+         // 優先使用 TradingView 的新聞標題
+         const tvNews = await getTvLatestNewsHeadline(symbol);
+         card.newsLine = tvNews ? buildNewsLine(tvNews, 96) : extractNewsLineFromSnapshot(snapshot);
+      } else {
+         card.newsLine = snapshot ? extractNewsLineFromSnapshot(snapshot) : "—";
+      }
 
       card.insiderSells = Array.isArray(snapshot?.insiderTransfers) ? snapshot.insiderTransfers : [];
 
@@ -849,7 +857,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       }
 
       // 多檔並行查詢（最多 10 檔），合併圖檔回傳
-      const cards = await Promise.all(tickers.map(t => fetchLiveUsStockCard(t, options?.baseUrl)));
+      const cards = await Promise.all(tickers.map(t => fetchLiveUsStockCard(t, options?.baseUrl, true)));
       const parts: string[] = [];
       const buffers: Buffer[] = [];
       
@@ -966,9 +974,9 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          const symbol = resolveCodeFromInputLocal(t) || t.toUpperCase();
          const isUs = /^[A-Z]{1,5}$/.test(symbol);
          const live = isUs 
-            ? await fetchLiveUsStockCard(symbol, options?.baseUrl)
-            : await fetchLiveStockCard(symbol, options?.baseUrl);
-         
+            ? await fetchLiveUsStockCard(symbol, options?.baseUrl, true)
+            : await fetchLiveStockCard(symbol, options?.baseUrl, true);
+
          // 放寬檢查：即使沒抓到 live.close (即時價)，只要有 yahooSymbol 且能抓到歷史序列，就以序列最後一筆為準
          if (!live || !live.yahooSymbol) return null;
 
