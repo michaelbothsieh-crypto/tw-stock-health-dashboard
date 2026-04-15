@@ -207,37 +207,7 @@ async function editMessage(chatId: string | number, messageId: number, text: str
    } catch (error) { return false; }
 }
 
-export async function triggerDeepResearchGHAction(ticker: string, chatId: string, platform: string, msgIdToDel?: number): Promise<{ ok: boolean; error?: string }> {
-   const token = process.env.GH_PAT || process.env.GITHUB_TOKEN;
-   const repo = process.env.GITHUB_REPOSITORY || "michaelbothsieh-crypto/tw-stock-health-dashboard";
-   if (!token) {
-      console.error("Missing GITHUB_TOKEN for dispatch");
-      return { ok: false, error: "Missing GITHUB_TOKEN" };
-   }
-   const url = `https://api.github.com/repos/${repo}/dispatches`;
-   try {
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Accept": "application/vnd.github.v3+json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          event_type: "deep-research",
-          client_payload: { ticker, chatId, platform, msgIdToDel: msgIdToDel ? String(msgIdToDel) : null }
-        })
-      });
-      if (res.status === 204 || res.status === 200) {
-         return { ok: true };
-      }
-      const errorText = await res.text().catch(() => "Unknown GitHub error");
-      return { ok: false, error: `GH Error ${res.status}: ${errorText}` };
-   } catch (e: any) {
-      console.error("GH Dispatch failed:", e);
-      return { ok: false, error: e.message };
-   }
-}
+// 移除 triggerDeepResearchGHAction
 
 async function replyOrEdit(chatId: number, progressMessageId: number | null, text: string) {
    if (progressMessageId !== null) {
@@ -291,7 +261,6 @@ async function ensureTelegramCommandsSynced() {
                { command: "us", description: "查詢美股個股（例：/us NVDA）" },
                { command: "etf", description: "查詢 ETF 持股及 YTD 表現（例：/etf 0050）" },
                { command: "whatis", description: "分析公司做什麼及近期新聞（例：/whatis 2330）" },
-               { command: "research", description: "深入研調社群與新聞風向 (需 2-3 分鐘)" },
                { command: "rank", description: "列出本群熱門股票及查詢至今報酬率" },
                { command: "roi", description: "計算指定時間段報酬率（例：/roi 2330 1m）" },
                { command: "debug_rank", description: "診斷排行榜連動問題" },
@@ -743,16 +712,6 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
    const command = commandRaw.toLowerCase().split("@")[0];
    const query = argParts.join(" ").trim();
 
-   if (command === "/research") {
-      if (!query) return { text: `請輸入代號進行深入研調，例如: ${command} 2330` };
-      
-      const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
-      // ... (keep rest of logic)
-      return { 
-         text: `🔍 <b>${symbol} 深度研調系統已啟動</b>\n正在掃描社群風向 (Reddit, X, 30天數據)...\n完成後將在此回傳報告 (約需 2-3 分鐘)。` 
-      };
-   }
-
    if (command === "/etf") {
       if (!query) return { text: "請輸入 ETF 代號，例如: /etf 0050 或 /etf QQQ" };
       
@@ -1079,7 +1038,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
 
    // 1. 立即送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
-   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/research", "/etf"].includes(command)) {
+   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/etf"].includes(command)) {
       progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
    }
 
@@ -1089,24 +1048,6 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
       
       if (!reply) {
          if (progressMessageId) await deleteMessage(chatId, progressMessageId);
-         return;
-      }
-
-      // 2. 特殊處理 /research：觸發 GitHub Action
-      if (command === "/research") {
-         const query = text.split(/\s+/).slice(1).join(" ").trim();
-         const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
-         
-         // 確保無論如何都能發出「已啟動」的提示
-         await replyOrEdit(chatId, progressMessageId, reply.text);
-         
-         const dispatchResult = await triggerDeepResearchGHAction(symbol, chatIdStr, "TG", progressMessageId || undefined);
-         
-         if (!dispatchResult.ok) {
-            const errorMsg = `❌ 啟動 GitHub Actions 失敗：\n${dispatchResult.error || "未知錯誤"}`;
-            await sendMessage(chatId, errorMsg);
-            console.error("[BotEngine] GitHub Dispatch Failed:", errorMsg);
-         }
          return;
       }
 
