@@ -426,10 +426,17 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
       // 如果兩邊都抓不到資料，才算失敗
       if (!snapshot && !rtQuote) return null;
 
+      // 優先使用 rtQuote 報價，如果沒有則從 snapshot 中抓取最後一個交易日的收盤價作為 fallback
+      let lastClose = rtQuote?.regularMarketPrice || null;
+      if (lastClose === null && snapshot?.data?.prices?.length > 0) {
+         const prices = snapshot.data.prices;
+         lastClose = prices[prices.length - 1].close;
+      }
+
       const card: StockCard = {
          symbol,
          nameZh: String(snapshot?.normalizedTicker?.companyNameZh || rtQuote?.longName || rtQuote?.shortName || symbol),
-         close: rtQuote?.regularMarketPrice || null, 
+         close: lastClose, 
          chgPct: rtQuote?.regularMarketChangePercent || null, 
          chgAbs: rtQuote?.regularMarketChange || null, 
          volume: rtQuote?.regularMarketVolume || null, 
@@ -437,6 +444,7 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string): P
          shortDir: "中立", strategySignal: "觀察", confidence: null, p1d: null, p3d: null, p5d: null,
          support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [],
          chartBuffer: null,
+         yahooSymbol: symbol,
       };
 
       // 3. 處理圖表 (美股優先用 Finviz)
@@ -928,8 +936,12 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
    }
 
    if (command === "/roi") {
-      const [tickerRaw, periodRaw] = query.split(/\s+/);
+      let [tickerRaw, periodRaw] = query.split(/\s+/);
       if (!tickerRaw || !periodRaw) return { text: "用法: /roi 股票代號(多個可用逗號分隔) 時間(1m, 3m, 6m, 1y, ytd, 或 YYYY-MM-DD)\n例如: /roi 2330,2317,NVDA 1m" };
+
+      // 清理結尾多餘的逗號 (例如: ytd,)
+      tickerRaw = tickerRaw.replace(/[,，]+$/, "").trim();
+      periodRaw = periodRaw.replace(/[,，]+$/, "").trim();
 
       const tickers = tickerRaw.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean).slice(0, 5);
       
@@ -957,7 +969,8 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             ? await fetchLiveUsStockCard(symbol, options?.baseUrl)
             : await fetchLiveStockCard(symbol, options?.baseUrl);
          
-         if (!live || !live.close || !live.yahooSymbol) return null;
+         // 放寬檢查：即使沒抓到 live.close (即時價)，只要有 yahooSymbol 且能抓到歷史序列，就以序列最後一筆為準
+         if (!live || !live.yahooSymbol) return null;
 
          try {
             const chartResult = await yahooFinance.chart(live.yahooSymbol, {
@@ -972,8 +985,10 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
                .filter(h => h.close > 0);
             
             if (history.length === 0) return null;
-            // 強制使用歷史序列還原後的頭尾數值計算，確保基準完全一致
-            return { symbol, live, history, initialPrice: history[0].close, lastPrice: history[history.length - 1].close };
+            
+            // 如果 live.close 為空，則從歷史序列中取最後一個收盤價
+            const lastPrice = live.close || history[history.length - 1].close;
+            return { symbol, live, history, initialPrice: history[0].close, lastPrice };
          } catch { return null; }
       }));
 
