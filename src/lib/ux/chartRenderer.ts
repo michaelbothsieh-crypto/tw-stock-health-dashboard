@@ -14,12 +14,14 @@ export interface ChartDataPoint {
 }
 
 /**
- * 將多個圖片 Buffer 垂直拼接成一張圖
+ * 將多個圖片 Buffer 垂直拼接成一張圖，並在每張圖左上角標註代號
  */
-export async function combineImages(buffers: (Buffer | null)[]): Promise<Buffer | null> {
+export async function combineImages(buffers: (Buffer | null)[], symbols?: string[]): Promise<Buffer | null> {
   const validBuffers = buffers.filter((b): b is Buffer => b !== null);
   if (validBuffers.length === 0) return null;
   if (validBuffers.length === 1) return validBuffers[0];
+
+  ensureFonts(); // 確保字型可用
 
   try {
     const images = await Promise.all(validBuffers.map(b => loadImage(b)));
@@ -36,10 +38,39 @@ export async function combineImages(buffers: (Buffer | null)[]): Promise<Buffer 
     const ctx = canvas.getContext('2d');
 
     let currentY = 0;
-    for (const img of images) {
-      // 若寬度不一致則居中繪製 (通常 Finviz 寬度是一樣的)
+    for (let i = 0; i < images.length; i++) {
+      const img = images[i];
+      // 若寬度不一致則居中繪製
       const x = (maxWidth - img.width) / 2;
       ctx.drawImage(img, x, currentY);
+
+      // 繪製左上角標籤
+      const symbol = symbols?.[i];
+      if (symbol) {
+        ctx.save();
+        const labelText = symbol.toUpperCase();
+        const padding = 8;
+        const fontSize = 24;
+        ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
+        const textWidth = ctx.measureText(labelText).width;
+        
+        // 標籤背景
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(x + 10, currentY + 10, textWidth + padding * 2, fontSize + padding * 2);
+        
+        // 標籤邊框
+        ctx.strokeStyle = '#facc15';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x + 10, currentY + 10, textWidth + padding * 2, fontSize + padding * 2);
+
+        // 標籤文字
+        ctx.fillStyle = '#facc15';
+        ctx.textBaseline = 'top';
+        ctx.textAlign = 'left';
+        ctx.fillText(labelText, x + 10 + padding, currentY + 10 + padding);
+        ctx.restore();
+      }
+
       currentY += img.height;
     }
 
@@ -211,6 +242,16 @@ export async function renderStockChart(
   ctx.fillStyle = '#ef4444'; ctx.fillRect(curX + 10, 25, 8, 12);
   ctx.fillStyle = '#22c55e'; ctx.fillRect(curX + 20, 25, 8, 12);
   ctx.fillStyle = '#9ca3af'; ctx.fillText('Trend (Red Up / Green Down)', curX + 35, 32);
+
+  // 3.1 繪製主標題 (代號 + 名稱)
+  const name = await getCompanyNameZh(symbol);
+  const mainTitle = name ? `${symbol} ${name}` : symbol;
+  ctx.save();
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold 24px ${FONT_FAMILY}`;
+  ctx.textAlign = 'center';
+  ctx.fillText(mainTitle, width / 2, 32);
+  ctx.restore();
 
   // 4. 繪製格線
   ctx.strokeStyle = '#262626';

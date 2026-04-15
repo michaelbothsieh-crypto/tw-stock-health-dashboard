@@ -891,9 +891,18 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
 
       // 每 3 張合併一組
       const chartBuffers: Buffer[] = [];
+      const validSymbols: string[] = [];
+      for (let i = 0; i < tickers.length; i++) {
+         const card = cards[i];
+         if (card && card.chartBuffer) {
+            validSymbols.push(card.symbol);
+         }
+      }
+
       for (let i = 0; i < buffers.length; i += 3) {
          const chunk = buffers.slice(i, i + 3);
-         const combined = await combineImages(chunk);
+         const chunkSymbols = validSymbols.slice(i, i + 3);
+         const combined = await combineImages(chunk, chunkSymbols);
          if (combined) chartBuffers.push(combined);
       }
 
@@ -968,9 +977,18 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
 
       // 每 3 張合併一組
       const chartBuffers: Buffer[] = [];
+      const validSymbols: string[] = [];
+      for (let i = 0; i < tickers.length; i++) {
+         const card = cards[i];
+         if (card && card.chartBuffer) {
+            validSymbols.push(card.symbol);
+         }
+      }
+
       for (let i = 0; i < buffers.length; i += 3) {
          const chunk = buffers.slice(i, i + 3);
-         const combined = await combineImages(chunk);
+         const chunkSymbols = validSymbols.slice(i, i + 3);
+         const combined = await combineImages(chunk, chunkSymbols);
          if (combined) chartBuffers.push(combined);
       }
 
