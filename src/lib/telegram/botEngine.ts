@@ -821,18 +821,17 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
 
       // 多檔並行查詢（最多 10 檔），合併圖檔回傳
       const cards = await Promise.all(tickers.map(t => fetchLiveStockCard(t, options?.baseUrl, true)));
-      const parts: string[] = [];
+      const errorParts: string[] = [];
       const buffers: Buffer[] = [];
       
       for (let i = 0; i < tickers.length; i++) {
          const card = cards[i];
          if (!card) {
-            parts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料，請檢查代號是否有誤。`));
+            errorParts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料。`));
          } else {
             if (options?.chatId && card.close) {
                await recordStockSearch(options.chatId, card.symbol, card.close).catch(() => null);
             }
-            parts.push(buildStockCardLines(card, card.snapshotVerdict || "觀察中"));
             if (card.chartBuffer) {
                buffers.push(card.chartBuffer);
             }
@@ -840,8 +839,12 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       }
       
       const combinedChart = buffers.length > 0 ? await combineImages(buffers) : null;
+      if (!combinedChart && errorParts.length > 0) {
+         return { text: errorParts.join("\n") };
+      }
+      
       return { 
-         text: parts.join("\n\n" + escapeHtml("──────────") + "\n\n"), 
+         text: errorParts.length > 0 ? errorParts.join("\n") : "", 
          chartBuffer: combinedChart 
       };
    }
@@ -889,18 +892,17 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
 
       // 多檔並行查詢（最多 10 檔），合併圖檔回傳
       const cards = await Promise.all(tickers.map(t => fetchLiveUsStockCard(t, options?.baseUrl, true)));
-      const parts: string[] = [];
+      const errorParts: string[] = [];
       const buffers: Buffer[] = [];
       
       for (let i = 0; i < tickers.length; i++) {
          const card = cards[i];
          if (!card) {
-            parts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料，請檢查代號是否有誤。`));
+            errorParts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料。`));
          } else {
             if (options?.chatId && card.close) {
                await recordStockSearch(options.chatId, card.symbol, card.close).catch(() => null);
             }
-            parts.push(buildStockCardLines(card, card.snapshotVerdict || "觀察中"));
             if (card.chartBuffer) {
                buffers.push(card.chartBuffer);
             }
@@ -908,8 +910,12 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       }
       
       const combinedChart = buffers.length > 0 ? await combineImages(buffers) : null;
+      if (!combinedChart && errorParts.length > 0) {
+         return { text: errorParts.join("\n") };
+      }
+      
       return { 
-         text: parts.join("\n\n" + escapeHtml("──────────") + "\n\n"), 
+         text: errorParts.length > 0 ? errorParts.join("\n") : "", 
          chartBuffer: combinedChart 
       };
    }
