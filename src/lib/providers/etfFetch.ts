@@ -15,13 +15,15 @@ export interface EtfFetchResult {
   holdings: EtfHolding[];
   isEtf: boolean;
   status: "success" | "no_holdings" | "not_found" | "api_error";
-  asOfDate?: string; // 資料截止日期
+  asOfDate?: string;
+  dividendYield?: number | null; // 殖利率
+  oneYearReturn?: number | null; // 1年報酬率
   errorMsg?: string;
 }
 
 async function tryQuoteSummary(symbol: string) {
   return await yahooFinance.quoteSummary(symbol, {
-    modules: ["topHoldings", "price", "summaryDetail", "fundProfile"]
+    modules: ["topHoldings", "price", "summaryDetail", "fundProfile", "fundPerformance"]
   }).catch(() => null);
 }
 
@@ -49,8 +51,6 @@ function formatHoldingName(yahooName: string, symbol: string): string {
     marketTag = "(UK)";
   } else if (upperSymbol.endsWith(".DE")) {
     marketTag = "(DE)";
-  } else if (upperSymbol.endsWith(".SG")) {
-    marketTag = "(SG)";
   } else if (!upperSymbol.includes(".")) {
     marketTag = "(US)";
   }
@@ -84,7 +84,10 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
   const etfName = localName || summary?.price?.longName || quote?.longName || quote?.shortName || pureCode;
   const isEtfLike = quote?.quoteType === "ETF" || quote?.quoteType === "MUTUALFUND" || !!summary?.topHoldings || !!localName;
 
-  // 提取資料截止日期
+  // 1. 抓取額外資訊
+  const dividendYield = summary?.summaryDetail?.trailingAnnualDividendYield;
+  const oneYearReturn = summary?.fundPerformance?.performanceOverview?.oneYearAnnualRollingReturn;
+
   let asOfDateStr = "";
   if (summary?.topHoldings?.lastMarketDate) {
     const d = new Date(summary.topHoldings.lastMarketDate);
@@ -100,6 +103,7 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
     if (!holdings || !Array.isArray(holdings) || holdings.length === 0) {
       return { 
         symbol: pureCode, name: etfName, holdings: [], isEtf: isEtfLike, status: "no_holdings", asOfDate: asOfDateStr,
+        dividendYield, oneYearReturn,
         errorMsg: quote?.quoteType === "MUTUALFUND" ? "此標的為共同基金/主動型 ETF，Yahoo 暫無公開持股明細。" : "目前 Yahoo Finance 尚未收錄此 ETF 的持股明細。"
       };
     }
@@ -129,9 +133,9 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
 
     return {
       symbol: pureCode, name: etfName, holdings: results.filter((r): r is EtfHolding => r !== null),
-      isEtf: true, status: "success", asOfDate: asOfDateStr
+      isEtf: true, status: "success", asOfDate: asOfDateStr, dividendYield, oneYearReturn
     };
   } catch (err) {
-    return { symbol: pureCode, name: etfName, holdings: [], isEtf: isEtfLike, status: "api_error", asOfDate: asOfDateStr };
+    return { symbol: pureCode, name: etfName, holdings: [], isEtf: isEtfLike, status: "api_error", asOfDate: asOfDateStr, dividendYield, oneYearReturn };
   }
 }

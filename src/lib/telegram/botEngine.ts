@@ -768,16 +768,39 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             return { text: `找不到「${symbol}」的資料，請確認代號是否正確。` };
          }
 
+         // 增加排行標籤
+         let popularityTag = "";
+         if (options?.chatId) {
+            const ranks = await getTopRankedStocks(options.chatId);
+            const myRankIndex = ranks.findIndex(r => r.symbol === symbol);
+            if (myRankIndex !== -1) {
+               popularityTag = `🔥 全群熱門排行第 ${myRankIndex + 1} 名\n`;
+            }
+         }
+
+         const statsLines = [];
+         if (result.dividendYield !== undefined && result.dividendYield !== null) {
+            statsLines.push(`💰 配息率：${(result.dividendYield * 100).toFixed(2)}%`);
+         }
+         if (result.oneYearReturn !== undefined && result.oneYearReturn !== null) {
+            statsLines.push(`📈 1年報酬率：${result.oneYearReturn.toFixed(2)}%`);
+         }
+
          if (result.status === "no_holdings" || result.holdings.length === 0) {
             return { 
-               text: `📊 <b>${result.name} (${result.symbol})</b>\n\n` +
+               text: `📊 <b>${result.name} (${result.symbol})</b>\n` +
+                     popularityTag + "\n" +
+                     (statsLines.length > 0 ? statsLines.join(" ｜ ") + "\n\n" : "") +
                      `${result.errorMsg || "目前 Yahoo Finance 尚未提供該 ETF 的持股明細。"}`
             };
          }
 
          const lines = [
-            `📊 <b>${result.name} (${result.symbol}) 前十大持股</b>`,
+            `📊 <b>${result.name} (${result.symbol})</b>`,
+            popularityTag,
+            statsLines.length > 0 ? statsLines.join(" ｜ ") : "",
             "",
+            "<b>【前十大持股】</b>",
          ];
 
          result.holdings.forEach((h, index) => {
