@@ -803,16 +803,47 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
    }
 
    if (command === "/tw") {
-      if (!query) return { text: "請輸入股票代號，例如: /tw 2330" };
-      const liveCard = await fetchLiveStockCard(query, options?.baseUrl);
-      if (liveCard) {
-         if (options?.chatId) {
-            await recordStockSearch(options.chatId, liveCard.symbol, liveCard.close).catch(() => null);
+      if (!query) return { text: "請輸入股票代號，例如:\n/tw 2330\n/tw 2330,2317,2454" };
+
+      const tickers = query.split(/[,，\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean).slice(0, 10);
+
+      if (tickers.length === 1) {
+         const liveCard = await fetchLiveStockCard(tickers[0], options?.baseUrl);
+         if (liveCard) {
+            if (options?.chatId) {
+               await recordStockSearch(options.chatId, liveCard.symbol, liveCard.close).catch(() => null);
+            }
+            const finalMsg = await buildStockCardWithAI(liveCard);
+            return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
          }
-         const finalMsg = await buildStockCardWithAI(liveCard);
-         return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
+         return { text: "找不到該股票資料。" };
       }
-      return { text: "找不到該股票資料。" };
+
+      // 多檔並行查詢（最多 10 檔），合併圖檔回傳
+      const cards = await Promise.all(tickers.map(t => fetchLiveStockCard(t, options?.baseUrl, true)));
+      const parts: string[] = [];
+      const buffers: Buffer[] = [];
+      
+      for (let i = 0; i < tickers.length; i++) {
+         const card = cards[i];
+         if (!card) {
+            parts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料，請檢查代號是否有誤。`));
+         } else {
+            if (options?.chatId && card.close) {
+               await recordStockSearch(options.chatId, card.symbol, card.close).catch(() => null);
+            }
+            parts.push(buildStockCardLines(card, card.snapshotVerdict || "觀察中"));
+            if (card.chartBuffer) {
+               buffers.push(card.chartBuffer);
+            }
+         }
+      }
+      
+      const combinedChart = buffers.length > 0 ? await combineImages(buffers) : null;
+      return { 
+         text: parts.join("\n\n" + escapeHtml("──────────") + "\n\n"), 
+         chartBuffer: combinedChart 
+      };
    }
 
    if (command === "/whatis") {
