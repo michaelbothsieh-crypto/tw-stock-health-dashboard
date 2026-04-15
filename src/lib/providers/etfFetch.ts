@@ -15,6 +15,7 @@ export interface EtfFetchResult {
   holdings: EtfHolding[];
   isEtf: boolean;
   status: "success" | "no_holdings" | "not_found" | "api_error";
+  asOfDate?: string; // 資料截止日期
   errorMsg?: string;
 }
 
@@ -29,22 +30,15 @@ async function tryQuote(symbol: string) {
   return Array.isArray(res) ? res[0] : res;
 }
 
-/**
- * 判定市場標籤並處理名稱
- */
 function formatHoldingName(yahooName: string, symbol: string): string {
   const upperSymbol = symbol.toUpperCase();
   let marketTag = "";
   let displayName = yahooName;
 
-  // 1. 判定市場標籤
   if (upperSymbol.endsWith(".TW") || upperSymbol.endsWith(".TWO")) {
     marketTag = "(TW)";
-    // 台股優先用本地中文名
     const pureCode = upperSymbol.split(".")[0];
-    if (twStockNames[pureCode]) {
-      displayName = twStockNames[pureCode];
-    }
+    if (twStockNames[pureCode]) displayName = twStockNames[pureCode];
   } else if (upperSymbol.endsWith(".T")) {
     marketTag = "(JP)";
   } else if (upperSymbol.endsWith(".HK")) {
@@ -61,15 +55,9 @@ function formatHoldingName(yahooName: string, symbol: string): string {
     marketTag = "(US)";
   }
 
-  // 2. 簡單清理名稱 (移除冗餘的 Co Ltd, Inc 等)
   const cleanName = displayName
-    .replace(/ Co Ltd/gi, "")
-    .replace(/ Ltd/gi, "")
-    .replace(/ Inc/gi, "")
-    .replace(/ Corp/gi, "")
-    .replace(/ Ordinary Shares/gi, "")
-    .replace(/ Class [A-Z]/gi, "")
-    .trim();
+    .replace(/ Co Ltd/gi, "").replace(/ Ltd/gi, "").replace(/ Inc/gi, "").replace(/ Corp/gi, "")
+    .replace(/ Ordinary Shares/gi, "").replace(/ Class [A-Z]/gi, "").trim();
 
   return `${cleanName} ${marketTag}`.trim();
 }
@@ -83,9 +71,7 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
   let quote = await tryQuote(currentSymbol);
 
   if (!quote && /^[0-9]/.test(pureCode)) {
-    const altSymbol = currentSymbol.endsWith(".TW") 
-      ? currentSymbol.replace(".TW", ".TWO") 
-      : currentSymbol.replace(".TWO", ".TW");
+    const altSymbol = currentSymbol.endsWith(".TW") ? currentSymbol.replace(".TW", ".TWO") : currentSymbol.replace(".TWO", ".TW");
     const altSummary = await tryQuoteSummary(altSymbol);
     const altQuote = await tryQuote(altSymbol);
     if (altQuote) {
@@ -98,6 +84,13 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
   const etfName = localName || summary?.price?.longName || quote?.longName || quote?.shortName || pureCode;
   const isEtfLike = quote?.quoteType === "ETF" || quote?.quoteType === "MUTUALFUND" || !!summary?.topHoldings || !!localName;
 
+  // 提取資料截止日期
+  let asOfDateStr = "";
+  if (summary?.topHoldings?.lastMarketDate) {
+    const d = new Date(summary.topHoldings.lastMarketDate);
+    asOfDateStr = !isNaN(d.getTime()) ? d.toLocaleDateString('zh-TW') : "";
+  }
+
   if (!quote && !localName) {
     return { symbol: pureCode, name: pureCode, holdings: [], isEtf: false, status: "not_found" };
   }
@@ -106,11 +99,7 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
     const holdings = summary?.topHoldings?.holdings;
     if (!holdings || !Array.isArray(holdings) || holdings.length === 0) {
       return { 
-        symbol: pureCode, 
-        name: etfName, 
-        holdings: [], 
-        isEtf: isEtfLike, 
-        status: "no_holdings",
+        symbol: pureCode, name: etfName, holdings: [], isEtf: isEtfLike, status: "no_holdings", asOfDate: asOfDateStr,
         errorMsg: quote?.quoteType === "MUTUALFUND" ? "此標的為共同基金/主動型 ETF，Yahoo 暫無公開持股明細。" : "目前 Yahoo Finance 尚未收錄此 ETF 的持股明細。"
       };
     }
@@ -121,47 +110,28 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
     const results = await Promise.all(holdings.slice(0, 10).map(async (h) => {
       let hSymbol = h.symbol;
       if (!hSymbol) return null;
-
-      if (/^[0-9]{4}$/.test(hSymbol)) {
-        hSymbol = `${hSymbol}.TW`;
-      }
+      if (/^[0-9]{4}$/.test(hSymbol)) hSymbol = `${hSymbol}.TW`;
 
       let ytdReturn: number | null = null;
       try {
         const [hChart, hQuoteRes] = await Promise.all([
-          yahooFinance.chart(hSymbol, {
-            period1: jan1st,
-            period2: endOfDay(new Date(jan1st.getTime() + 10 * 24 * 60 * 60 * 1000)),
-            interval: "1d"
-          }).catch(() => null),
+          yahooFinance.chart(hSymbol, { period1: jan1st, period2: endOfDay(new Date(jan1st.getTime() + 10 * 24 * 60 * 60 * 1000)), interval: "1d" }).catch(() => null),
           yahooFinance.quote(hSymbol).catch(() => null)
         ]);
-
         const history = hChart?.quotes || [];
         const startPrice = history.find(q => q.close !== null)?.close;
         const currentPrice = (Array.isArray(hQuoteRes) ? hQuoteRes[0] : hQuoteRes)?.regularMarketPrice;
-
-        if (startPrice && currentPrice) {
-          ytdReturn = ((currentPrice - startPrice) / startPrice) * 100;
-        }
+        if (startPrice && currentPrice) ytdReturn = ((currentPrice - startPrice) / startPrice) * 100;
       } catch (err) { }
 
-      return {
-        symbol: hSymbol,
-        name: formatHoldingName(h.holdingName || hSymbol, hSymbol),
-        percent: (h.holdingPercent || 0) * 100,
-        ytdReturn
-      };
+      return { symbol: hSymbol, name: formatHoldingName(h.holdingName || hSymbol, hSymbol), percent: (h.holdingPercent || 0) * 100, ytdReturn };
     }));
 
     return {
-      symbol: pureCode,
-      name: etfName,
-      holdings: results.filter((r): r is EtfHolding => r !== null),
-      isEtf: true,
-      status: "success"
+      symbol: pureCode, name: etfName, holdings: results.filter((r): r is EtfHolding => r !== null),
+      isEtf: true, status: "success", asOfDate: asOfDateStr
     };
   } catch (err) {
-    return { symbol: pureCode, name: etfName, holdings: [], isEtf: isEtfLike, status: "api_error" };
+    return { symbol: pureCode, name: etfName, holdings: [], isEtf: isEtfLike, status: "api_error", asOfDate: asOfDateStr };
   }
 }

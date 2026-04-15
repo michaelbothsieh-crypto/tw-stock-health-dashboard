@@ -786,6 +786,9 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          });
 
          lines.push("");
+         if (result.asOfDate) {
+            lines.push(`📅 資料更新日期：${result.asOfDate}`);
+         }
          lines.push(`💡 YTD 代表持股年初至今的漲跌幅。`);
 
          return { text: lines.join("\n"), chartBuffer: null };
