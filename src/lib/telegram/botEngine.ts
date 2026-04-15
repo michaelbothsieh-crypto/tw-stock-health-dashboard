@@ -782,7 +782,7 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
 
          result.holdings.forEach((h, index) => {
             const ytdText = h.ytdReturn !== null ? `(${formatSignedPct(h.ytdReturn, 2)})` : "(無資料)";
-            lines.push(`${index + 1}. ${h.name} - ${h.percent.toFixed(2)}% ${ytdText}`);
+            lines.push(`${index + 1}. ${h.name} : ${h.percent.toFixed(2)}% ${ytdText}`);
          });
 
          lines.push("");
