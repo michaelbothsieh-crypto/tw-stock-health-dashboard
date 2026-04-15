@@ -803,31 +803,27 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       
       const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
       let yahooSymbol = symbol;
-      // 支援台股代號（4-6 碼數字，或數字開頭、末尾帶字母 A/B/T/D/E/F/G/H/I 等）
       if (/^[0-9][A-Z0-9]{3,5}$/.test(symbol)) {
-         // TW ETF 推算
-         // 4, 5, 8 開頭，或是 3 開頭 (排除 3008)，或是以 B/A/T 等結尾通常是在 TPEX 或特定台股後綴
-         const isProbablyTPEX = /^[458]/.test(symbol) || (symbol.startsWith("3") && symbol !== "3008") || /[ABTDE]$/.test(symbol);
-         yahooSymbol = isProbablyTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
+         // 先猜上市，後續 fetchEtfTopHoldings 會自動嘗試反向後綴
+         yahooSymbol = `${symbol}.TW`;
       }
 
       try {
          const result = await fetchEtfTopHoldings(yahooSymbol);
-         const etfName = result.name;
          
-         if (!result.isEtf && result.holdings.length === 0) {
-            return { text: `找不到「${symbol}」的資料，或該代號不屬於 ETF。` };
+         if (result.status === "not_found") {
+            return { text: `找不到「${symbol}」的資料，請確認代號是否正確。` };
          }
 
-         if (result.holdings.length === 0) {
+         if (result.status === "no_holdings" || result.holdings.length === 0) {
             return { 
-               text: `📊 <b>${etfName} (${symbol})</b>\n\n` +
-                     `目前 Yahoo Finance 尚未提供該 ETF (可能是主動型 ETF) 的持股明細。`
+               text: `📊 <b>${result.name} (${result.symbol})</b>\n\n` +
+                     `${result.errorMsg || "目前 Yahoo Finance 尚未提供該 ETF 的持股明細。"}`
             };
          }
 
          const lines = [
-            `📊 <b>${etfName} (${symbol}) 前十大持股</b>`,
+            `📊 <b>${result.name} (${result.symbol}) 前十大持股</b>`,
             "",
          ];
 
