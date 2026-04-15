@@ -15,24 +15,43 @@ export interface EtfFetchResult {
   isEtf: boolean;
 }
 
+async function tryQuoteSummary(symbol: string) {
+  return await yahooFinance.quoteSummary(symbol, {
+    modules: ["topHoldings", "price", "summaryDetail"]
+  }).catch(() => null);
+}
+
+async function tryQuote(symbol: string) {
+  const res = await yahooFinance.quote(symbol).catch(() => null);
+  return Array.isArray(res) ? res[0] : res;
+}
+
 export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResult> {
   const pureCode = symbol.split(".")[0];
   const localName = twStockNames[pureCode];
+  
+  let currentSymbol = symbol;
+  let summary = await tryQuoteSummary(currentSymbol);
+  let quote = await tryQuote(currentSymbol);
+
+  // 如果失敗且是台股，嘗試反向後綴 (TW <-> TWO)
+  if (!quote && /^[0-9]/.test(pureCode)) {
+    const altSymbol = currentSymbol.endsWith(".TW") 
+      ? currentSymbol.replace(".TW", ".TWO") 
+      : currentSymbol.replace(".TWO", ".TW");
+    
+    const altSummary = await tryQuoteSummary(altSymbol);
+    const altQuote = await tryQuote(altSymbol);
+    
+    if (altQuote) {
+      summary = altSummary;
+      quote = altQuote;
+      currentSymbol = altSymbol;
+    }
+  }
 
   try {
-    // 1. 同時抓取持股明細與基本報價資訊，確保即使沒持股也能拿到名稱
-    const [summary, quoteRes] = await Promise.all([
-      yahooFinance.quoteSummary(symbol, {
-        modules: ["topHoldings", "price", "summaryDetail"]
-      }).catch(() => null),
-      yahooFinance.quote(symbol).catch(() => null)
-    ]);
-
-    const quote: any = Array.isArray(quoteRes) ? quoteRes[0] : quoteRes;
-    const etfName = summary?.price?.longName || quote?.longName || quote?.shortName || localName || symbol;
-    
-    // 判定是否為 ETF (Yahoo 的 quoteType 通常會標示 ETF)
-    // 或者如果在本地 twStockNames 有名字，我們也先將其判定為 ETF (或至少是我們追蹤的標的)
+    const etfName = summary?.price?.longName || quote?.longName || quote?.shortName || localName || pureCode;
     const isEtf = quote?.quoteType === "ETF" || !!summary?.topHoldings || !!localName;
 
     const holdings = summary?.topHoldings?.holdings;
@@ -40,7 +59,6 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
       return { name: etfName, holdings: [], isEtf };
     }
 
-    // 2. 計算 YTD
     const now = new Date();
     const jan1st = startOfYear(now);
     
@@ -53,7 +71,7 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
         const [hChart, hQuoteRes] = await Promise.all([
           yahooFinance.chart(holdingSymbol, {
             period1: jan1st,
-            period2: endOfDay(new Date(jan1st.getTime() + 10 * 24 * 60 * 60 * 1000)), // 增加緩衝天數
+            period2: endOfDay(new Date(jan1st.getTime() + 10 * 24 * 60 * 60 * 1000)),
             interval: "1d"
           }).catch(() => null),
           yahooFinance.quote(holdingSymbol).catch(() => null)
@@ -82,7 +100,6 @@ export async function fetchEtfTopHoldings(symbol: string): Promise<EtfFetchResul
       isEtf: true
     };
   } catch (err) {
-    console.error(`Failed to fetch ETF holdings for ${symbol}`, err);
-    return { name: localName || symbol, holdings: [], isEtf: !!localName };
+    return { name: localName || pureCode, holdings: [], isEtf: !!localName };
   }
 }
