@@ -803,9 +803,11 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       
       const symbol = resolveCodeFromInputLocal(query) || query.toUpperCase();
       let yahooSymbol = symbol;
-      if (/^[0-9]+$/.test(symbol)) {
+      // 支援台股代號（4-6 碼數字，或數字開頭、末尾帶字母 A/B/T/D/E/F/G/H/I 等）
+      if (/^[0-9][A-Z0-9]{3,5}$/.test(symbol)) {
          // TW ETF 推算
-         const isProbablyTPEX = /^[458]/.test(symbol) || (symbol.startsWith("3") && symbol !== "3008") || symbol.toUpperCase().endsWith("B");
+         // 4, 5, 8 開頭，或是 3 開頭 (排除 3008)，或是以 B/A/T 等結尾通常是在 TPEX 或特定台股後綴
+         const isProbablyTPEX = /^[458]/.test(symbol) || (symbol.startsWith("3") && symbol !== "3008") || /[ABTDE]$/.test(symbol);
          yahooSymbol = isProbablyTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
       }
 
