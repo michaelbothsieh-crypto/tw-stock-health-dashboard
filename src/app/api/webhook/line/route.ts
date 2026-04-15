@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as line from "@line/bot-sdk";
 
-import { generateBotReply, resolveCodeFromInputLocal, triggerDeepResearchGHAction } from "@/lib/telegram/botEngine";
+import { generateBotReply, resolveCodeFromInputLocal } from "@/lib/telegram/botEngine";
 
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "",
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest) {
                   "輸入 /tw <代號> (例：/tw 2330)\n" +
                   "輸入 /etf <代號> (例：/etf 0050)\n" +
                   "輸入 /rank (熱門排行)\n" +
-                  "輸入 /roi <代號> <時間> (績效分析)\n\n",
+                  "輸入 /roi <代號> <時間> (績效分析)\n\n" +
                   "🎥 影片工具：\n" +
                   "輸入 /nlm <YouTube網址>\n" +
                   "輸入 /pic <YouTube網址>\n" +
