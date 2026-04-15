@@ -59,7 +59,7 @@ async function startLoadingAnimation(userId?: string) {
 
 async function forwardToLazyTube(params: {
   chatId: string;
-  command: "help" | "nlm" | "pic" | "note" | "slide";
+  command: "help" | "nlm" | "pic" | "note" | "slide" | "research";
   url?: string;
   prompt?: string;
 }) {
@@ -184,18 +184,19 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        const lazyTubeMatch = userText.match(/^\/(nlm|pic|note|slide)\b/i);
+        const lazyTubeMatch = userText.match(/^\/(nlm|pic|note|slide|research)\b/i);
         if (lazyTubeMatch) {
           const command = lazyTubeMatch[1].toLowerCase() as
             | "nlm"
             | "pic"
             | "note"
-            | "slide";
+            | "slide"
+            | "research";
           const parts = userText.split(/\s+/);
-          const videoUrl = parts[1];
+          const videoUrl = parts[1]; // 對於 research 來說，這裡是主題或代號
           const customPrompt = parts.slice(2).join(" ");
 
-          if (!videoUrl || !videoUrl.startsWith("http")) {
+          if (command !== "research" && (!videoUrl || !videoUrl.startsWith("http"))) {
             await client.replyMessage({
               replyToken: event.replyToken,
               messages: [
@@ -208,6 +209,7 @@ export async function POST(req: NextRequest) {
             continue;
           }
 
+          // 對於 research，videoUrl 就是主題，我們將其作為 'url' 傳遞或調整參數名
           await startLoadingAnimation(event.source.type === "user" ? event.source.userId : undefined);
 
           try {
@@ -215,7 +217,7 @@ export async function POST(req: NextRequest) {
               chatId,
               command,
               url: videoUrl,
-              prompt: customPrompt || DEFAULT_LAZYTUBE_PROMPT,
+              prompt: customPrompt || (command === "research" ? "" : DEFAULT_LAZYTUBE_PROMPT),
             });
 
             if (response.status === 403) {
