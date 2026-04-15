@@ -39,10 +39,9 @@ export async function POST(req: Request) {
     // 2. 指令白名單：僅處理與本專案相關的指令
     const [commandRaw] = userText.split(/\s+/);
     const command = commandRaw.toLowerCase().split("@")[0];
-    const ALLOWED_COMMANDS = ["/tw", "/us", "/whatis", "/deep", "/daily", "/stock", "/watchlist", "/setlist", "/start", "/help", "/rank", "/roi", "/debug_rank"];
-    
-    if (!ALLOWED_COMMANDS.includes(command)) {
-      console.log(`[TelegramWebhook] Ignored command: ${command}`);
+    const ALLOWED_COMMANDS = ["/tw", "/us", "/etf", "/whatis", "/research", "/daily", "/stock", "/watchlist", "/setlist", "/start", "/help", "/rank", "/roi", "/debug_rank"];
+
+    if (!ALLOWED_COMMANDS.includes(command)) {      console.log(`[TelegramWebhook] Ignored command: ${command}`);
       return NextResponse.json({ ok: true, reason: "Ignored: not a stock-specific command" });
     }
 
