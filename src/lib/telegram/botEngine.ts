@@ -294,13 +294,14 @@ async function ensureTelegramCommandsSynced() {
             commands: [
                { command: "tw", description: "查詢台股個股（例：/tw 2330）" },
                { command: "us", description: "查詢美股個股（例：/us NVDA）" },
+               { command: "twrank", description: "台股昨日漲幅前 10 名" },
+               { command: "usrank", description: "美股昨日漲幅前 10 名" },
                { command: "etf", description: "查詢 ETF 持股及 YTD 表現（例：/etf 0050）" },
                { command: "whatis", description: "分析公司做什麼及近期新聞（例：/whatis 2330）" },
                { command: "rank", description: "列出本群熱門股票及查詢至今報酬率" },
                { command: "roi", description: "計算指定時間段報酬率（例：/roi 2330 1m）" },
                { command: "debug_rank", description: "診斷排行榜連動問題" },
-            ],
-         }),
+            ],         }),
       });
       commandsSynced = true;
    } catch (error) { }
@@ -742,6 +743,41 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipH
    }
 }
 
+async function fetchTopGainers(market: "taiwan" | "america", limit = 10): Promise<Array<{ symbol: string; change: number }>> {
+   const url = `https://scanner.tradingview.com/${market}/scan`;
+   const body = {
+      filter: [
+         { left: "type", operation: "equal", right: "stock" },
+         { left: "market_cap_basic", operation: "greater", right: 500000000 }, // 市值 > 5億
+         { left: "change", operation: "greater", right: 0 }
+      ],
+      options: { lang: "en" },
+      symbols: { query: { types: [] }, tickers: [] },
+      columns: ["name", "change"],
+      sort: { sortBy: "change", sortOrder: "desc" },
+      range: [0, limit],
+   };
+
+   try {
+      const res = await fetch(url, {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify(body),
+      });
+      if (!res.ok) return [];
+      const payload = await res.json();
+      return (payload.data || []).map((item: any) => {
+         // TradingView 回傳的 symbol 格式通常是 "EXCHANGE:TICKER"
+         const fullSymbol = item.s;
+         const ticker = fullSymbol.split(":")[1] || fullSymbol;
+         return {
+            symbol: ticker,
+            change: item.d[1] || 0
+         };
+      });
+   } catch { return []; }
+}
+
 type BotReply = {
    text: string;
    chartBuffer?: Buffer | null;
@@ -828,6 +864,58 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          console.error("[BotEngine] /etf Error:", err);
          return { text: "抱歉，查詢 ETF 資料時發生錯誤。", chartBuffer: null };
       }
+   }
+
+   if (command === "/twrank" || command === "/usrank") {
+      const isUs = command === "/usrank";
+      const market = isUs ? "america" : "taiwan";
+      const gainers = await fetchTopGainers(market, 10);
+      
+      if (gainers.length === 0) {
+         return { text: `暫時無法取得${isUs ? "美股" : "台股"}漲幅排行資料。` };
+      }
+
+      const tickers = gainers.map(g => g.symbol);
+      const cards = isUs
+         ? await Promise.all(tickers.map(t => fetchLiveUsStockCard(t, options?.baseUrl, true, true)))
+         : await Promise.all(tickers.map(t => fetchLiveStockCard(t, options?.baseUrl, true, true)));
+
+      const errorParts: string[] = [];
+      const buffers: Buffer[] = [];
+      const validSymbols: string[] = [];
+      const textLines: string[] = [`🏆 <b>${isUs ? "美股" : "台股"}昨日漲幅前 10 名</b>`, ""];
+
+      for (let i = 0; i < tickers.length; i++) {
+         const card = cards[i];
+         const g = gainers[i];
+         if (!card) {
+            errorParts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料。`));
+         } else {
+            const isTW = /^[0-9]+$/.test(card.symbol);
+            const name = twStockNames[card.symbol] || card.nameZh || "";
+            const label = (isTW && name) ? `${name}(${card.symbol})` : card.symbol;
+            textLines.push(`${i + 1}. ${label}: <b>+${g.change.toFixed(2)}%</b>`);
+
+            if (card.chartBuffer) {
+               buffers.push(card.chartBuffer);
+               validSymbols.push(card.symbol);
+            }
+         }
+      }
+
+      // 每 3 張合併一組
+      const chartBuffers: Buffer[] = [];
+      for (let i = 0; i < buffers.length; i += 3) {
+         const chunk = buffers.slice(i, i + 3);
+         const chunkSymbols = validSymbols.slice(i, i + 3);
+         const combined = await combineImages(chunk, chunkSymbols);
+         if (combined) chartBuffers.push(combined);
+      }
+
+      return { 
+         text: textLines.join("\n") + (errorParts.length > 0 ? "\n\n" + errorParts.join("\n") : ""), 
+         chartBuffers 
+      };
    }
 
    if (command === "/tw") {
@@ -1155,7 +1243,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
 
    // 1. 立即送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
-   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/etf"].includes(command)) {
+   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/etf", "/twrank", "/usrank"].includes(command)) {
       progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
    }
 
