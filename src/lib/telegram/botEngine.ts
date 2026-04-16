@@ -481,22 +481,20 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string, sk
       }
 
       // 3. 處理圖表 (美股優先用 Finviz)
-      if (!skipHeavy) {
-         try {
-            const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
-            const chartRes = await fetch(finvizUrl, {
-               headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" },
-            });
-            if (chartRes.ok) {
-               const ab = await chartRes.arrayBuffer();
-               card.chartBuffer = Buffer.from(ab);
-            }
-         } catch { }
-         
-         if (!skipQuote && !skipHeavy) {
-            const tvNews = await getTvLatestNewsHeadline(symbol);
-            if (tvNews) card.newsLine = buildNewsLine(tvNews, 96);
+      try {
+         const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
+         const chartRes = await fetch(finvizUrl, {
+            headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" },
+         });
+         if (chartRes.ok) {
+            const ab = await chartRes.arrayBuffer();
+            card.chartBuffer = Buffer.from(ab);
          }
+      } catch { }
+
+      if (!skipQuote && !skipHeavy) {
+         const tvNews = await getTvLatestNewsHeadline(symbol);
+         if (tvNews) card.newsLine = buildNewsLine(tvNews, 96);
       }
 
       return card;
@@ -768,12 +766,18 @@ async function fetchLatestConference(ticker: string): Promise<{ date: string; ti
 
 async function fetchTopGainers(market: "taiwan" | "america", limit = 10): Promise<Array<{ symbol: string; change: number }>> {
    const url = `https://scanner.tradingview.com/${market}/scan`;
+   const filter: any[] = [
+      { left: "type", operation: "equal", right: "stock" },
+      { left: "market_cap_basic", operation: "greater", right: 500000000 }, // 市值 > 5億
+      { left: "change", operation: "greater", right: 0 }
+   ];
+
+   if (market === "taiwan") {
+      filter.push({ left: "exchange", operation: "in_range", right: ["TWSE", "TPEX"] });
+   }
+
    const body = {
-      filter: [
-         { left: "type", operation: "equal", right: "stock" },
-         { left: "market_cap_basic", operation: "greater", right: 500000000 }, // 市值 > 5億
-         { left: "change", operation: "greater", right: 0 }
-      ],
+      filter,
       options: { lang: "en" },
       symbols: { query: { types: [] }, tickers: [] },
       columns: ["name", "change"],
