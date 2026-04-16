@@ -356,22 +356,28 @@ function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
 }
 
 function buildStockCardLines(card: StockCard, verdict: string = "數據整理中"): string {
+   const symbol = escapeHtml(card.symbol);
+   const nameZh = escapeHtml(card.nameZh);
+   const vText = escapeHtml(verdict);
+   
    const lines = [
-      `<b>${card.symbol} ${card.nameZh} [${verdict}]</b>`,
+      `<b>${symbol} ${nameZh} [${vText}]</b>`,
       `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）${card.isPriceRealTime === false ? "　⚠️延遲報價" : ""}`,
-      `【新聞】 ${card.newsLine || "—"}`,
+      `【新聞】 ${card.newsLine || "—"}`, // newsLine 已經由 buildNewsLine 處理過 escape
    ];
 
    if (card.insiderSells && card.insiderSells.length > 0) {
       lines.push("");
       lines.push(`🚨 【內部人警訊】 近期高層申讓 ${card.insiderSells.length} 筆：`);
       card.insiderSells.slice(0, 2).forEach(sell => {
-         const modeStr = sell.humanMode || "拋售";
-         lines.push(`  - ${sell.declarer}(${sell.role}) ${modeStr} ${sell.lots}張`);
+         const modeStr = escapeHtml(sell.humanMode || "拋售");
+         const declarer = escapeHtml(sell.declarer);
+         const role = escapeHtml(sell.role);
+         lines.push(`  - ${declarer}(${role}) ${modeStr} ${sell.lots}張`);
       });
    }
 
-   return lines.map((line) => escapeHtml(line)).join("\n");
+   return lines.join("\n");
 }
 
 async function buildStockCardWithAI(card: StockCard): Promise<string> {
