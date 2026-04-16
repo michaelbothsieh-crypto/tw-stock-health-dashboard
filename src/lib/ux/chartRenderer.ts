@@ -243,9 +243,8 @@ export async function renderStockChart(
   ctx.fillStyle = '#22c55e'; ctx.fillRect(curX + 20, 25, 8, 12);
   ctx.fillStyle = '#9ca3af'; ctx.fillText('Trend (Red Up / Green Down)', curX + 35, 32);
 
-  // 3.1 繪製主標題 (代號 + 名稱)
-  const name = await getCompanyNameZh(symbol);
-  const mainTitle = name ? `${symbol} ${name}` : symbol;
+  // 3.1 繪製主標題 (僅顯示代號)
+  const mainTitle = symbol.toUpperCase();
   ctx.save();
   ctx.fillStyle = '#ffffff';
   ctx.font = `bold 24px ${FONT_FAMILY}`;
