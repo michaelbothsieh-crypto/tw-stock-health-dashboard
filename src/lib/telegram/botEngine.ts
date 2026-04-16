@@ -419,8 +419,10 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
 
 
 async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
-   if (!/^[A-Z]{1,5}(\.[A-Z]{1,2})?$/i.test(ticker)) return null;
-   const symbol = ticker.toUpperCase();
+   // 移除可能的交易所字首 (例如 NASDAQ:NVDA -> NVDA)
+   const cleanTicker = ticker.includes(":") ? ticker.split(":")[1] : ticker;
+   if (!/^[A-Z]{1,5}(\.[A-Z]{1,2})?$/i.test(cleanTicker)) return null;
+   const symbol = cleanTicker.toUpperCase();
    const baseUrl = getSnapshotBaseUrl(overrideBaseUrl);
    if (!baseUrl) return null;
 
@@ -437,7 +439,7 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string, sk
    };
 
    try {
-      if (!skipQuote) {
+      if (skipQuote === false) {
          const controller = new AbortController();
          const snapTimer = setTimeout(() => controller.abort(), 15000);
          
@@ -491,6 +493,33 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string, sk
             card.chartBuffer = Buffer.from(ab);
          }
       } catch { }
+
+      // 4. 如果 Finviz 失敗，嘗試使用本地繪圖 (Fallback)
+      if (!card.chartBuffer) {
+         try {
+            const chartResult = await yahooFinance.chart(symbol, {
+               period1: subMonths(new Date(), 6),
+               period2: new Date(),
+               interval: '1d',
+            });
+            const historyRaw = chartResult.quotes || [];
+            const history = historyRaw
+               .filter(h => h.date && (h.adjclose !== null || h.close !== null))
+               .map(h => ({ 
+                  date: h.date.toISOString().split('T')[0], 
+                  open: h.open ?? h.close ?? 0,
+                  high: h.high ?? h.close ?? 0,
+                  low: h.low ?? h.close ?? 0,
+                  close: h.adjclose ?? h.close ?? 0,
+                  volume: h.volume ?? 0
+               }))
+               .filter(h => h.close > 0);
+            
+            if (history.length >= 2) {
+               card.chartBuffer = await renderStockChart(history, null, null, symbol, 180);
+            }
+         } catch { }
+      }
 
       if (!skipQuote && !skipHeavy) {
          const tvNews = await getTvLatestNewsHeadline(symbol);
