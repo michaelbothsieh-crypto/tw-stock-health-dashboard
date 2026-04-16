@@ -296,6 +296,7 @@ async function ensureTelegramCommandsSynced() {
                { command: "us", description: "查詢美股個股（例：/us NVDA）" },
                { command: "twrank", description: "台股昨日漲幅前 10 名" },
                { command: "usrank", description: "美股昨日漲幅前 10 名" },
+               { command: "conference", description: "查詢最近一筆法說會資訊（例：/conference 2330）" },
                { command: "etf", description: "查詢 ETF 持股及 YTD 表現（例：/etf 0050）" },
                { command: "whatis", description: "分析公司做什麼及近期新聞（例：/whatis 2330）" },
                { command: "rank", description: "列出本群熱門股票及查詢至今報酬率" },
@@ -743,6 +744,28 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipH
    }
 }
 
+async function fetchLatestConference(ticker: string): Promise<{ date: string; title: string; link: string } | null> {
+   const now = new Date();
+   const startDate = new Date(now.getFullYear(), now.getMonth() - 6, 1).toISOString().split('T')[0];
+   
+   try {
+      const res = await fetch(`https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockNews&data_id=${ticker}&start_date=${startDate}`);
+      const payload = await res.json();
+      if (payload.status !== 200 || !Array.isArray(payload.data)) return null;
+
+      const conferenceNews = payload.data
+         .filter((n: any) => n.title.includes("法說會") || n.title.includes("投資人說明會"))
+         .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      if (conferenceNews.length === 0) return null;
+      return {
+         date: conferenceNews[0].date.split(" ")[0],
+         title: conferenceNews[0].title,
+         link: conferenceNews[0].link
+      };
+   } catch { return null; }
+}
+
 async function fetchTopGainers(market: "taiwan" | "america", limit = 10): Promise<Array<{ symbol: string; change: number }>> {
    const url = `https://scanner.tradingview.com/${market}/scan`;
    const body = {
@@ -864,6 +887,24 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          console.error("[BotEngine] /etf Error:", err);
          return { text: "抱歉，查詢 ETF 資料時發生錯誤。", chartBuffer: null };
       }
+   }
+
+   if (command === "/conference") {
+      const ticker = resolveCodeFromInputLocal(query) || query.trim().toUpperCase();
+      if (!ticker) return { text: "請輸入股票代號，例如: /conference 2330" };
+
+      const conf = await fetchLatestConference(ticker);
+      if (!conf) return { text: `找不到「${ticker}」近期的法說會相關資訊。` };
+
+      const name = twStockNames[ticker] || "";
+      const label = name ? `${name}(${ticker})` : ticker;
+
+      return {
+         text: `🎤 <b>${label} 最近一筆法說會資訊</b>\n\n` +
+               `日期: ${conf.date}\n` +
+               `標題: ${conf.title}\n\n` +
+               `<a href="${conf.link}">🔗 查看新聞連結</a>`
+      };
    }
 
    if (command === "/twrank" || command === "/usrank") {
@@ -1243,7 +1284,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
 
    // 1. 立即送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
-   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/etf", "/twrank", "/usrank"].includes(command)) {
+   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/etf", "/twrank", "/usrank", "/conference"].includes(command)) {
       progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
    }
 
