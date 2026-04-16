@@ -339,7 +339,6 @@ function buildTrendByProb(upProb1D: number | null): string {
 }
 
 function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
-   const cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000; // 2 天前
    const allNews = [
       ...(Array.isArray(snapshot?.news?.topBullishNews) ? snapshot.news.topBullishNews : []),
       ...(Array.isArray(snapshot?.news?.topBearishNews) ? snapshot.news.topBearishNews : []),
@@ -350,45 +349,16 @@ function extractNewsLineFromSnapshot(snapshot: SnapshotLike): string {
    for (const item of allNews) {
       const title = item?.title?.trim();
       if (!title || title.length === 0 || title.startsWith("近")) continue;
-      // 有日期就過濾掉 2 天以上的舊聞
-      if (item.date) {
-         const newsTime = new Date(item.date).getTime();
-         if (!isNaN(newsTime) && newsTime < cutoff) continue;
-      }
+      // 移除兩天時間限制，讓有新聞就顯示
       return buildNewsLine(title, 96);
    }
-   return "—（近期無重大新聞）";
-}
-
-function buildVolumeState(volume: number | null, volumeVs5dPct: number | null, unit: string = "股"): string {
-   let volText = "—";
-   if (volume !== null) {
-      if (unit === "張") {
-         // 台股從各個 provider (FinMind, Fugle) 拿到的 volume 通常都已經是「張數」了，不需要再除以 1000
-         volText = `${humanizeNumber(volume)}張`;
-      } else {
-         volText = `${humanizeNumber(volume)}股`;
-      }
-   }
-   if (volumeVs5dPct === null) return `${volText}（平量）`;
-   if (volumeVs5dPct >= 80) return `${volText}（爆量）`;
-   if (volumeVs5dPct >= 15) return `${volText}（放量）`;
-   if (volumeVs5dPct <= -20) return `${volText}（縮量）`;
-   return `${volText}（平量）`;
+   return "—";
 }
 
 function buildStockCardLines(card: StockCard, verdict: string = "數據整理中"): string {
-   const stanceText = buildStanceText(card.shortDir, card.strategySignal, card.confidence);
-   const volumeState = buildVolumeState(card.volume, card.volumeVs5dPct, card.flowUnit);
-   const support = formatPrice(card.support, 2);
-   const resistance = formatPrice(card.resistance, 2);
    const lines = [
-      `${card.symbol} ${card.nameZh} [${verdict}]`,
+      `<b>${card.symbol} ${card.nameZh} [${verdict}]</b>`,
       `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）${card.isPriceRealTime === false ? "　⚠️延遲報價" : ""}`,
-      `【量能】 ${volumeState}`,
-      `【趨勢】 ${stanceText}（勝率 ${formatPct(card.confidence, 1)}）`,
-      `【關鍵價】 支撐 ${support} ｜ 壓力 ${resistance}`,
-      "",
       `【新聞】 ${card.newsLine || "—"}`,
    ];
 
@@ -428,6 +398,7 @@ async function buildStockCardWithAI(card: StockCard): Promise<string> {
          marginLots: card.marginLots || 0,
          institutionalLots: card.institutionalLots || 0,
          insiderTransfers: card.insiderSells,
+         recentNews: card.recentNews || (card.newsLine && card.newsLine !== "—" ? [card.newsLine] : []),
       });
       const structuredPart = buildStockCardLines(card, playbook?.verdict || "觀察中");
       if (playbook) {

@@ -106,8 +106,9 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
 
 【新聞驅動與事件】(必須判斷新聞題材是否真實發酵，或者只是主力倒貨的利多出盡)
 - 判斷依據: 若有新聞且法人大買、股價漲，為「發酵中」；若新聞樂觀但法人賣超或跌破支撐，為「利多出盡/騙線」。
-- 近兩日重大新聞:
-${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `  * ${n}`).join('\n') : "  * (近兩日無重大催化劑新聞)"}
+- 近期新聞標題與催化劑:
+${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `  * ${n}`).join('\n') : "  * (近期無顯著新聞)"}
+
 
 任務：融合「技術價格行為」、「籌碼散戶與法人對峙」以及「新聞驅動熱度」，提出最犀利、充滿洞見的實戰解析。嚴格遵守字數限制！
 
