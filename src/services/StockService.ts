@@ -172,12 +172,29 @@ export class StockService {
 
          const getFirstNewsTitle = (news: any): string | null => {
             if (!news || !Array.isArray(news) || news.length === 0) return null;
+            
+            // 優先找尋中文新聞或具備代號標籤的新聞
+            for (const item of news) {
+               const title = typeof item === 'string' ? item : (item?.title || item?.headline);
+               if (!title) continue;
+
+               // 過濾掉不相關的廣告或極其無關的英文新聞 (例如 First Mold...)
+               const isChinese = /[\u4e00-\u9fa5]/.test(title);
+               const mentionsTicker = symbol && title.includes(symbol);
+               
+               if (isChinese || mentionsTicker) return title;
+            }
+
+            // 若都沒中文，且第一條新聞至少不是亂碼，才考慮回傳
             const first = news[0];
-            return typeof first === 'string' ? first : (first?.title || first?.headline || null);
+            const firstTitle = typeof first === 'string' ? first : (first?.title || first?.headline);
+            return firstTitle || null;
          };
 
          card.recentNews = snapshot?.news || [];
-         const fallbackNews = getFirstNewsTitle(card.recentNews) || getFirstNewsTitle((yahooSearchRes as any)?.news);
+         // 優先順序: TV即時 > Snapshot歷史 > Yahoo搜尋
+         const yahooNews = (yahooSearchRes as any)?.news;
+         const fallbackNews = getFirstNewsTitle(card.recentNews) || getFirstNewsTitle(yahooNews);
          card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
          card.insiderSells = snapshot?.insiderTransfers || [];
          card.flowScore = snapshot?.signals?.flow?.flowScore;
@@ -232,6 +249,16 @@ export class StockService {
             
             const getFirstNewsTitle = (news: any): string | null => {
                if (!news || !Array.isArray(news) || news.length === 0) return null;
+               
+               for (const item of news) {
+                  const title = typeof item === 'string' ? item : (item?.title || item?.headline);
+                  if (!title) continue;
+
+                  const isChinese = /[\u4e00-\u9fa5]/.test(title);
+                  const mentionsTicker = symbol && title.toUpperCase().includes(symbol);
+                  if (isChinese || mentionsTicker) return title;
+               }
+
                const first = news[0];
                return typeof first === 'string' ? first : (first?.title || first?.headline || null);
             };
