@@ -160,33 +160,10 @@ export class StockService {
          }
 
          if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
-            const marketOpen = isMarketOpen(symbol);
-            const diffPct = card.close !== null ? Math.abs(rtQuote.regularMarketPrice - card.close) / card.close : 0;
-            const isSplitDetected = diffPct > 0.8;
-
-            // 價格異常保護：如果價差大於 50% 但小於 80% (不足以判定為分割)，視為報價源異常
-            const isPriceAnomaly = diffPct > 0.5 && diffPct <= 0.8;
-            const mismatch = !marketOpen && card.close !== null && diffPct > 0.05 && !isSplitDetected;
-
-            if (!mismatch && !isPriceAnomaly) {
-               const oldClose = card.close;
-               card.close = rtQuote.regularMarketPrice;
-               card.chgPct = rtQuote.regularMarketChangePercent ?? card.chgPct;
-               card.chgAbs = rtQuote.regularMarketChange ?? card.chgAbs;
-               card.volume = rtQuote.regularMarketVolume || card.volume;
-
-               // 如果偵測到分割，且舊收盤價存在，則需要調整所有歷史 Bar 以符合新比例
-               if (isSplitDetected && oldClose !== null && oldClose !== 0 && card.close !== null) {
-                  const ratio = card.close / oldClose;
-                  processedBars = processedBars.map((b: any) => ({
-                     ...b,
-                     open: (Number(b.open) || 0) * ratio,
-                     high: (Number(b.high) || 0) * ratio,
-                     low: (Number(b.low) || 0) * ratio,
-                     close: (Number(b.close) || 0) * ratio
-                  }));
-               }
-            }
+            card.close = rtQuote.regularMarketPrice;
+            card.chgPct = rtQuote.regularMarketChangePercent ?? card.chgPct;
+            card.chgAbs = rtQuote.regularMarketChange ?? card.chgAbs;
+            card.volume = rtQuote.regularMarketVolume || card.volume;
          }
 
          // 同步即時報價至圖表數據
@@ -259,16 +236,7 @@ export class StockService {
 
          if (snapshot || rtQuote) {
             const snapPrice = snapshot?.data?.prices?.length ? snapshot.data.prices[snapshot.data.prices.length-1].close : null;
-            let finalPrice = rtQuote?.regularMarketPrice || snapPrice;
-            
-            // 異常價格校驗
-            if (rtQuote?.regularMarketPrice && snapPrice) {
-               const diffPct = Math.abs(rtQuote.regularMarketPrice - snapPrice) / snapPrice;
-               if (diffPct > 0.5 && diffPct <= 0.8) {
-                  // 疑似報價異常，優先採用快照價格
-                  finalPrice = snapPrice;
-               }
-            }
+            const finalPrice = rtQuote?.regularMarketPrice || snapPrice;
 
             const card: StockCard = {
                symbol,
