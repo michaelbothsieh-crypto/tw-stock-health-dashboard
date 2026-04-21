@@ -8,9 +8,11 @@ export class MessageService {
       const symbol = escapeHtml(card.symbol);
       const nameZh = escapeHtml(card.nameZh);
       const vText = escapeHtml(verdict);
+      
+      const title = (nameZh && nameZh !== symbol) ? `${symbol} ${nameZh}` : symbol;
 
       const lines = [
-         `<b>${symbol} ${nameZh} [${vText}]</b>`,
+         `<b>${title} [${vText}]</b>`,
          `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）${card.isPriceRealTime === false ? "　⚠️延遲報價" : ""}`,
          `【技術】 ${card.tvRating || "—"}`,
          `【新聞】 ${card.newsLine || "—"}`,

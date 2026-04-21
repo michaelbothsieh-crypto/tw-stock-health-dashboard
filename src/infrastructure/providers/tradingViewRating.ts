@@ -6,11 +6,11 @@
 export type TVRating = 'Strong Buy' | 'Buy' | 'Neutral' | 'Sell' | 'Strong Sell' | 'Unknown';
 
 export const TV_RATING_ZH: Record<TVRating, string> = {
-  'Strong Buy': '🔥 強力買入',
-  'Buy': '✅ 買入',
-  'Neutral': '⚖️ 中性',
-  'Sell': '❌ 賣出',
-  'Strong Sell': '💀 強力賣出',
+  'Strong Buy': '強力買入',
+  'Buy': '買入',
+  'Neutral': '中性',
+  'Sell': '賣出',
+  'Strong Sell': '強力賣出',
   'Unknown': '—'
 };
 
