@@ -216,6 +216,12 @@ export class StockService {
          const fallbackNews = this.getFirstNewsTitle(card.recentNews, symbol, isUS) || this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, isUS);
          card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
          
+         // 如果新聞為空，但技術評分強勢，將其作為隱性催化劑注入
+         const isStrongTechnical = card.tvRating?.includes("買入");
+         if (!tvNews && !fallbackNews && isStrongTechnical) {
+            card.newsLine = `技術面動能強勁 (${card.tvRating})`;
+         }
+
          card.insiderSells = snapshot?.insiderTransfers || [];
          card.flowScore = snapshot?.signals?.flow?.flowScore;
          card.macroRisk = snapshot?.crashWarning?.score;
@@ -264,7 +270,13 @@ export class StockService {
             };
             
             card.recentNews = snapshot?.news || [];
-            card.newsLine = buildNewsLine(tvNews || this.getFirstNewsTitle(card.recentNews, symbol, true), 96);
+            const fallbackNews = this.getFirstNewsTitle(card.recentNews, symbol, true);
+            card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
+
+            // 如果新聞為空，但技術評分強勢，注入熱度訊號
+            if (!tvNews && !fallbackNews && card.tvRating?.includes("買入")) {
+               card.newsLine = `技術面呈現多頭熱度 (${card.tvRating})`;
+            }
 
             if (card.close !== null) {
                const todayStr = new Date().toLocaleDateString('en-CA');

@@ -28,6 +28,7 @@ import { evaluateCrashWarning } from "@/infrastructure/crash/crashEngine";
 import { selectTwPeers } from "@/infrastructure/twPeerSelector";
 import { getMarketIndicators } from "@/infrastructure/providers/marketIndicators";
 import { getTvTechnicalIndicators } from "@/infrastructure/providers/tradingViewFetch";
+import { fetchTradingViewRating } from "@/infrastructure/providers/tradingViewRating";
 import { translateTechnicals } from "@/shared/utils/technicalTranslator";
 import { fetchStockSnapshot } from "@/infrastructure/stockRouter";
 import { getTacticalPlaybook } from "@/domain/ai/playbookAgent";
@@ -151,8 +152,37 @@ export class SnapshotService {
     }
     const keyLevels = calculateKeyLevels(mappedPrices);
 
-    const strategy = generateStrategy({ ...trendSignals, ...flowSignals, ...fundamentalSignals, ...catalystResult, ...shortTermVolatility, ...shortTerm, ...predictions, consistencyScore: consistency.score, riskFlags });
-    const explainBreakdown = buildExplainBreakdown({ trend: trendSignals, flow: flowSignals, fundamental: fundamentalSignals, ai: aiExplanation, shortTermVolatility, shortTerm, predictions, consistency, latestClose });
+    // 技術面動能作為隱性催化劑優化
+    let finalCatalystScore = catalystResult.catalystScore;
+    const tvRating = await fetchTradingViewRating(norm.symbol, this.isTaiwanStock(norm.symbol) ? 'taiwan' : 'america');
+    if (snapshotData.news.length < 3 && tvRating.includes('Buy')) {
+        finalCatalystScore = Math.max(finalCatalystScore, tvRating === 'Strong Buy' ? 60 : 30);
+    }
+
+    const strategy = generateStrategy({ 
+       ...trendSignals, 
+       ...flowSignals, 
+       ...fundamentalSignals, 
+       ...catalystResult, 
+       catalystScore: finalCatalystScore, // 注入優化後的分數
+       ...shortTermVolatility, 
+       ...shortTerm, 
+       ...predictions, 
+       consistencyScore: consistency.score, 
+       riskFlags 
+    });
+    
+    const explainBreakdown = buildExplainBreakdown({ 
+       trend: trendSignals, 
+       flow: flowSignals, 
+       fundamental: fundamentalSignals, 
+       ai: aiExplanation, 
+       shortTermVolatility, 
+       shortTerm, 
+       predictions, 
+       consistency, 
+       latestClose 
+    });
     const uxSummary = buildUxSummary({ direction: aiExplanation.stance, strategyConfidence: strategy.confidence, consistencyLevel: consistency.level, topRiskFlag: riskFlags[0], keyLevels });
     
     // 5. 複雜數據組裝 (Full Mode Only)
