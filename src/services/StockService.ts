@@ -163,15 +163,19 @@ export class StockService {
             const marketOpen = isMarketOpen(symbol);
             const diffPct = card.close !== null ? Math.abs(rtQuote.regularMarketPrice - card.close) / card.close : 0;
             const isSplitDetected = diffPct > 0.8;
+
+            // 價格異常保護：如果價差大於 50% 但小於 80% (不足以判定為分割)，視為報價源異常
+            const isPriceAnomaly = diffPct > 0.5 && diffPct <= 0.8;
             const mismatch = !marketOpen && card.close !== null && diffPct > 0.05 && !isSplitDetected;
 
-            if (!mismatch) {
+            if (!mismatch && !isPriceAnomaly) {
                const oldClose = card.close;
                card.close = rtQuote.regularMarketPrice;
                card.chgPct = rtQuote.regularMarketChangePercent ?? card.chgPct;
                card.chgAbs = rtQuote.regularMarketChange ?? card.chgAbs;
                card.volume = rtQuote.regularMarketVolume || card.volume;
 
+               // 如果偵測到分割，且舊收盤價存在，則需要調整所有歷史 Bar 以符合新比例
                if (isSplitDetected && oldClose !== null && oldClose !== 0 && card.close !== null) {
                   const ratio = card.close / oldClose;
                   processedBars = processedBars.map((b: any) => ({
@@ -254,12 +258,24 @@ export class StockService {
          if (!snapshot && (!rtQuote || rtQuote.regularMarketPrice === undefined)) return null;
 
          if (snapshot || rtQuote) {
+            const snapPrice = snapshot?.data?.prices?.length ? snapshot.data.prices[snapshot.data.prices.length-1].close : null;
+            let finalPrice = rtQuote?.regularMarketPrice || snapPrice;
+            
+            // 異常價格校驗
+            if (rtQuote?.regularMarketPrice && snapPrice) {
+               const diffPct = Math.abs(rtQuote.regularMarketPrice - snapPrice) / snapPrice;
+               if (diffPct > 0.5 && diffPct <= 0.8) {
+                  // 疑似報價異常，優先採用快照價格
+                  finalPrice = snapPrice;
+               }
+            }
+
             const card: StockCard = {
                symbol,
                nameZh: String(snapshot?.normalizedTicker?.companyNameZh || rtQuote?.longName || rtQuote?.shortName || symbol),
-               close: rtQuote?.regularMarketPrice || (snapshot?.data?.prices?.length ? snapshot.data.prices[snapshot.data.prices.length-1].close : null),
-               chgPct: rtQuote?.regularMarketChangePercent || null,
-               chgAbs: rtQuote?.regularMarketChange || null,
+               close: finalPrice,
+               chgPct: finalPrice === rtQuote?.regularMarketPrice ? rtQuote?.regularMarketChangePercent : null,
+               chgAbs: finalPrice === rtQuote?.regularMarketPrice ? rtQuote?.regularMarketChange : null,
                volume: rtQuote?.regularMarketVolume || null,
                volumeVs5dPct: null, flowNet: null, flowUnit: "股", shortDir: "中立", strategySignal: "觀察", confidence: null,
                p1d: snapshot?.predictions?.upProb1D, 
