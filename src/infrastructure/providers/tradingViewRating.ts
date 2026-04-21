@@ -16,20 +16,20 @@ export const TV_RATING_ZH: Record<TVRating, string> = {
 
 export async function fetchTradingViewRating(ticker: string, market: 'taiwan' | 'america'): Promise<TVRating> {
   const url = `https://scanner.tradingview.com/${market}/scan`;
-  
-  let symbol = ticker.toUpperCase();
-  if (market === 'taiwan') {
-    if (!symbol.includes(':')) {
-      // 台股上櫃代號規律: 3, 4, 5, 6, 8 開頭通常為上櫃 (TPEX)
-      const isProbablyTPEX = /^[34568]/.test(symbol) && symbol !== "3008"; 
-      symbol = `${isProbablyTPEX ? 'TPEX' : 'TWSE'}:${symbol}`;
+  const cleanTicker = ticker.toUpperCase();
+
+  const getSymbols = (): string[] => {
+    if (market === 'taiwan') {
+      if (cleanTicker.includes(':')) return [cleanTicker];
+      const isProbablyTPEX = /^[34568]/.test(cleanTicker) && cleanTicker !== "3008"; 
+      return [`${isProbablyTPEX ? 'TPEX' : 'TWSE'}:${cleanTicker}`];
     }
-  } else {
-    if (!symbol.includes(':')) symbol = `NASDAQ:${symbol}`;
-  }
+    // 美股可能在不同交易所，一次查多個
+    return [`NASDAQ:${cleanTicker}`, `NYSE:${cleanTicker}`, `AMEX:${cleanTicker}`];
+  };
 
   const body = {
-    symbols: { tickers: [symbol] },
+    symbols: { tickers: getSymbols() },
     columns: ["Recommend.All"]
   };
 
@@ -40,20 +40,19 @@ export async function fetchTradingViewRating(ticker: string, market: 'taiwan' | 
       body: JSON.stringify(body),
     });
 
-    if (!res.ok) {
-        // 如果 NASDAQ 失敗，嘗試 NYSE (針對美股)
-        if (market === 'america' && !ticker.includes(':')) {
-            const nyseBody = { symbols: { tickers: [`NYSE:${ticker.toUpperCase()}`] }, columns: ["Recommend.All"] };
-            const nyseRes = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nyseBody) });
-            const nyseData = await nyseRes.json();
-            return parseRating(nyseData?.data?.[0]?.d?.[0]);
-        }
-        return 'Unknown';
-    }
+    if (!res.ok) return 'Unknown';
 
     const data = await res.json();
-    const score = data?.data?.[0]?.d?.[0];
-    return parseRating(score);
+    const rows = data?.data || [];
+    
+    // 找出第一個有效的評分
+    for (const row of rows) {
+      if (row.d && row.d[0] !== undefined && row.d[0] !== null) {
+        return parseRating(row.d[0]);
+      }
+    }
+    
+    return 'Unknown';
   } catch (err) {
     console.error(`[TVRating] Error for ${ticker}:`, err);
     return 'Unknown';
