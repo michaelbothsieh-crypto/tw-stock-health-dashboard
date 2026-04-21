@@ -14,7 +14,6 @@ export class MessageService {
       const lines = [
          `<b>${title} [${vText}]</b>`,
          `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）${card.marketStatusLabel || ""}${card.isPriceRealTime === false ? "　⚠️延遲報價" : ""}`,
-         `【成交】 ${humanizeNumber(card.volume)}${card.flowUnit}`,
          `【技術】 ${card.tvRating || "—"}`,
          `【產業】 ${card.industry || "—"}`,
          `【新聞】 ${card.newsLine || "—"}`,
@@ -53,7 +52,7 @@ export class MessageService {
             technicalTrend: card.shortDir,
             flowScore: card.flowScore ?? 50,
             flowVerdict: card.shortDir,
-            recentTrend: `今日股價表現：現價 ${card.close}，漲跌幅 ${card.chgPct?.toFixed(2)}% (${card.chgPct && card.chgPct > 9.5 ? '強勢漲停' : '趨勢強勁'})，技術評分：${card.tvRating}。`,
+            recentTrend: `今日股價表現：現價 ${card.close}，漲跌幅 ${card.chgPct?.toFixed(2)}% (${card.chgPct && card.chgPct > 9.5 ? '強勢漲停' : '趨勢強勁'})，成交量：${humanizeNumber(card.volume)}${card.flowUnit}，技術評分：${card.tvRating}。`,
             trustLots: card.trustLots || 0,
             shortLots: card.shortLots || 0,
             marginLots: card.marginLots || 0,
