@@ -635,7 +635,11 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipH
       // 2. 注入 Yahoo 即時報價 (最高優先權)
       if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
          const marketOpen = isMarketOpen(symbol);
-         const mismatch = !marketOpen && card.close !== null && Math.abs(rtQuote.regularMarketPrice - card.close) / card.close > 0.05;
+         const diffPct = card.close !== null ? Math.abs(rtQuote.regularMarketPrice - card.close) / card.close : 0;
+         
+         // 判定為誤判的情境：非開盤時間且差距在 5%~80% 之間 (可能是數據源髒)
+         // 但如果差距極大 (>80%)，通常是拆分或反分割，則必須以即時報價為準
+         const mismatch = !marketOpen && card.close !== null && diffPct > 0.05 && diffPct < 0.8;
 
          if (!mismatch) {
             card.close = rtQuote.regularMarketPrice;
