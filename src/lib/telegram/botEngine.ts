@@ -112,7 +112,10 @@ type StockCard = {
    macroRisk?: number;
    isPriceRealTime?: boolean;
    yahooSymbol?: string;
+   tvRating?: string;
 };
+
+import { fetchTradingViewRating, TV_RATING_ZH } from "../providers/tradingViewRating";
 
 type TelegramHandleOptions = {
    baseUrl?: string;
@@ -294,8 +297,7 @@ async function ensureTelegramCommandsSynced() {
          headers: { "Content-Type": "application/json" },
          body: JSON.stringify({
             commands: [
-               { command: "tw", description: "🔍 台股查詢：個股健檢與即時報價" },
-               { command: "us", description: "🇺🇸 美股查詢：個股即時數據" },
+               { command: "stock", description: "🔍 股號/股名：個股健檢與即時數據 (台/美股通用)" },
                { command: "hot", description: "🔥 爆紅榜：Yahoo 社群熱門瀏覽 (etf/stock)" },
                { command: "etf", description: "📊 ETF 分析：持股內容與績效表現" },
                { command: "twrank", description: "🏆 台股排行：昨日漲幅前 10 名" },
@@ -367,9 +369,9 @@ function buildStockCardLines(card: StockCard, verdict: string = "數據整理中
    const lines = [
       `<b>${symbol} ${nameZh} [${vText}]</b>`,
       `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）${card.isPriceRealTime === false ? "　⚠️延遲報價" : ""}`,
+      `【技術】 ${card.tvRating || "—"}`,
       `【新聞】 ${card.newsLine || "—"}`, // newsLine 已經由 buildNewsLine 處理過 escape
    ];
-
    if (card.insiderSells && card.insiderSells.length > 0) {
       lines.push("");
       lines.push(`🚨 【內部人警訊】 近期高層申讓 ${card.insiderSells.length} 筆：`);
@@ -482,6 +484,12 @@ async function fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string, sk
                }
             }
          }
+      }
+
+      // 注入 TradingView 技術評分
+      if (!skipQuote) {
+         const rating = await fetchTradingViewRating(symbol, 'america');
+         card.tvRating = TV_RATING_ZH[rating];
       }
 
       // 3. 處理圖表 (美股優先用 Finviz)
@@ -721,6 +729,12 @@ async function fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipH
       // 只有台股才能用 Fugle，非台股（美股）不標示延遲
       const isTWStock = /[0-9]/.test(symbol);
       card.isPriceRealTime = isTWStock ? (skipQuote ? false : (fugleQuote !== null)) : undefined;
+
+      // 注入 TradingView 技術評分
+      if (!skipQuote) {
+         const rating = await fetchTradingViewRating(symbol, 'taiwan');
+         card.tvRating = TV_RATING_ZH[rating];
+      }
 
       return card;
    } catch (error) {
@@ -972,27 +986,43 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       return { text: lines.join("\n") };
    }
 
-   if (command === "/tw") {
-      if (!query) return { text: "請輸入股票代號，例如:\n/tw 2330\n/tw 2330,2317,2454" };
+   if (command === "/stock") {
+      if (!query) return { text: "請輸入股票代號或名稱，例如:\n/stock 2330\n/stock NVDA\n/stock 台積電" };
 
       const tickers = query.split(/[,，\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean).slice(0, 10);
 
+      const processTicker = async (t: string, skipH = false, skipQ = false) => {
+         // 自動判定台股 vs 美股
+         // 台股：純數字或英數字組合 (如 00981A, 2330.TW)
+         // 美股：純字母
+         const isTaiwan = /^[0-9A-Z]{4,6}$/.test(t) || t.includes('.') || resolveCodeFromInputLocal(t);
+         const isUS = /^[A-Z]{1,5}$/.test(t);
+         
+         if (isTaiwan) {
+            return await fetchLiveStockCard(t, options?.baseUrl, skipH, skipQ);
+         } else if (isUS) {
+            return await fetchLiveUsStockCard(t, options?.baseUrl, skipH, skipQ);
+         }
+         return null;
+      };
+
       if (tickers.length === 1) {
-         const liveCard = await fetchLiveStockCard(tickers[0], options?.baseUrl);
+         const liveCard = await processTicker(tickers[0]);
          if (liveCard) {
-            if (options?.chatId) {
+            if (options?.chatId && liveCard.close) {
                await recordStockSearch(options.chatId, liveCard.symbol, liveCard.close).catch(() => null);
             }
             const finalMsg = await buildStockCardWithAI(liveCard);
             return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
          }
-         return { text: "找不到該股票資料。" };
+         return { text: `找不到「${tickers[0]}」的資料，請確認代號或名稱是否正確。` };
       }
 
-      // 多檔並行查詢（最多 10 檔），合併圖檔回傳。啟用 skipHeavy=true, skipQuote=true 以加速。
-      const cards = await Promise.all(tickers.map(t => fetchLiveStockCard(t, options?.baseUrl, true, true)));
+      // 多檔查詢
+      const cards = await Promise.all(tickers.map(t => processTicker(t, true, true)));
       const errorParts: string[] = [];
       const buffers: Buffer[] = [];
+      const validSymbols: string[] = [];
 
       for (let i = 0; i < tickers.length; i++) {
          const card = cards[i];
@@ -1004,20 +1034,12 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
             }
             if (card.chartBuffer) {
                buffers.push(card.chartBuffer);
+               validSymbols.push(card.symbol);
             }
          }
       }
 
-      // 每 3 張合併一組
       const chartBuffers: Buffer[] = [];
-      const validSymbols: string[] = [];
-      for (let i = 0; i < tickers.length; i++) {
-         const card = cards[i];
-         if (card && card.chartBuffer) {
-            validSymbols.push(card.symbol);
-         }
-      }
-
       for (let i = 0; i < buffers.length; i += 3) {
          const chunk = buffers.slice(i, i + 3);
          const chunkSymbols = validSymbols.slice(i, i + 3);
@@ -1032,19 +1054,21 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       return { 
          text: errorParts.length > 0 ? errorParts.join("\n") : "", 
          chartBuffers 
-      };   }
+      };
+   }
 
    if (command === "/whatis") {
       if (!query) return { text: "請輸入公司名稱或代號，例如:\n/whatis 2330\n/whatis 台積電\n/whatis OpenAI" };
 
       try {
-         // 1. 嘗試解析代號（優先尋找已知代號）
+         // 自動判定台股 vs 美股
          const isUs = /^[A-Z]{1,5}$/i.test(query);
          const liveCard = isUs
             ? await fetchLiveUsStockCard(query, options?.baseUrl)
             : await fetchLiveStockCard(query, options?.baseUrl);
 
          // 2. 呼叫 AI 進行分析
+         const { getStockWhatIs } = await import("../ai/whatisAgent");
          const result = await getStockWhatIs({
             ticker: liveCard?.symbol,
             stockName: liveCard?.nameZh || query, // 若找不到代號，就用使用者輸入的名稱
@@ -1057,68 +1081,6 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          return { text: `抱歉，分析「${query}」時發生錯誤，請稍後再試。`, chartBuffer: null };
       }
    }
-
-   if (command === "/us") {
-      if (!query) return { text: "請輸入美股代號，例如:\n/us NVDA\n/us NVDA,AAPL,TSLA" };
-
-      const tickers = query.split(/[,，\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean).slice(0, 10);
-
-      if (tickers.length === 1) {
-         const liveCard = await fetchLiveUsStockCard(tickers[0], options?.baseUrl);
-         if (liveCard) {
-            if (options?.chatId) {
-               await recordStockSearch(options.chatId, liveCard.symbol, liveCard.close).catch(() => null);
-            }
-            const finalMsg = await buildStockCardWithAI(liveCard);
-            return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
-         }
-         return { text: `找不到「${tickers[0]}」的資料，請確認代號是否正確。` };
-      }
-
-      // 多檔並行查詢（最多 10 檔），合併圖檔回傳。啟用 skipHeavy=true, skipQuote=true 以加速。
-      const cards = await Promise.all(tickers.map(t => fetchLiveUsStockCard(t, options?.baseUrl, true, true)));
-      const errorParts: string[] = [];
-      const buffers: Buffer[] = [];
-
-      for (let i = 0; i < tickers.length; i++) {
-         const card = cards[i];
-         if (!card) {
-            errorParts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料。`));
-         } else {
-            if (options?.chatId && card.close) {
-               await recordStockSearch(options.chatId, card.symbol, card.close).catch(() => null);
-            }
-            if (card.chartBuffer) {
-               buffers.push(card.chartBuffer);
-            }
-         }
-      }
-
-      // 每 3 張合併一組
-      const chartBuffers: Buffer[] = [];
-      const validSymbols: string[] = [];
-      for (let i = 0; i < tickers.length; i++) {
-         const card = cards[i];
-         if (card && card.chartBuffer) {
-            validSymbols.push(card.symbol);
-         }
-      }
-
-      for (let i = 0; i < buffers.length; i += 3) {
-         const chunk = buffers.slice(i, i + 3);
-         const chunkSymbols = validSymbols.slice(i, i + 3);
-         const combined = await combineImages(chunk, chunkSymbols);
-         if (combined) chartBuffers.push(combined);
-      }
-
-      if (chartBuffers.length === 0 && errorParts.length > 0) {
-         return { text: errorParts.join("\n") };
-      }
-
-      return { 
-         text: errorParts.length > 0 ? errorParts.join("\n") : "", 
-         chartBuffers 
-      };   }
    if (command === "/rank") {
       try {
          if (!options?.chatId) return { text: "無法辨識群組 ID，請在群組中使用。" };
@@ -1287,7 +1249,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
 
    // 1. 立即送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
-   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/etf", "/twrank", "/usrank", "/hot"].includes(command)) {
+   if (["/stock", "/whatis", "/rank", "/roi", "/etf", "/twrank", "/usrank", "/hot"].includes(command)) {
       progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
    }
 
