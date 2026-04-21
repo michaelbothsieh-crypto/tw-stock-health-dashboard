@@ -197,6 +197,21 @@ export class StockService {
                const rating = await fetchTradingViewRating(symbol, 'america');
                card.tvRating = TV_RATING_ZH[rating];
             }
+
+            // 3. 處理圖表 (美股優先用 Finviz)
+            try {
+               const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
+               const chartRes = await fetch(finvizUrl, {
+                  headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" },
+               });
+               if (chartRes.ok) {
+                  const ab = await chartRes.arrayBuffer();
+                  card.chartBuffer = Buffer.from(ab);
+               }
+            } catch (e) {
+               console.warn(`[StockService] Finviz fetch failed for ${symbol}`, e);
+            }
+
             return card;
          }
          return null;

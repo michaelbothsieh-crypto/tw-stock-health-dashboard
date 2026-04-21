@@ -72,15 +72,23 @@ export class StockHandler implements CommandHandler {
   }
 
   private async processTicker(t: string, baseUrl?: string, skipH = false, skipQ = false) {
-    // 自動判定台股 vs 美股
-    const isTaiwan = /^[0-9A-Z]{4,6}$/.test(t) || t.includes('.') || t.match(/[\u4e00-\u9fa5]/) || !!resolveCodeFromInputLocal(t);
-    const isUS = /^[A-Z]{1,5}$/.test(t);
+    const cleanT = t.trim().toUpperCase();
     
-    if (isTaiwan) {
-      return await StockService.fetchLiveStockCard(t, baseUrl, skipH, skipQ);
-    } else if (isUS) {
-      return await StockService.fetchLiveUsStockCard(t, baseUrl, skipH, skipQ);
+    // 1. 優先判斷是否為台股代號 (4-6位純數字, 或帶有 .TW/.TWO)
+    const isTaiwanTicker = /^[0-9]{4,6}$/.test(cleanT) || cleanT.includes('.TW') || cleanT.includes('.TWO');
+    
+    // 2. 判斷是否為美股代號 (1-5位純字母)
+    const isUsTicker = /^[A-Z]{1,5}$/.test(cleanT);
+
+    // 3. 透過名稱解析 (僅限台股)
+    const resolvedTaiwanTicker = !isTaiwanTicker && !isUsTicker ? resolveCodeFromInputLocal(t) : null;
+
+    if (isTaiwanTicker || resolvedTaiwanTicker) {
+      return await StockService.fetchLiveStockCard(resolvedTaiwanTicker || cleanT, baseUrl, skipH, skipQ);
+    } else if (isUsTicker) {
+      return await StockService.fetchLiveUsStockCard(cleanT, baseUrl, skipH, skipQ);
     }
+    
     return null;
   }
 }
