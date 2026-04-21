@@ -303,8 +303,6 @@ async function ensureTelegramCommandsSynced() {
                { command: "whatis", description: "🤔 股票分析：公司簡介與近期新聞摘要" },
                { command: "roi", description: "📈 報酬計算：自訂時間段績效 (例: /roi 2330 1y)" },
                { command: "rank", description: "👑 本群熱門：群組內最受關注的股票" },
-               { command: "watchlist", description: "👀 觀察名單：列出目前追蹤的股票" },
-               { command: "daily", description: "📝 健檢報告：產生每日盤後分析" },
                { command: "help", description: "💡 使用幫助：顯示完整指令說明" },
             ],         }),
       });
@@ -1285,7 +1283,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
 
    // 1. 立即送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
-   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/etf", "/twrank", "/usrank", "/hot", "/daily", "/watchlist"].includes(command)) {
+   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/etf", "/twrank", "/usrank", "/hot"].includes(command)) {
       progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
    }
 
