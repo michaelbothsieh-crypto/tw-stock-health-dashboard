@@ -44,36 +44,8 @@ export async function combineImages(buffers: (Buffer | null)[], symbols?: string
       const x = (maxWidth - img.width) / 2;
       ctx.drawImage(img, x, currentY);
 
-      // 繪製左上角標籤
-      const symbol = symbols?.[i];
-      if (symbol) {
-        ctx.save();
-        const labelText = symbol.toUpperCase();
-        const padding = 8;
-        const fontSize = 24;
-        ctx.font = `bold ${fontSize}px ${FONT_FAMILY}`;
-        const textWidth = ctx.measureText(labelText).width;
-        
-        // 標籤背景
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        ctx.fillRect(x + 10, currentY + 10, textWidth + padding * 2, fontSize + padding * 2);
-        
-        // 標籤邊框
-        ctx.strokeStyle = '#facc15';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(x + 10, currentY + 10, textWidth + padding * 2, fontSize + padding * 2);
-
-        // 標籤文字
-        ctx.fillStyle = '#facc15';
-        ctx.textBaseline = 'top';
-        ctx.textAlign = 'left';
-        ctx.fillText(labelText, x + 10 + padding, currentY + 10 + padding);
-        ctx.restore();
-      }
-
       currentY += img.height;
     }
-
     return canvas.toBuffer('image/png');
   } catch (e) {
     console.error('[ChartRenderer] combineImages error:', e);

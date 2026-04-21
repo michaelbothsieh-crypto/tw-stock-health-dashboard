@@ -13,6 +13,8 @@ import { getTvLatestNewsHeadline } from "../providers/tradingViewFetch";
 import { subMonths, subYears, parseISO, startOfDay, endOfDay } from "date-fns";
 import { redis as redisInstance } from "../providers/redisCache";
 
+import { fetchYahooCommunityRank } from "../providers/yahooRankFetch";
+
 // 建立反向查詢表加速名稱解析
 const reverseStockNames: Record<string, string> = {};
 if (twStockNames) {
@@ -293,8 +295,8 @@ async function ensureTelegramCommandsSynced() {
          body: JSON.stringify({
             commands: [
                { command: "tw", description: "查詢台股個股（例：/tw 2330）" },
-               { command: "us", description: "查詢美股個股（例：/us NVDA）" },
-               { command: "twrank", description: "台股昨日漲幅前 10 名" },
+               { command: "hot", description: "Yahoo 社群爆紅榜 (例：/hot etf)" },
+               { command: "us", description: "查詢美股個股（例：/us NVDA）" },               { command: "twrank", description: "台股昨日漲幅前 10 名" },
                { command: "usrank", description: "美股昨日漲幅前 10 名" },
                { command: "conference", description: "查詢最近一筆法說會資訊（例：/conference 2330）" },
                { command: "etf", description: "查詢 ETF 持股及 YTD 表現（例：/etf 0050）" },
@@ -797,11 +799,14 @@ async function fetchTopGainers(market: "taiwan" | "america", limit = 10): Promis
    const url = `https://scanner.tradingview.com/${market}/scan`;
    const filter: any[] = [
       { left: "type", operation: "equal", right: "stock" },
-      { left: "market_cap_basic", operation: "greater", right: 500000000 }, // 市值 > 5億
       { left: "change", operation: "greater", right: 0 }
    ];
 
-   if (market === "taiwan") {
+   if (market === "america") {
+      filter.push({ left: "market_cap_basic", operation: "greater", right: 1000000000 }); // 美股市值 > 10億
+      filter.push({ left: "close", operation: "greater", right: 5 }); // 股價 > 5美元，避免水餃股
+   } else {
+      filter.push({ left: "market_cap_basic", operation: "greater", right: 500000000 }); // 台股市值 > 5億
       filter.push({ left: "exchange", operation: "in_range", right: ["TWSE", "TPEX"] });
    }
 
@@ -990,6 +995,35 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          text: textLines.join("\n") + (errorParts.length > 0 ? "\n\n" + errorParts.join("\n") : ""), 
          chartBuffers 
       };
+   }
+
+   if (command === "/hot") {
+      const subType = query.toLowerCase();
+      let type: 'all' | 'stock' | 'etf' = 'all';
+      if (subType === 'etf') type = 'etf';
+      else if (subType === 'stock' || subType === '股票') type = 'stock';
+
+      const list = await fetchYahooCommunityRank(type);
+      if (list.length === 0) return { text: "暫時無法取得 Yahoo 社群爆紅榜資料 (可能受限於存取頻率)。" };
+
+      const title = type === 'etf' ? "ETF" : (type === 'stock' ? "股票" : "全部");
+      const lines: string[] = [`🔥 <b>Yahoo 社群爆紅榜 - ${title}</b>`, ""];
+      
+      const enrichedList = await Promise.all(list.map(async item => {
+         const name = twStockNames[item.symbol] || item.symbol;
+         const { price } = await fetchPriceOnly(item.symbol);
+         return { ...item, name, price };
+      }));
+
+      enrichedList.forEach(item => {
+         const priceText = item.price ? `<code>${item.price.toFixed(2)}</code>` : "—";
+         lines.push(`${item.rank}. ${item.name} (${item.symbol}) ${priceText}`);
+      });
+
+      lines.push("");
+      lines.push(`👉 <a href="https://tw.stock.yahoo.com/community/rank/active?type=${type}">查看完整榜單</a>`);
+
+      return { text: lines.join("\n") };
    }
 
    if (command === "/tw") {

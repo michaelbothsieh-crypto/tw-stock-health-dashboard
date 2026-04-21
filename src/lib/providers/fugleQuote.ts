@@ -27,7 +27,7 @@ export async function fetchFugleQuote(symbol: string): Promise<FugleQuote | null
 
   // Fugle 只支援台股，strip .TW / .TWO suffix
   const code = symbol.replace(/\.(TW|TWO)$/i, "");
-  if (!/^\d{4,}$/.test(code)) {
+  if (!/^[A-Z0-9]{4,}$/i.test(code)) {
     console.warn(`[Fugle] Invalid symbol format for Fugle: ${symbol}`);
     return null;
   }
