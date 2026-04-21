@@ -52,13 +52,15 @@ function calculateAtr14(bars: PriceDaily[]): number | null {
   );
 
   const trueRanges: number[] = [];
-  for (let i = 1; i < sortedBars.length; i += 1) {
-    const current = sortedBars[i];
-    const prev = sortedBars[i - 1];
+  for (let i = 1; i < sortedBars.length; i++) {
+    const current = sortedBars[i] as any;
+    const prev = sortedBars[i - 1] as any;
+    const high = current.high ?? current.max;
+    const low = current.low ?? current.min;
     const tr = Math.max(
-      current.max - current.min,
-      Math.abs(current.max - prev.close),
-      Math.abs(current.min - prev.close),
+      high - low,
+      Math.abs(high - prev.close),
+      Math.abs(low - prev.close),
     );
     trueRanges.push(tr);
   }
@@ -84,19 +86,19 @@ export function calculateShortTermVolatility(prices: PriceDaily[]): ShortTermVol
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
 
-  const today = sortedBars[sortedBars.length - 1];
-  const yesterday = sortedBars[sortedBars.length - 2];
+  const today = sortedBars[sortedBars.length - 1] as any;
+  const yesterday = sortedBars[sortedBars.length - 2] as any;
 
-  const recent20Volumes = sortedBars.slice(-20).map((bar) => bar.Trading_Volume || 0);
+  const recent20Volumes = sortedBars.slice(-20).map((bar: any) => bar.volume || bar.Trading_Volume || 0);
   const avg20Volume =
     recent20Volumes.length > 0
       ? recent20Volumes.reduce((acc, value) => acc + value, 0) / recent20Volumes.length
       : 0;
 
-  const volumeSpike = safeDiv(today.Trading_Volume || 0, avg20Volume);
+  const volumeSpike = safeDiv(today.volume || today.Trading_Volume || 0, avg20Volume);
   const atr14 = calculateAtr14(sortedBars);
   const atrPct = atr14 !== null ? safeDiv(atr14, today.close) : null;
-  const gap = safeDiv(today.open, yesterday.close);
+  const gap = yesterday ? safeDiv(today.open, yesterday.close) : null;
   const normalizedGap = gap === null ? null : gap - 1;
 
   const volumeScore = mapVolumeSpikeScore(volumeSpike);

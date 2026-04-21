@@ -95,12 +95,20 @@ export class SnapshotService {
     if (snapshotData.warnings.length > 0) warnings.push(...snapshotData.warnings);
 
     const prices = snapshotData.prices;
-    const legacyPrices = prices.map(p => ({ date: p.date, stock_id: norm.symbol, Trading_Volume: p.volume, open: p.open, max: p.high, min: p.low, close: p.close }));
+    const legacyPrices = (prices as any[]).map((p: any) => ({ 
+      date: p.date, 
+      stock_id: norm.symbol, 
+      volume: p.volume || p.Trading_Volume, 
+      open: p.open, 
+      high: p.high || p.max, 
+      low: p.low || p.min, 
+      close: p.close 
+    }));
     const latestDate = prices[prices.length - 1].date;
 
     // 4. 指標計算
-    const trendSignals = calculateTrend(legacyPrices);
-    const flowSignals = calculateFlow(prices.map(p=>p.date), snapshotData.flow?.investors || [], snapshotData.flow?.margin || []);
+    const trendSignals = calculateTrend(legacyPrices as any);
+    const flowSignals = calculateFlow((prices as any[]).map((p: any) => p.date), snapshotData.flow?.investors || [], snapshotData.flow?.margin || []);
     let fundamentalSignals = calculateFundamental(snapshotData.fundamentals.revenue || []);
     
     // US Fundamental Fallback
@@ -131,7 +139,7 @@ export class SnapshotService {
     if (!isMarketOpen(norm.symbol) && liveQuote && Math.abs(liveQuote.price - fLatestClose) / fLatestClose > 0.05) latestClose = fLatestClose;
 
     // 關鍵價位
-    const mappedPrices = prices.map(p => ({ ...p }));
+    const mappedPrices = (prices as any[]).map((p: any) => ({ ...p }));
     const todayStr = new Date().toLocaleDateString('en-CA');
     if (liveQuote) {
        const last = mappedPrices[mappedPrices.length - 1];
@@ -155,7 +163,7 @@ export class SnapshotService {
        const [gl, mkt, it] = await Promise.all([
           (async () => {
              const profile = await resolveStockProfile(norm.symbol, displayName);
-             const { members: all, targetClusterId: tid } = await getOrComputeClusters(norm.symbol, prices.map(p=>({date:p.date,close:p.close})), 15);
+             const { members: all, targetClusterId: tid } = await getOrComputeClusters(norm.symbol, (prices as any[]).map((p: any)=>({date:p.date,close:p.close})), 15);
              const theme = profile.sectorZh;
              const usMap = mapThemeToUS(theme, norm.symbol);
              const peers = await selectTwPeers(norm.symbol, Array.from(all.values()).filter(m=>m.clusterId === tid), theme, all);
@@ -166,8 +174,8 @@ export class SnapshotService {
                 globalBars.forEach(r => globalData[r.symbol] = r.bars);
              } catch {}
              
-             const drivers = selectDrivers(prices.map(p=>({date:p.date,close:p.close})), usMap, globalData);
-             return { linkage: { profile, drivers, relativeStrength: calculateRelativeStrength(prices.map(p=>({date:p.date,close:p.close})), drivers.sector, globalData), twPeerLinkage: peers } };
+             const drivers = selectDrivers((prices as any[]).map((p: any)=>({date:p.date,close:p.close})), usMap, globalData);
+             return { linkage: { profile, drivers, relativeStrength: calculateRelativeStrength((prices as any[]).map((p: any)=>({date:p.date,close:p.close})), drivers.sector, globalData), twPeerLinkage: peers } };
           })(),
           getMarketIndicators({ symbols: ["^VIX", "^MOVE", "SOXX", "QQQ", "^DXY", "DX-Y.NYB", "UUP", "USDJPY=X", "JPY=X"], rangeDays: 65 }),
           this.isTaiwanStock(norm.symbol) ? getFilteredInsiderTransfers(norm.symbol).catch(()=>[]) : Promise.resolve([])

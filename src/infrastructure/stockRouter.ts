@@ -47,7 +47,7 @@ export async function fetchStockSnapshot(norm: NormalizedTicker) {
         getMarginShort(symbol, format(subDays(now, 60), "yyyy-MM-dd"), today),
         getMonthlyRevenue(symbol, format(subDays(now, 365), "yyyy-MM-dd"), today),
         getTaiwanStockNews(symbol, format(subDays(now, 7), "yyyy-MM-dd"), today),
-        getTvTechnicalIndicators(symbol, "taiwan")
+        getTvTechnicalIndicators(symbol)
       ]);
 
       results.prices = priceRes.data || [];
@@ -62,7 +62,7 @@ export async function fetchStockSnapshot(norm: NormalizedTicker) {
         getPriceDailyUs(symbol, startDate, today).catch(() => ({ data: [] })),
         getMonthlyRevenueUs(symbol, startDate, today).catch(() => ({ data: [] })),
         getUsStockNews(symbol, format(subDays(now, 14), "yyyy-MM-dd"), today).catch(() => ({ data: [] })),
-        getTvTechnicalIndicators(symbol, "america")
+        getTvTechnicalIndicators(symbol)
       ]);
       results.prices = priceRes.data || [];
       results.fundamentals.revenue = revRes.data || [];

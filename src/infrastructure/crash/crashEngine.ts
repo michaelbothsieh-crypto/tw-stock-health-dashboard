@@ -1,4 +1,4 @@
-import { MarketIndicatorResult } from "../../providers/marketIndicators";
+import { MarketIndicatorResult } from "@/infrastructure/providers/marketIndicators";
 
 export interface CrashFactorResult {
   score: number | null;

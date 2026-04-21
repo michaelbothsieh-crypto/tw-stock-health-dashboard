@@ -1,4 +1,4 @@
-import { PriceDaily } from "../providers/finmind";
+import { PriceDaily } from "@/infrastructure/providers/finmind";
 
 export interface TrendSignals {
     sma20: number | null;
@@ -126,7 +126,7 @@ export function calculateTrend(data: PriceDaily[]): TrendSignals {
     }
 
     const closes = sortedData.map(d => d.close);
-    const volumes = sortedData.map(d => d.Trading_Volume || 0); // 這裡 Volume 可能是單位股數，缺值為 0
+    const volumes = sortedData.map((d: any) => d.volume || d.Trading_Volume || 0); // 這裡 Volume 可能是單位股數，缺值為 0
     const currentClose = closes[closes.length - 1];
 
     const risks: string[] = [];

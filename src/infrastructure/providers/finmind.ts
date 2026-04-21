@@ -57,6 +57,14 @@ export async function getInstitutionalInvestorsUs(symbol: string, start: string,
   return fetchFinmind("USStockInstitutionalInvestorsBuySell", symbol, start, end);
 }
 
+export async function getFugleTechnicalIndicators(symbol: string) {
+    return null; // Placeholder for legacy compatibility
+}
+
+export async function getFugleTechnicalIndicatorsTpex(symbol: string) {
+    return null; // Placeholder for legacy compatibility
+}
+
 // 相容性導出
 export async function getStockInfo(symbol: string) {
    return fetchFinmind("TaiwanStockInfo", symbol, "2020-01-01", "2020-01-01");
@@ -89,6 +97,7 @@ export interface MonthlyRevenue {
   revenue: number;
   revenue_year: number;
   revenue_month: number;
+  revenue_year_on_year: number;
 }
 
 export const FinmindProviderError = Error;

@@ -115,18 +115,25 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
    const command = commandRaw.toLowerCase().split("@")[0];
 
    const ALLOWED_CORE = ["/stock", "/whatis", "/rank", "/roi", "/etf", "/twrank", "/usrank", "/hot"];
+   let progressMessageId: number | null = null;
    if (ALLOWED_CORE.includes(command)) {
-      await sendMessage(chatId, "正在搜尋資料中...");
+      progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
    }
 
    try {
       const reply = await generateBotReply(text, { ...options, chatId: String(chatId) });
       if (reply) {
-         await replyWithCard(chatId, null, reply.text, reply.chartBuffer || null, reply.chartBuffers);
+         await replyWithCard(chatId, progressMessageId, reply.text, reply.chartBuffer || null, reply.chartBuffers);
+      } else if (progressMessageId) {
+         await deleteMessage(chatId, progressMessageId);
       }
    } catch (error) {
       console.error("[BotEngine] handleTelegramMessage Error:", error);
-      await sendMessage(chatId, "抱歉，處理資料時發生錯誤。");
+      if (progressMessageId) {
+         await editMessage(chatId, progressMessageId, "抱歉，處理資料時發生錯誤。");
+      } else {
+         await sendMessage(chatId, "抱歉，處理資料時發生錯誤。");
+      }
    }
 }
 

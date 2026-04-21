@@ -46,8 +46,8 @@ export async function fetchRecentBars(
 
             // 排序與過濾
             const sortedAndFiltered = rawData
-                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                .filter(d => typeof d.close === 'number');
+                .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                .filter((d: any) => typeof d.close === 'number');
 
             if (sortedAndFiltered.length >= targetBars) {
                 validData = sortedAndFiltered;

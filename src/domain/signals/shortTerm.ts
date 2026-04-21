@@ -1,4 +1,4 @@
-import { PriceDaily } from "../providers/finmind";
+import { PriceDaily } from "@/infrastructure/providers/finmind";
 import { ShortTermVolatility } from "./shortTermVolatility";
 import { TrendSignals } from "./trend";
 
@@ -79,8 +79,8 @@ export function calculateShortTermSignals(
     };
   }
 
-  const closes = sorted.map((bar) => bar.close);
-  const highs = sorted.map((bar) => bar.max);
+  const closes = sorted.map((bar: any) => bar.close);
+  const highs = sorted.map((bar: any) => bar.high || bar.max);
   const latest = sorted[sorted.length - 1];
   const close = latest.close;
 
