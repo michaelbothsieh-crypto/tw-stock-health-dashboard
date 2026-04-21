@@ -166,14 +166,19 @@ export class StockService {
          card.shortDir = snapshot?.predictions?.upProb1D ? (snapshot.predictions.upProb1D >= 58 ? "偏多" : snapshot.predictions.upProb1D <= 42 ? "偏空" : "中立") : "中立";
          card.strategySignal = snapshot?.strategy?.signal || "觀察";
          card.confidence = snapshot?.strategy?.confidence;
+         
+         // 抓取 Yahoo 備援新聞 (透過 Search API)
+         const yahooSearchRes = await yahooFinance.search(yahooSymbol).catch(() => null);
+
          const getFirstNewsTitle = (news: any): string | null => {
             if (!news || !Array.isArray(news) || news.length === 0) return null;
             const first = news[0];
-            return typeof first === 'string' ? first : first?.title || null;
+            return typeof first === 'string' ? first : (first?.title || first?.headline || null);
          };
 
          card.recentNews = snapshot?.news || [];
-         card.newsLine = buildNewsLine(tvNews || getFirstNewsTitle(card.recentNews), 96);
+         const fallbackNews = getFirstNewsTitle(card.recentNews) || getFirstNewsTitle((yahooSearchRes as any)?.news);
+         card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
          card.insiderSells = snapshot?.insiderTransfers || [];
          card.flowScore = snapshot?.signals?.flow?.flowScore;
          card.macroRisk = snapshot?.crashWarning?.score;
@@ -223,7 +228,7 @@ export class StockService {
             const getFirstNewsTitle = (news: any): string | null => {
                if (!news || !Array.isArray(news) || news.length === 0) return null;
                const first = news[0];
-               return typeof first === 'string' ? first : first?.title || null;
+               return typeof first === 'string' ? first : (first?.title || first?.headline || null);
             };
 
             card.recentNews = snapshot?.news || [];

@@ -16,12 +16,19 @@ export const TV_RATING_ZH: Record<TVRating, string> = {
 
 export async function fetchTradingViewRating(ticker: string, market: 'taiwan' | 'america'): Promise<TVRating> {
   const url = `https://scanner.tradingview.com/${market}/scan`;
-  const symbol = market === 'taiwan' 
-    ? (ticker.includes('.') ? ticker : `TWSE:${ticker}`) 
-    : (ticker.includes(':') ? ticker : `NASDAQ:${ticker}`);
+  
+  let symbol = ticker.toUpperCase();
+  if (market === 'taiwan') {
+    if (!symbol.includes(':')) {
+      const isProbablyTPEX = symbol.startsWith("8") || symbol.startsWith("5") || symbol.startsWith("4") || (symbol.startsWith("3") && symbol !== "3008") || symbol.endsWith("B");
+      symbol = `${isProbablyTPEX ? 'TPEX' : 'TWSE'}:${symbol}`;
+    }
+  } else {
+    if (!symbol.includes(':')) symbol = `NASDAQ:${symbol}`;
+  }
 
   const body = {
-    symbols: { tickers: [symbol.toUpperCase()] },
+    symbols: { tickers: [symbol] },
     columns: ["Recommend.All"]
   };
 
