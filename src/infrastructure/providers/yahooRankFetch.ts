@@ -1,7 +1,6 @@
 
 /**
- * Yahoo Finance Trending API - 取得目前熱門趨勢
- * API: https://query1.finance.yahoo.com/v1/finance/trending/TW
+ * Yahoo 奇摩股市 - 社群爆紅榜 (熱門瀏覽)
  */
 
 export interface YahooRankItem {
@@ -14,52 +13,86 @@ export interface YahooRankItem {
 }
 
 export async function fetchYahooCommunityRank(type: 'all' | 'stock' | 'etf' = 'all'): Promise<YahooRankItem[]> {
-  const url = `https://query1.finance.yahoo.com/v1/finance/trending/TW`;
+  const url = `https://tw.stock.yahoo.com/community/rank/active?type=${type}`;
   
   try {
     const res = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Referer': 'https://tw.stock.yahoo.com/'
       }
     });
 
-    if (!res.ok) {
-        // Fallback: 如果 429 則回傳空陣列
-        if (res.status === 429) console.warn('[YahooRank] Rate limited (429)');
-        return [];
+    if (!res.ok) return [];
+    const html = await res.text();
+
+    // 1. 擷取 root.App.main 的 JSON
+    const marker = 'root.App.main = ';
+    const startIdx = html.indexOf(marker);
+    if (startIdx === -1) return [];
+
+    let jsonStr = "";
+    let bracketCount = 0;
+    let foundStart = false;
+
+    for (let i = startIdx + marker.length; i < html.length; i++) {
+        const char = html[i];
+        if (char === '{') {
+            bracketCount++;
+            foundStart = true;
+        } else if (char === '}') {
+            bracketCount--;
+        }
+        if (foundStart) {
+            jsonStr += char;
+            if (bracketCount === 0) break;
+        }
     }
-    
-    const json = await res.json();
-    const quotes = json?.finance?.result?.[0]?.quotes || [];
 
-    const result: YahooRankItem[] = [];
-    let rankCount = 1;
+    if (!jsonStr) return [];
+    // 淨化 JSON (處理 undefined)
+    const sanitizedJson = jsonStr.replace(/:\s*undefined\s*(,|})/g, ":null$1");
+    const data = JSON.parse(sanitizedJson);
 
-    for (const q of quotes) {
-      const fullSymbol = q.symbol;
-      const ticker = fullSymbol.split('.')[0];
-      
-      // 簡單分類判斷
+    // 2. 依照 Yahoo 最新結構提取列表 (精準路徑)
+    // 優先順序: Stores -> Plugins -> 遞迴搜尋
+    const stores = data?.context?.dispatcher?.stores;
+    let list = stores?.CommunityRankingStore?.rankList || 
+               stores?.RankStore?.list || 
+               data?.pageData?.context?.dispatcher?.stores?.CommunityRankingStore?.rankList;
+
+    if (!list) {
+        // 最後防線：遞迴尋找具有 symbol 的陣列
+        const findArray = (obj: any): any[] | null => {
+            if (!obj || typeof obj !== 'object') return null;
+            if (Array.isArray(obj) && obj.length > 0 && obj[0].symbol) return obj;
+            for (const k in obj) {
+                const found = findArray(obj[k]);
+                if (found) return found;
+            }
+            return null;
+        };
+        list = findArray(data);
+    }
+
+    if (!list || !Array.isArray(list)) return [];
+
+    return list.slice(0, 10).map((item: any, index: number) => {
+      const fullSymbol = item.symbol || "";
+      const ticker = fullSymbol.replace('.TW', '').replace('.TWO', '');
       const isETF = ticker.startsWith('00') || ticker.startsWith('01');
-      
-      if (type === 'etf' && !isETF) continue;
-      if (type === 'stock' && isETF) continue;
 
-      result.push({
+      return {
         symbol: ticker,
-        name: ticker, // Trending API 通常不帶名稱，後續由 BotEngine 名稱解析補上
-        price: null,
-        changePct: null,
-        rank: rankCount++,
+        name: item.stockName || item.name || ticker,
+        price: typeof item.price === 'number' ? item.price : (typeof item.close === 'number' ? item.close : null),
+        changePct: typeof item.changePercent === 'number' ? item.changePercent : null,
+        rank: index + 1,
         category: isETF ? 'ETF' : '股票'
-      });
-
-      if (result.length >= 10) break;
-    }
-
-    return result;
+      };
+    });
   } catch (err) {
-    console.error('[YahooRank] Error fetching trending:', err);
+    console.error('[YahooRank] Error:', err);
     return [];
   }
 }

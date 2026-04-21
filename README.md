@@ -31,6 +31,24 @@
 
 ---
 
+## 📸 功能實景展示 (Gallery)
+
+### 📊 戰術情報中心 (Web Dashboard)
+| 核心戰情室 | 技術面分析 | 籌碼流向雷達 |
+|:---:|:---:|:---:|
+| ![Dashboard Summary](public/screenshots/summary.png) | ![Technical Analysis](public/screenshots/technical.png) | ![Flow Radar](public/screenshots/flow_radar.png) |
+
+| 實戰腳本 (AI Playbook) | 全球連動監控 | 多維度雷達圖 |
+|:---:|:---:|:---:|
+| ![AI Playbook](public/screenshots/playbook.png) | ![Global Linkage](public/screenshots/chart_peer.png) | ![Radar Overview](public/screenshots/radar.png) |
+
+### ⚡ Telegram 智能助理 (Mobile Experience)
+| 深度健檢卡片 | 自定義觀察名單 | 階段性能量分析 |
+|:---:|:---:|:---:|
+| ![Details View](public/screenshots/details.png) | ![Watchlist](public/screenshots/watchlist.png) | ![Stages Analysis](public/screenshots/stages.png) |
+
+---
+
 ## 🏗️ 軟體工程實踐
 本專案經歷了深度的架構重構，嚴格遵循以下現代軟體開發標準：
 *   **SOLID & SoC**：核心邏輯已解耦為 `SnapshotService`、`StockService` 與 `MessageService`，確保職責單一且易於測試。
