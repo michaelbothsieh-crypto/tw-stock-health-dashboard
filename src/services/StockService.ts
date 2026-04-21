@@ -49,7 +49,7 @@ export interface StockCard {
    isPriceRealTime?: boolean;
    yahooSymbol?: string;
    tvRating?: string;
-   marketStatusLabel?: string; // 盤前/盤後/即時 標籤
+   marketStatusLabel?: string;
 }
 
 export class StockService {
@@ -73,9 +73,7 @@ export class StockService {
          }
       }
       const first = news[0];
-      const firstTitle = typeof first === 'string' ? first : (first?.title || first?.headline);
-      if (firstTitle && isUS) return firstTitle;
-      return null;
+      return (typeof first === 'string' ? first : (first?.title || first?.headline)) || null;
    }
 
    private static getRichNewsList(news: any, symbol?: string, isUS = false): string[] {
@@ -202,7 +200,7 @@ export class StockService {
          card.confidence = snapshot?.strategy?.confidence;
          
          const yahooSearchRes = await yahooFinance.search(yahooSymbol).catch(() => null);
-         const snapshotNewsRaw = Array.isArray(snapshot?.news) ? snapshot.news : (snapshot?.news?.timeline || []);
+         const snapshotNewsRaw = snapshot?.news?.timeline || (Array.isArray(snapshot?.news) ? snapshot.news : []);
          card.recentNews = [
             ...this.getRichNewsList(snapshotNewsRaw, symbol, isUS),
             ...this.getRichNewsList((yahooSearchRes as any)?.news, symbol, isUS)
@@ -215,7 +213,10 @@ export class StockService {
          card.insiderSells = snapshot?.insiderTransfers || [];
          card.flowScore = snapshot?.signals?.flow?.flowScore;
          card.macroRisk = snapshot?.crashWarning?.score;
-         card.industry = snapshot?.globalLinkage?.profile?.sectorZh || snapshot?.industry;
+         
+         const { resolveStockProfile } = await import("@/domain/industry/stockProfileResolver");
+         const localProfile = await resolveStockProfile(symbol, card.nameZh).catch(() => null);
+         card.industry = snapshot?.globalLinkage?.profile?.sectorZh || snapshot?.industry || localProfile?.sectorZh || "—";
          
          if (!skipQuote) {
             const rating = await fetchTradingViewRating(symbol, 'taiwan');
@@ -247,14 +248,12 @@ export class StockService {
 
          if (snapshot || rtQuote) {
             const snapPrice = snapshot?.data?.prices?.length ? snapshot.data.prices[snapshot.data.prices.length-1].close : null;
-            
-            // --- 智慧時段報價邏輯 ---
             let finalPrice = rtQuote?.regularMarketPrice || snapPrice;
             let finalChgPct = rtQuote?.regularMarketChangePercent || null;
             let statusLabel = "";
 
             if (rtQuote) {
-               const state = rtQuote.marketState; // PRE, REGULAR, POST, CLOSED
+               const state = rtQuote.marketState;
                if (state === "PRE" && rtQuote.preMarketPrice) {
                   finalPrice = rtQuote.preMarketPrice;
                   finalChgPct = rtQuote.preMarketChangePercent;
@@ -279,12 +278,12 @@ export class StockService {
                p5d: snapshot?.predictions?.upProb5D, 
                support: snapshot?.keyLevels?.supportLevel, resistance: snapshot?.keyLevels?.breakoutLevel,
                bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [], chartBuffer: null,
-               industry: assetProfile?.assetProfile?.sector || snapshot?.industry || "—",
+               industry: snapshot?.globalLinkage?.profile?.sectorZh || snapshot?.industry || assetProfile?.assetProfile?.sector || "—",
                marketStatusLabel: statusLabel
             };
             
             const yahooSearchRes = await yahooFinance.search(symbol).catch(() => null);
-            const snapshotNewsRaw = Array.isArray(snapshot?.news) ? snapshot.news : (snapshot?.news?.timeline || []);
+            const snapshotNewsRaw = snapshot?.news?.timeline || (Array.isArray(snapshot?.news) ? snapshot.news : []);
             card.recentNews = [
                ...this.getRichNewsList(snapshotNewsRaw, symbol, true),
                ...this.getRichNewsList((yahooSearchRes as any)?.news, symbol, true)
