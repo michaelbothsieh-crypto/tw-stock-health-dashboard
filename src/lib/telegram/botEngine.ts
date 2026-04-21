@@ -959,41 +959,23 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
          ? await Promise.all(tickers.map(t => fetchLiveUsStockCard(t, options?.baseUrl, true, true)))
          : await Promise.all(tickers.map(t => fetchLiveStockCard(t, options?.baseUrl, true, true)));
 
-      const errorParts: string[] = [];
-      const buffers: Buffer[] = [];
-      const validSymbols: string[] = [];
       const textLines: string[] = [`🏆 <b>${isUs ? "美股" : "台股"}昨日漲幅前 10 名</b>`, ""];
 
       for (let i = 0; i < tickers.length; i++) {
          const card = cards[i];
          const g = gainers[i];
          if (!card) {
-            errorParts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料。`));
+            textLines.push(`${i + 1}. ${tickers[i]}: <b>+${g.change.toFixed(2)}%</b>`);
          } else {
             const isTW = /^[0-9]+$/.test(card.symbol);
             const name = twStockNames[card.symbol] || card.nameZh || "";
             const label = (isTW && name) ? `${name}(${card.symbol})` : card.symbol;
             textLines.push(`${i + 1}. ${label}: <b>+${g.change.toFixed(2)}%</b>`);
-
-            if (card.chartBuffer) {
-               buffers.push(card.chartBuffer);
-               validSymbols.push(card.symbol);
-            }
          }
       }
 
-      // 每 3 張合併一組
-      const chartBuffers: Buffer[] = [];
-      for (let i = 0; i < buffers.length; i += 3) {
-         const chunk = buffers.slice(i, i + 3);
-         const chunkSymbols = validSymbols.slice(i, i + 3);
-         const combined = await combineImages(chunk, chunkSymbols);
-         if (combined) chartBuffers.push(combined);
-      }
-
       return { 
-         text: textLines.join("\n") + (errorParts.length > 0 ? "\n\n" + errorParts.join("\n") : ""), 
-         chartBuffers 
+         text: textLines.join("\n")
       };
    }
 
