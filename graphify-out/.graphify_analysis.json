@@ -1,0 +1,950 @@
+{
+  "communities": {
+    "0": [
+      "constants_formatturnover",
+      "constants_getbreakoutfastema",
+      "constants_getbreakoutmaxcrossagedays",
+      "constants_getbreakoutminrsi",
+      "constants_getbreakoutminturnover",
+      "constants_getbreakoutrelativevolumemultiplier",
+      "constants_getbreakoutslowema",
+      "constants_getbreakouttrendema",
+      "correlation_calculateinstitutioncorrelation",
+      "correlation_pearsoncorrelation",
+      "marketindicators_getmarketindicators",
+      "relativestrength_calculaterelativestrength",
+      "relativestrength_calculatesma",
+      "riskflags_riskflaglabel",
+      "route_buildtelegrammessage",
+      "route_buildtvcolumns",
+      "route_dedupebysymbol",
+      "route_fetchfreshgoldencrossmatches",
+      "route_formatdatekey",
+      "route_get",
+      "route_getwatchlist",
+      "route_istaiwanstock",
+      "route_parseboundednumber",
+      "route_scantradingview",
+      "route_tonumber",
+      "src_app_api_cron_breakout_alert_route_ts",
+      "src_app_api_cron_daily_alert_route_ts",
+      "src_app_api_global_crash_route_ts",
+      "src_app_api_health_news_route_ts",
+      "src_app_api_report_latest_route_ts",
+      "src_app_api_screener_breakout_route_ts",
+      "src_app_api_stock_name_route_ts",
+      "src_app_api_stock_ticker_chart_route_ts",
+      "src_app_api_stock_ticker_insider_route_ts",
+      "src_app_api_stock_ticker_snapshot_route_ts",
+      "src_app_api_telegram_chart_proxy_route_ts",
+      "src_app_api_telegram_health_route_ts",
+      "src_lib_analytics_correlation_ts",
+      "src_lib_analytics_relativestrength_ts",
+      "src_lib_notifications_telegram_ts",
+      "src_lib_providers_marketindicators_ts",
+      "src_lib_providers_twseinsiderfetch_ts",
+      "src_lib_riskflags_ts",
+      "src_lib_screener_constants_ts",
+      "src_lib_ux_summarybuilder_ts",
+      "src_lib_ux_technicaltranslator_ts",
+      "summarybuilder_builduxsummary",
+      "technicaltranslator_translatetechnicals",
+      "telegram_sendtelegramalert",
+      "twseinsiderfetch_getfilteredinsidertransfers"
+    ],
+    "1": [
+      "formatters_calcvolumevs5d",
+      "fuglequote_fetchfuglequote",
+      "market_clearmarketcache",
+      "market_detectmarket",
+      "market_ismarketopen",
+      "nameresolver_containstoomuchenglish",
+      "nameresolver_resolvebatch",
+      "nameresolver_resolvestockname",
+      "rediscache_getcache",
+      "rediscache_setcache",
+      "scripts_test_split_ts",
+      "scripts_test_tv_news_ts",
+      "sentiment_analyzesentiment",
+      "src_hooks_usestocksnapshot_ts",
+      "src_lib_ai_whatisagent_ts",
+      "src_lib_market_ts",
+      "src_lib_news_sentiment_ts",
+      "src_lib_providers_fuglequote_ts",
+      "src_lib_providers_rediscache_ts",
+      "src_lib_providers_tradingviewfetch_ts",
+      "src_lib_providers_tradingviewrating_ts",
+      "src_lib_stocks_nameresolver_ts",
+      "src_lib_telegram_handlers_whatishandler_ts",
+      "src_lib_telegram_stockservice_ts",
+      "src_lib_telegram_utils_ts",
+      "src_lib_ticker_ts",
+      "stockhandler_stockhandler_processticker",
+      "stockservice_stockservice",
+      "stockservice_stockservice_fetchlivestockcard",
+      "stockservice_stockservice_fetchliveusstockcard",
+      "stockservice_stockservice_getsnapshotbaseurl",
+      "test_split_test00631l",
+      "test_tv_news_test",
+      "ticker_normalizeticker",
+      "tradingviewfetch_gettvlatestnewsheadline",
+      "tradingviewfetch_gettvtechnicalindicators",
+      "tradingviewrating_fetchtradingviewrating",
+      "tradingviewrating_parserating",
+      "usestocksnapshot_usestocksnapshot",
+      "utils_resolvecodefrominputlocal",
+      "whatisagent_getstockwhatis",
+      "whatishandler_whatishandler",
+      "whatishandler_whatishandler_canhandle",
+      "whatishandler_whatishandler_handle"
+    ],
+    "2": [
+      "companyname_getcompanynamezh",
+      "driverselector_alignseries",
+      "driverselector_calccorrelation",
+      "driverselector_calcreturns",
+      "driverselector_selectdrivers",
+      "finmind_fetchfromfinmind",
+      "finmind_finmindprovidererror",
+      "finmind_finmindprovidererror_constructor",
+      "finmind_getinstitutionalinvestors",
+      "finmind_getmarginshort",
+      "finmind_getmargintransactions",
+      "finmind_getmonthlyrevenue",
+      "finmind_getpricedaily",
+      "finmind_getstockinfo",
+      "finmind_gettaiwanstocknews",
+      "finmindfetch_buildquerystring",
+      "finmindfetch_dorequest",
+      "finmindfetch_finmindfetch",
+      "finmindfetch_infererrorcode",
+      "finmindfetch_shouldretrywithenvtoken",
+      "src_lib_api_stockrouter_ts",
+      "src_lib_companyname_ts",
+      "src_lib_global_driverselector_ts",
+      "src_lib_global_twinmapping_ts",
+      "src_lib_global_twpeerselector_ts",
+      "src_lib_global_yahoofinance_ts",
+      "src_lib_industry_stockprofileresolver_ts",
+      "src_lib_providers_finmind_ts",
+      "src_lib_providers_finmindfetch_ts",
+      "src_lib_providers_yahoofetch_ts",
+      "stockprofileresolver_resolvebyname",
+      "stockprofileresolver_resolvestockprofile",
+      "stockrouter_fetchstocksnapshot",
+      "twinmapping_gettwinsymbol",
+      "twpeerselector_selecttwpeers",
+      "yahoofetch_gettaiwanstockyahoonews",
+      "yahoofetch_getusstockfundamentals",
+      "yahoofinance_fetchyahoofinancebars"
+    ],
+    "3": [
+      "formatters_buildnewsflag",
+      "formatters_buildnewsline",
+      "formatters_buildstancetext",
+      "formatters_calcsupportresistance",
+      "formatters_clamptextlength",
+      "formatters_detectmajornews",
+      "formatters_escapehtml",
+      "formatters_formatpct",
+      "formatters_formatprice",
+      "formatters_formatsignedpct",
+      "formatters_humanizenumber",
+      "formatters_parsesignednumberloose",
+      "formatters_roundto",
+      "formatters_synclevel",
+      "formatters_tofinite",
+      "generatedailyreport_buildtelegramsummary",
+      "messageservice_messageservice",
+      "messageservice_messageservice_buildstockcardlines",
+      "messageservice_messageservice_buildstockcardwithai",
+      "playbookagent_generaterulebasedplaybook",
+      "playbookagent_gettacticalplaybook",
+      "src_lib_ai_playbookagent_ts",
+      "src_lib_telegram_formatters_ts",
+      "src_lib_telegram_handlers_stockhandler_ts",
+      "src_lib_telegram_messageservice_ts",
+      "stockhandler_stockhandler",
+      "stockhandler_stockhandler_canhandle",
+      "stockhandler_stockhandler_handle"
+    ],
+    "4": [
+      "botengine_deletemessage",
+      "botengine_editmessage",
+      "botengine_ensuretelegramcommandssynced",
+      "botengine_generatebotreply",
+      "botengine_handletelegrammessage",
+      "botengine_replywithcard",
+      "botengine_sendmessage",
+      "chatstore_getallchatids",
+      "chatstore_getredisconfig",
+      "chatstore_registerchatid",
+      "chatstore_removechatid",
+      "chatstore_upstashrequest",
+      "route_forwardtolazytube",
+      "route_getchatid",
+      "route_getsecurebaseurl",
+      "route_post",
+      "route_startloadinganimation",
+      "scripts_test_telegram_chart_ts",
+      "src_app_api_report_daily_route_ts",
+      "src_app_api_stats_visitors_route_ts",
+      "src_app_api_telegram_webhook_route_ts",
+      "src_app_api_webhook_line_route_ts",
+      "src_lib_telegram_botengine_ts",
+      "src_lib_telegram_chatstore_ts",
+      "test_telegram_chart_main"
+    ],
+    "5": [
+      "catalystscore_calculatecatalystscore",
+      "catalystscore_clamp",
+      "catalystscore_includesany",
+      "catalystscore_toimpact",
+      "classify_classifynews",
+      "flow_calculateflow",
+      "fundamental_calculatefundamental",
+      "generatedailyreport_buildmarkdown",
+      "generatedailyreport_buildrow",
+      "generatedailyreport_clamp",
+      "generatedailyreport_decidetomorrowtrend",
+      "generatedailyreport_extractinstitutionnettoday",
+      "generatedailyreport_formatchangepct",
+      "generatedailyreport_formatsignednumber",
+      "generatedailyreport_generatereport",
+      "generatedailyreport_pickmajornews",
+      "scripts_generatedailyreport_ts",
+      "src_lib_config_watchlistparser_ts",
+      "src_lib_news_catalystscore_ts",
+      "src_lib_news_classify_ts",
+      "src_lib_signals_flow_ts",
+      "src_lib_signals_fundamental_ts",
+      "watchlistparser_getwatchlist"
+    ],
+    "6": [
+      "chartrenderer_combineimages",
+      "chartrenderer_drawtext",
+      "chartrenderer_ensurefonts",
+      "chartrenderer_getotfont",
+      "chartrenderer_rendermultiroichart",
+      "chartrenderer_renderprofitchart",
+      "chartrenderer_renderrankchart",
+      "chartrenderer_renderstockchart",
+      "rankhandler_rankhandler",
+      "rankhandler_rankhandler_canhandle",
+      "rankhandler_rankhandler_handle",
+      "rankstore_gettoprankedstocks",
+      "rankstore_recordstocksearch",
+      "roihandler_roihandler",
+      "roihandler_roihandler_canhandle",
+      "roihandler_roihandler_handle",
+      "scripts_test_simple_draw_ts",
+      "src_lib_telegram_handlers_rankhandler_ts",
+      "src_lib_telegram_handlers_roihandler_ts",
+      "src_lib_telegram_rankstore_ts",
+      "src_lib_ux_chartrenderer_ts",
+      "test_simple_draw_test"
+    ],
+    "7": [
+      "clusteringengine_calcreturns",
+      "clusteringengine_euclideandistancesq",
+      "clusteringengine_getorcomputeclusters",
+      "clusteringengine_normalizetozscore",
+      "clusteringengine_runkmeans",
+      "globallinkagetile_getcorrcolor",
+      "globallinkagetile_handleaddtowatchlist",
+      "globallinkagetile_useadaptedlinkage",
+      "src_components_tiles_globallinkagetile_tsx",
+      "src_lib_global_clusteringengine_ts",
+      "src_lib_stores_watchliststore_ts",
+      "watchliststore_watchliststore",
+      "watchliststore_watchliststore_add",
+      "watchliststore_watchliststore_constructor",
+      "watchliststore_watchliststore_getitems",
+      "watchliststore_watchliststore_init",
+      "watchliststore_watchliststore_loadfromstorage",
+      "watchliststore_watchliststore_notify",
+      "watchliststore_watchliststore_remove",
+      "watchliststore_watchliststore_savetostorage",
+      "watchliststore_watchliststore_subscribe"
+    ],
+    "8": [
+      "backtest_evaluatepredictionsignal",
+      "backtest_runbacktest",
+      "calibration_buildcalibrationmodel",
+      "calibration_clamp",
+      "calibration_computebins",
+      "calibration_getcalibrationmodel",
+      "calibration_identitycalibration",
+      "calibration_linearregression",
+      "calibration_rollingsamples",
+      "range_fetchrecentbars",
+      "range_formatdatetoyyyymmdd",
+      "src_lib_predict_backtest_ts",
+      "src_lib_predict_calibration_ts",
+      "src_lib_range_ts",
+      "src_lib_signals_trend_ts",
+      "trend_calculateema",
+      "trend_calculatemacd",
+      "trend_calculatersi",
+      "trend_calculatesma",
+      "trend_calculatetrend"
+    ],
+    "9": [
+      "explainbreakdown_buildexplainbreakdown",
+      "explainbreakdown_clamp",
+      "explainbreakdown_clamp01",
+      "explainbreakdown_scorefromalignment",
+      "explainbreakdown_scorefromatrpct",
+      "explainbreakdown_scorefromflowpressure",
+      "explainbreakdown_scorefromgap",
+      "explainbreakdown_scorefrommacdhistogram",
+      "explainbreakdown_scorefrommarginchange",
+      "explainbreakdown_scorefromreturn",
+      "explainbreakdown_scorefromrsi",
+      "explainbreakdown_scorefromvolumespike",
+      "explainbreakdown_scorefromyoy",
+      "explainbreakdown_scorefromyoytrend",
+      "explainbreakdown_todisplayvalue",
+      "explainbreakdown_withcontribution",
+      "src_lib_explainbreakdown_ts"
+    ],
+    "10": [
+      "select_select",
+      "select_selectgroup",
+      "select_selectitem",
+      "select_selectlabel",
+      "select_selectscrolldownbutton",
+      "select_selectscrollupbutton",
+      "select_selectseparator",
+      "select_selecttrigger",
+      "select_selectvalue",
+      "src_components_ui_select_tsx"
+    ],
+    "11": [
+      "etffetch_calculatemanualreturn",
+      "etffetch_fetchetftopholdings",
+      "etffetch_formatholdingname",
+      "etffetch_tryquote",
+      "etffetch_tryquotesummary",
+      "etfhandler_etfhandler",
+      "etfhandler_etfhandler_canhandle",
+      "etfhandler_etfhandler_handle",
+      "src_lib_providers_etffetch_ts",
+      "src_lib_telegram_handlers_etfhandler_ts"
+    ],
+    "12": [
+      "commandrouter_commandrouter",
+      "commandrouter_commandrouter_constructor",
+      "commandrouter_commandrouter_route",
+      "legacyhelpers_fetchtopgainers",
+      "src_lib_telegram_commandrouter_ts",
+      "src_lib_telegram_handlers_trendrankhandler_ts",
+      "src_lib_telegram_legacyhelpers_ts",
+      "trendrankhandler_trendrankhandler",
+      "trendrankhandler_trendrankhandler_canhandle",
+      "trendrankhandler_trendrankhandler_handle"
+    ],
+    "13": [
+      "src_lib_strategy_strategyengine_ts",
+      "strategyengine_baserisknotes",
+      "strategyengine_buildexplain",
+      "strategyengine_clamp",
+      "strategyengine_downgradesignalbyconsistency",
+      "strategyengine_finalizestrategy",
+      "strategyengine_generatestrategy",
+      "strategyengine_signalfromprob",
+      "strategyengine_strategyconfidence"
+    ],
+    "14": [
+      "breakout_buildbreakoutrow",
+      "breakout_findcrossagedays",
+      "breakout_getbreakoutexitreasons",
+      "breakout_isbreakoutentry",
+      "breakout_isbreakoutexit",
+      "breakout_isfinitenumber",
+      "breakout_parsetvsymbol",
+      "src_lib_screener_breakout_ts"
+    ],
+    "15": [
+      "src_components_layout_utils_tsx",
+      "utils_chipbarcolorclass",
+      "utils_chipcolorclass",
+      "utils_directionlabel",
+      "utils_formatscoreaspercent",
+      "utils_gettwsecolor",
+      "utils_scoretoneclass",
+      "utils_strategylabel"
+    ],
+    "16": [
+      "shortterm_calculateshorttermsignals",
+      "shortterm_clamp",
+      "shortterm_linearmap",
+      "shortterm_mean",
+      "shortterm_percentilerank",
+      "shortterm_stdev",
+      "shortterm_tocontribution",
+      "src_lib_signals_shortterm_ts"
+    ],
+    "17": [
+      "shorttermvolatility_calculateatr14",
+      "shorttermvolatility_calculateshorttermvolatility",
+      "shorttermvolatility_clamp",
+      "shorttermvolatility_mapatrpctscore",
+      "shorttermvolatility_mapgapscore",
+      "shorttermvolatility_mapvolumespikescore",
+      "shorttermvolatility_safediv",
+      "src_lib_signals_shorttermvolatility_ts"
+    ],
+    "18": [
+      "probability_calibrated",
+      "probability_clamp",
+      "probability_computerawprobabilities",
+      "probability_normalizescore",
+      "probability_predictprobabilities",
+      "probability_round1",
+      "probability_sigmoid",
+      "src_lib_predict_probability_ts"
+    ],
+    "19": [
+      "alertagent_generatepushalert",
+      "base_callgemini",
+      "base_callgroq",
+      "base_callllmwithfallback",
+      "modelrouter_getavailablegroqmodels",
+      "src_lib_ai_alertagent_ts",
+      "src_lib_ai_base_ts",
+      "src_lib_ai_modelrouter_ts"
+    ],
+    "20": [
+      "globaldrivers_alignseries",
+      "globaldrivers_calcbeta",
+      "globaldrivers_calccorrelation",
+      "globaldrivers_calcreturns",
+      "globaldrivers_calculateglobaldrivers",
+      "globaldrivers_interpretcorr",
+      "src_lib_global_globaldrivers_ts"
+    ],
+    "21": [
+      "crashengine_calcdrawdown20",
+      "crashengine_calcret20",
+      "crashengine_calcvixstats",
+      "crashengine_clamp",
+      "crashengine_evaluatecrashwarning",
+      "crashengine_safenumber",
+      "src_lib_global_crash_crashengine_ts"
+    ],
+    "22": [
+      "consistency_calculateconsistency",
+      "consistency_clamp",
+      "consistency_directiontotext",
+      "consistency_levelfromscore",
+      "consistency_todirection",
+      "src_lib_consistency_ts"
+    ],
+    "23": [
+      "hothandler_hothandler",
+      "hothandler_hothandler_canhandle",
+      "hothandler_hothandler_handle",
+      "src_lib_providers_yahoorankfetch_ts",
+      "src_lib_telegram_handlers_hothandler_ts",
+      "yahoorankfetch_fetchyahoocommunityrank"
+    ],
+    "24": [
+      "src_components_stockchart_tsx",
+      "stockchart_calculatesma",
+      "stockchart_formatlinevalue",
+      "stockchart_stockchart",
+      "stockchart_truncate2"
+    ],
+    "25": [
+      "src_components_ui_table_tsx",
+      "table_cn",
+      "table_table",
+      "table_tablebody",
+      "table_tableheader"
+    ],
+    "26": [
+      "src_i18n_zh_tw_ts",
+      "zh_tw_impactlabel",
+      "zh_tw_maperrorcodetozh",
+      "zh_tw_stancelabelwithen",
+      "zh_tw_volatilitysummary"
+    ],
+    "27": [
+      "page_formathumanamount",
+      "page_handlemanualrefresh",
+      "page_num",
+      "src_app_screener_page_tsx"
+    ],
+    "28": [
+      "scoreexplainpanel_formatcontribution",
+      "scoreexplainpanel_formatdisplayvalue",
+      "scoreexplainpanel_formatweight",
+      "src_components_scoreexplainpanel_tsx"
+    ],
+    "29": [
+      "card_carddescription",
+      "card_cardfooter",
+      "card_cn",
+      "src_components_ui_card_tsx"
+    ],
+    "30": [
+      "radaroverview_leveltext",
+      "radaroverview_radaroverview",
+      "radaroverview_radartooltip",
+      "src_components_charts_radaroverview_tsx"
+    ],
+    "31": [
+      "dashboardbento_handlekeydown",
+      "dashboardbento_ontickerchange",
+      "dashboardbento_sync",
+      "src_components_dashboard_dashboardbento_tsx"
+    ],
+    "32": [
+      "src_components_ui_visitorstats_tsx",
+      "src_hooks_usevisitorstats_ts",
+      "usevisitorstats_usevisitorstats",
+      "visitorstats_visitorstats"
+    ],
+    "33": [
+      "keylevels_calculateatr",
+      "keylevels_calculatekeylevels",
+      "keylevels_calculatesma",
+      "src_lib_signals_keylevels_ts"
+    ],
+    "34": [
+      "explain_clamp",
+      "explain_formatsignedpercent",
+      "explain_generateexplanation",
+      "src_lib_ai_explain_ts"
+    ],
+    "35": [
+      "src_components_layout_stockskeleton_tsx",
+      "stockskeleton_desktopstockskeleton",
+      "stockskeleton_mobilestockskeleton"
+    ],
+    "36": [
+      "darktooltip_darktooltip",
+      "darktooltip_formatvalue",
+      "src_components_charts_darktooltip_tsx"
+    ],
+    "37": [
+      "src_components_bento_tile_tsx",
+      "tile_tileheader",
+      "tile_tilevalue"
+    ],
+    "38": [
+      "flow_test_generateinstdata",
+      "flow_test_generatemargindata",
+      "src_lib_signals_tests_flow_test_ts"
+    ],
+    "39": [
+      "crashwarning_test_buildmarketdata",
+      "crashwarning_test_generatemockbars",
+      "src_lib_tests_crashwarning_test_ts"
+    ],
+    "40": [
+      "src_lib_ai_stockanalyst_ts",
+      "stockanalyst_buildanalystprompt",
+      "stockanalyst_generatestockanalysis"
+    ],
+    "41": [
+      "reportfetcher_fetchlatestreport",
+      "reportfetcher_readlatestlocalreport",
+      "src_lib_telegram_reportfetcher_ts"
+    ],
+    "42": [
+      "src_lib_global_thememapper_ts",
+      "thememapper_mapthemetous",
+      "thememapper_normalizesymbol"
+    ],
+    "43": [
+      "scripts_test_etf_api_ts",
+      "test_etf_api_test"
+    ],
+    "44": [
+      "clear_whatis_cache_clearcache",
+      "scripts_clear_whatis_cache_ts"
+    ],
+    "45": [
+      "layout_rootlayout",
+      "src_app_layout_tsx"
+    ],
+    "46": [
+      "page_homepage",
+      "src_app_page_tsx"
+    ],
+    "47": [
+      "page_stockpage",
+      "src_app_stock_ticker_page_tsx"
+    ],
+    "48": [
+      "page_handlescoreloaded",
+      "src_app_watchlist_page_tsx"
+    ],
+    "49": [
+      "page_handlegenerate",
+      "src_app_reports_page_tsx"
+    ],
+    "50": [
+      "sidebar_sidebar",
+      "src_components_sidebar_tsx"
+    ],
+    "51": [
+      "providers_providers",
+      "src_components_providers_tsx"
+    ],
+    "52": [
+      "src_components_ui_tabs_tsx",
+      "tabs_cn"
+    ],
+    "53": [
+      "badge_badge",
+      "src_components_ui_badge_tsx"
+    ],
+    "54": [
+      "button_cn",
+      "src_components_ui_button_tsx"
+    ],
+    "55": [
+      "input_input",
+      "src_components_ui_input_tsx"
+    ],
+    "56": [
+      "macroradartile_macroradartile",
+      "src_components_tiles_macroradartile_tsx"
+    ],
+    "57": [
+      "src_components_tiles_technicaltile_tsx",
+      "technicaltile_technicaltile"
+    ],
+    "58": [
+      "flowradartile_flowradartile",
+      "src_components_tiles_flowradartile_tsx"
+    ],
+    "59": [
+      "bentogrid_bentogrid",
+      "src_components_bento_bentogrid_tsx"
+    ],
+    "60": [
+      "healthcard_fetchdata",
+      "src_components_watchlist_healthcard_tsx"
+    ],
+    "61": [
+      "src_hooks_usewatchlist_ts",
+      "usewatchlist_usewatchlist"
+    ],
+    "62": [
+      "src_lib_utils_ts",
+      "utils_cn"
+    ],
+    "63": [
+      "src_lib_providers_yahoofinance_ts",
+      "yahoofinance_fetchyahooquote"
+    ],
+    "64": [
+      "fundamental_test_generaterevenuedata",
+      "src_lib_signals_tests_fundamental_test_ts"
+    ],
+    "65": [
+      "src_lib_signals_tests_trend_test_ts",
+      "trend_test_generatemockdata"
+    ],
+    "66": [
+      "inputresolver_resolvecodefrominput",
+      "src_lib_stocks_inputresolver_ts"
+    ],
+    "67": [
+      "scorestyles_getsharedscorestyle",
+      "src_lib_ux_scorestyles_ts"
+    ],
+    "68": [
+      "playbookgenerator_generateplaybook",
+      "src_lib_ux_playbookgenerator_ts"
+    ],
+    "69": [
+      "next_env_d_ts"
+    ],
+    "70": [
+      "test_fugle_ts"
+    ],
+    "71": [
+      "next_config_ts"
+    ],
+    "72": [
+      "scripts_patch_verify_ts"
+    ],
+    "73": [
+      "scripts_patch_bot_engine_ts"
+    ],
+    "74": [
+      "src_components_ui_tooltip_tsx"
+    ],
+    "75": [
+      "src_components_layout_types_ts"
+    ],
+    "76": [
+      "src_components_layout_desktopstocklayout_tsx"
+    ],
+    "77": [
+      "src_components_layout_mobilestocklayout_tsx"
+    ],
+    "78": [
+      "src_components_dashboard_heroplaybook_tsx"
+    ],
+    "79": [
+      "src_lib_types_stock_ts"
+    ],
+    "80": [
+      "src_lib_screener_tests_breakout_test_ts"
+    ],
+    "81": [
+      "src_lib_providers_yahoofinanceclient_ts"
+    ],
+    "82": [
+      "src_lib_ux_fontdata_ts"
+    ],
+    "83": [
+      "src_lib_tests_market_test_ts"
+    ],
+    "84": [
+      "src_lib_tests_range_test_ts"
+    ],
+    "85": [
+      "src_lib_tests_ticker_test_ts"
+    ],
+    "86": [
+      "src_lib_news_tests_sentiment_test_ts"
+    ],
+    "87": [
+      "src_lib_news_tests_catalystscore_test_ts"
+    ],
+    "88": [
+      "src_lib_news_tests_classify_test_ts"
+    ],
+    "89": [
+      "src_lib_ai_tests_explain_test_ts"
+    ],
+    "90": [
+      "src_lib_telegram_types_ts"
+    ],
+    "91": [
+      "src_lib_global_stockpool_ts"
+    ],
+    "92": [
+      "src_lib_strategy_types_ts"
+    ],
+    "93": [
+      "src_i18n_glossary_zh_tw_ts"
+    ],
+    "94": [
+      "src_data_twstocknames_ts"
+    ]
+  },
+  "cohesion": {
+    "0": 0.06,
+    "1": 0.07,
+    "2": 0.08,
+    "3": 0.11,
+    "4": 0.14,
+    "5": 0.13,
+    "6": 0.13,
+    "7": 0.16,
+    "8": 0.16,
+    "9": 0.26,
+    "10": 0.2,
+    "11": 0.27,
+    "12": 0.2,
+    "13": 0.44,
+    "14": 0.46,
+    "15": 0.25,
+    "16": 0.54,
+    "17": 0.57,
+    "18": 0.54,
+    "19": 0.25,
+    "20": 0.52,
+    "21": 0.67,
+    "22": 0.67,
+    "23": 0.33,
+    "24": 0.5,
+    "25": 0.4,
+    "26": 0.4,
+    "27": 0.5,
+    "28": 0.5,
+    "29": 0.5,
+    "30": 0.5,
+    "31": 0.5,
+    "32": 0.5,
+    "33": 0.83,
+    "34": 0.83,
+    "35": 0.67,
+    "36": 0.67,
+    "37": 0.67,
+    "38": 0.67,
+    "39": 0.67,
+    "40": 1.0,
+    "41": 1.0,
+    "42": 1.0,
+    "43": 1.0,
+    "44": 1.0,
+    "45": 1.0,
+    "46": 1.0,
+    "47": 1.0,
+    "48": 1.0,
+    "49": 1.0,
+    "50": 1.0,
+    "51": 1.0,
+    "52": 1.0,
+    "53": 1.0,
+    "54": 1.0,
+    "55": 1.0,
+    "56": 1.0,
+    "57": 1.0,
+    "58": 1.0,
+    "59": 1.0,
+    "60": 1.0,
+    "61": 1.0,
+    "62": 1.0,
+    "63": 1.0,
+    "64": 1.0,
+    "65": 1.0,
+    "66": 1.0,
+    "67": 1.0,
+    "68": 1.0,
+    "69": 1.0,
+    "70": 1.0,
+    "71": 1.0,
+    "72": 1.0,
+    "73": 1.0,
+    "74": 1.0,
+    "75": 1.0,
+    "76": 1.0,
+    "77": 1.0,
+    "78": 1.0,
+    "79": 1.0,
+    "80": 1.0,
+    "81": 1.0,
+    "82": 1.0,
+    "83": 1.0,
+    "84": 1.0,
+    "85": 1.0,
+    "86": 1.0,
+    "87": 1.0,
+    "88": 1.0,
+    "89": 1.0,
+    "90": 1.0,
+    "91": 1.0,
+    "92": 1.0,
+    "93": 1.0,
+    "94": 1.0
+  },
+  "gods": [
+    {
+      "id": "route_get",
+      "label": "GET()",
+      "degree": 66
+    },
+    {
+      "id": "generatedailyreport_buildrow",
+      "label": "buildRow()",
+      "degree": 24
+    },
+    {
+      "id": "test_tv_news_test",
+      "label": "test()",
+      "degree": 19
+    },
+    {
+      "id": "explainbreakdown_buildexplainbreakdown",
+      "label": "buildExplainBreakdown()",
+      "degree": 15
+    },
+    {
+      "id": "route_post",
+      "label": "POST()",
+      "degree": 13
+    },
+    {
+      "id": "stockrouter_fetchstocksnapshot",
+      "label": "fetchStockSnapshot()",
+      "degree": 13
+    },
+    {
+      "id": "shortterm_calculateshorttermsignals",
+      "label": "calculateShortTermSignals()",
+      "degree": 10
+    },
+    {
+      "id": "shorttermvolatility_calculateshorttermvolatility",
+      "label": "calculateShortTermVolatility()",
+      "degree": 10
+    },
+    {
+      "id": "watchliststore_watchliststore",
+      "label": "WatchlistStore",
+      "degree": 10
+    },
+    {
+      "id": "rediscache_setcache",
+      "label": "setCache()",
+      "degree": 9
+    }
+  ],
+  "surprises": [
+    {
+      "source": "main()",
+      "target": "handleTelegramMessage()",
+      "source_files": [
+        "scripts/test_telegram_chart.ts",
+        "src/lib/telegram/botEngine.ts"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; peripheral node `main()` unexpectedly reaches hub `handleTelegramMessage()`"
+    },
+    {
+      "source": "test()",
+      "target": "renderMultiRoiChart()",
+      "source_files": [
+        "scripts/test_simple_draw.ts",
+        "src/lib/ux/chartRenderer.ts"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; peripheral node `test()` unexpectedly reaches hub `renderMultiRoiChart()`"
+    },
+    {
+      "source": "buildRow()",
+      "target": "getCompanyNameZh()",
+      "source_files": [
+        "scripts/generateDailyReport.ts",
+        "src/lib/companyName.ts"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "buildRow()",
+      "target": "fetchRecentBars()",
+      "source_files": [
+        "scripts/generateDailyReport.ts",
+        "src/lib/range.ts"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    },
+    {
+      "source": "buildRow()",
+      "target": "getInstitutionalInvestors()",
+      "source_files": [
+        "scripts/generateDailyReport.ts",
+        "src/lib/providers/finmind.ts"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    }
+  ]
+}
