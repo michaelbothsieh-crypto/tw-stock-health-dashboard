@@ -1,7 +1,7 @@
 
 import { StockCard } from "./StockService";
 import { getTacticalPlaybook } from "@/domain/ai/playbookAgent";
-import { escapeHtml, formatPrice, formatSignedPct, buildNewsLine, buildStanceText } from "@/shared/utils/formatters";
+import { escapeHtml, formatPrice, formatSignedPct, buildNewsLine, buildStanceText, humanizeNumber } from "@/shared/utils/formatters";
 
 export class MessageService {
    static buildStockCardLines(card: StockCard, verdict: string = "數據整理中"): string {
@@ -14,6 +14,7 @@ export class MessageService {
       const lines = [
          `<b>${title} [${vText}]</b>`,
          `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）${card.isPriceRealTime === false ? "　⚠️延遲報價" : ""}`,
+         `【成交】 ${humanizeNumber(card.volume)}${card.flowUnit}`,
          `【技術】 ${card.tvRating || "—"}`,
          `【產業】 ${card.industry || "—"}`,
          `【新聞】 ${card.newsLine || "—"}`,

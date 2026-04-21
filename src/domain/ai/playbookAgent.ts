@@ -98,18 +98,14 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
 
 【籌碼面數據】(極度重要，請納入主觀判斷邏輯)
 - 法人(外+投+自)近 5 日淨買賣: ${ctx.institutionalLots !== undefined ? `${ctx.institutionalLots} 張` : "無資料"}
-- 投信近 5 日淨買賣: ${ctx.trustLots !== undefined ? `${ctx.trustLots} 張` : "無資料"}
-- 融資變化 (散戶指標): ${ctx.marginLots !== undefined ? `${ctx.marginLots} 張` : "無資料"}
-- 融券變化: ${ctx.shortLots !== undefined ? `${ctx.shortLots} 張` : "無資料"}
 - 籌碼對抗結論: ${ctx.flowVerdict || "中立"}
-- 內部人申讓警訊: ${ctx.insiderTransfers?.length ? ctx.insiderTransfers.map(i => `${i.declarer}(${i.role}) ${i.type} ${i.lots}張`).join(', ') : "無"}
-- 系統環境風險: ${fMacro} (大於 80 時大盤崩盤風險極高，策略須極端保守)
+- 注意：法人買賣超通常於 15:00 後更新。若目前股價強勢大漲但法人數據顯示中立，請優先以「爆量(成交量大增)」視為法人進場的隱性訊號。
 
 【新聞與動能判定】(極度重要！請勿盲目依賴新聞文字)
 - 判斷準則：
-  1. 價格行為是最高真實：若股價今日強勢大漲(>5%)且技術評分為買入，即便新聞欄位為空，也代表「隱性利多發酵」或「資金面驅動」，嚴禁判定為『題材未發酵』。
-  2. 新聞只是驗證：若有新聞且股價漲，為「題材共振」；若新聞樂觀但股價不漲反跌，為「利多出盡」。
-  3. 無新聞時：優先觀察「技術位階」與「籌碼流向」判定目前的市場動能。
+  1. 價格與量能是最高真實：若股價今日強勢大漲(>5%)且成交量顯著放大，即便籌碼與新聞尚未更新，也代表「主力發動」，嚴禁判定為『籌碼未跟進』或『題材未發酵』。
+  2. 爆量長紅：視為資金積極進場，應給予積極評價。
+  3. 量縮盤整：則需觀察支撐。
 - 近期新聞標題:
 ${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `  * ${n}`).join('\n') : "  * (近期無顯著新聞)"}
 
