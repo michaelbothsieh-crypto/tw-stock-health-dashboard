@@ -209,6 +209,11 @@ export class StockService {
          const snapshot = snapRes && snapRes.ok ? await snapRes.json() : null;
          const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
 
+         // 嚴格檢查：如果沒有即時報價且沒有 Snapshot 資料，視為查無此股
+         if (!snapshot && (!rtQuote || rtQuote.regularMarketPrice === undefined)) {
+            return null;
+         }
+
          if (snapshot || rtQuote) {
             const card: StockCard = {
                symbol,

@@ -22,14 +22,14 @@ export class StockHandler implements CommandHandler {
 
     if (tickers.length === 1) {
       const liveCard = await this.processTicker(tickers[0], baseUrl);
-      if (liveCard) {
+      if (liveCard && liveCard.close !== null) {
         if (chatId && liveCard.close) {
           await recordStockSearch(String(chatId), liveCard.symbol, liveCard.close).catch(() => null);
         }
         const finalMsg = await MessageService.buildStockCardWithAI(liveCard);
         return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
       }
-      return { text: `找不到「${tickers[0]}」的資料，請確認代號或名稱是否正確。` };
+      return { text: `❌ 找不到「${tickers[0]}」的資料，請確認代號是否正確。` };
     }
 
     // 多檔查詢
