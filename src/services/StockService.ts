@@ -66,12 +66,12 @@ export class StockService {
          const controller = new AbortController();
          const snapTimer = setTimeout(() => controller.abort(), 20000);
 
-         const tasks: Promise<any>[] = [
-            fetch(snapUrl, { signal: controller.signal }).finally(() => clearTimeout(snapTimer))
-         ];
-         if (!skipQuote) tasks.push(fetchFugleQuote(symbol));
-
-         const [snapRes, fugleQuote] = await Promise.all(tasks);
+         const [snapRes, fugleQuote, tvNews] = await Promise.all([
+            fetch(snapUrl, { signal: controller.signal }).finally(() => clearTimeout(snapTimer)),
+            skipQuote ? Promise.resolve(null) : fetchFugleQuote(symbol),
+            getTvLatestNewsHeadline(symbol)
+         ]);
+         
          if (!snapRes.ok) return null;
          const snapshot = await snapRes.json();
 
@@ -108,7 +108,7 @@ export class StockService {
 
          const card: StockCard = {
             symbol: String(snapshot?.normalizedTicker?.symbol || symbol),
-            nameZh: String(snapshot?.normalizedTicker?.companyNameZh || symbol),
+            nameZh: twStockNames[symbol] || String(snapshot?.normalizedTicker?.companyNameZh || symbol),
             close: null, chgPct: null, chgAbs: null, volume: null, volumeVs5dPct: null, flowNet: null, flowUnit: "張",
             shortDir: "中立", strategySignal: "觀察", confidence: null, p1d: null, p3d: null, p5d: null,
             support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "snapshot", insiderSells: [],
@@ -151,7 +151,14 @@ export class StockService {
          card.shortDir = snapshot?.predictions?.upProb1D ? (snapshot.predictions.upProb1D >= 58 ? "偏多" : snapshot.predictions.upProb1D <= 42 ? "偏空" : "中立") : "中立";
          card.strategySignal = snapshot?.strategy?.signal || "觀察";
          card.confidence = snapshot?.strategy?.confidence;
-         card.newsLine = snapshot ? (await getTvLatestNewsHeadline(symbol) ? buildNewsLine(await getTvLatestNewsHeadline(symbol), 96) : "—") : "—";
+         const getFirstNewsTitle = (news: any): string | null => {
+            if (!news || !Array.isArray(news) || news.length === 0) return null;
+            const first = news[0];
+            return typeof first === 'string' ? first : first?.title || null;
+         };
+
+         card.recentNews = snapshot?.news || [];
+         card.newsLine = buildNewsLine(tvNews || getFirstNewsTitle(card.recentNews), 96);
          card.insiderSells = snapshot?.insiderTransfers || [];
          card.flowScore = snapshot?.signals?.flow?.flowScore;
          card.macroRisk = snapshot?.crashWarning?.score;
@@ -172,10 +179,14 @@ export class StockService {
       
       try {
          const snapUrl = `${baseUrl}/api/stock/${symbol}/snapshot?mode=lite`;
-         const snapRes = await fetch(snapUrl).catch(() => null);
-         const snapshot = snapRes && snapRes.ok ? await snapRes.json() : null;
+         
+         const [snapRes, rtQuoteRaw, tvNews] = await Promise.all([
+            fetch(snapUrl).catch(() => null),
+            yahooFinance.quote(symbol).catch(() => null),
+            getTvLatestNewsHeadline(symbol)
+         ]);
 
-         const rtQuoteRaw = await yahooFinance.quote(symbol).catch(() => null);
+         const snapshot = snapRes && snapRes.ok ? await snapRes.json() : null;
          const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
 
          if (snapshot || rtQuote) {
@@ -193,6 +204,16 @@ export class StockService {
                support: snapshot?.keyLevels?.supportLevel, resistance: snapshot?.keyLevels?.breakoutLevel,
                bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [], chartBuffer: null
             };
+            
+            const getFirstNewsTitle = (news: any): string | null => {
+               if (!news || !Array.isArray(news) || news.length === 0) return null;
+               const first = news[0];
+               return typeof first === 'string' ? first : first?.title || null;
+            };
+
+            card.recentNews = snapshot?.news || [];
+            card.newsLine = buildNewsLine(tvNews || getFirstNewsTitle(card.recentNews), 96);
+
             if (!skipQuote) {
                const rating = await fetchTradingViewRating(symbol, 'america');
                card.tvRating = TV_RATING_ZH[rating];
