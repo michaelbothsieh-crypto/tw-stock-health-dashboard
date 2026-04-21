@@ -44,3 +44,5 @@ next-env.d.ts
 
 # local patches
 /scripts/patch_*.ts
+graphify-out/
+tmp/
