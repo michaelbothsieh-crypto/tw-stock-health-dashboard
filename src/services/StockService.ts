@@ -66,15 +66,24 @@ export class StockService {
          if (!title) continue;
 
          const hasChinese = /[\u4e00-\u9fa5]/.test(title);
+         const upperTitle = title.toUpperCase();
          
-         // 如果是台股，必須包含中文或包含代號的新聞 (杜絕無關廣告)
          if (!isUS) {
-            if (hasChinese || (cleanSymbol && title.toUpperCase().includes(cleanSymbol))) return title;
+            // 台股：必須包含中文或包含代號的新聞 (杜絕無關廣告)
+            if (hasChinese || (cleanSymbol && upperTitle.includes(cleanSymbol))) return title;
          } else {
-            // 如果是美股，只要有新聞就回傳 (Yahoo Search 回傳的通常相關)
-            return title;
+            // 美股：不限中文，但必須提到代號
+            // (針對美股 Yahoo Search 容易回傳無關頭條的問題)
+            if (cleanSymbol && upperTitle.includes(cleanSymbol)) return title;
+            // 如果連代號都沒提到，且完全沒中文，則可能是全域雜訊，予以跳過
+            if (hasChinese) return title;
          }
       }
+
+      // 如果循環完都沒符合條件的，但第一條新聞至少提到了 symbol (即便沒邊界匹配)
+      const first = news[0];
+      const firstTitle = typeof first === 'string' ? first : (first?.title || first?.headline);
+      if (firstTitle && isUS) return firstTitle; // 美股稍微放寬，最後取第一條
 
       return null;
    }
