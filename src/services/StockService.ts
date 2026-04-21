@@ -8,7 +8,7 @@ import { renderStockChart, ChartDataPoint } from "@/shared/utils/chartRenderer";
 import { fetchTradingViewRating, TV_RATING_ZH } from "@/infrastructure/providers/tradingViewRating";
 import { isMarketOpen } from "@/shared/utils/market";
 import { resolveCodeFromInputLocal } from "@/shared/utils/ticker";
-import { buildNewsLine, calcVolumeVs5d, calcSupportResistance } from "@/shared/utils/formatters";
+import { buildNewsLine, calcVolumeVs5d, calcSupportResistance, humanizeNumber } from "@/shared/utils/formatters";
 
 export interface StockCard {
    symbol: string;
@@ -49,6 +49,7 @@ export interface StockCard {
    isPriceRealTime?: boolean;
    yahooSymbol?: string;
    tvRating?: string;
+   marketStatusLabel?: string; // 盤前/盤後/即時 標籤
 }
 
 export class StockService {
@@ -58,34 +59,43 @@ export class StockService {
 
    private static getFirstNewsTitle(news: any, symbol?: string, isUS = false): string | null {
       if (!news || !Array.isArray(news) || news.length === 0) return null;
-      
       const cleanSymbol = symbol?.toUpperCase();
-      
       for (const item of news) {
          const title = typeof item === 'string' ? item : (item?.title || item?.headline);
          if (!title) continue;
-
          const hasChinese = /[\u4e00-\u9fa5]/.test(title);
          const upperTitle = title.toUpperCase();
-         
          if (!isUS) {
-            // 台股：必須包含中文或包含代號的新聞 (杜絕無關廣告)
             if (hasChinese || (cleanSymbol && upperTitle.includes(cleanSymbol))) return title;
          } else {
-            // 美股：不限中文，但必須提到代號
-            // (針對美股 Yahoo Search 容易回傳無關頭條的問題)
             if (cleanSymbol && upperTitle.includes(cleanSymbol)) return title;
-            // 如果連代號都沒提到，且完全沒中文，則可能是全域雜訊，予以跳過
             if (hasChinese) return title;
          }
       }
-
-      // 如果循環完都沒符合條件的，但第一條新聞至少提到了 symbol (即便沒邊界匹配)
       const first = news[0];
       const firstTitle = typeof first === 'string' ? first : (first?.title || first?.headline);
-      if (firstTitle && isUS) return firstTitle; // 美股稍微放寬，最後取第一條
-
+      if (firstTitle && isUS) return firstTitle;
       return null;
+   }
+
+   private static getRichNewsList(news: any, symbol?: string, isUS = false): string[] {
+      if (!news || !Array.isArray(news) || news.length === 0) return [];
+      const cleanSymbol = symbol?.toUpperCase();
+      const results: string[] = [];
+      for (const item of news) {
+         const title = typeof item === 'string' ? item : (item?.title || item?.headline);
+         const summary = item?.summary || item?.description || "";
+         if (!title) continue;
+         const content = summary ? `${title} | 摘要: ${summary}` : title;
+         if (!isUS) {
+            const hasChinese = /[\u4e00-\u9fa5]/.test(title);
+            if (hasChinese || (cleanSymbol && title.toUpperCase().includes(cleanSymbol))) results.push(content);
+         } else {
+            results.push(content);
+         }
+         if (results.length >= 5) break;
+      }
+      return results;
    }
 
    static async fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
@@ -166,7 +176,6 @@ export class StockService {
             card.volume = rtQuote.regularMarketVolume || card.volume;
          }
 
-         // 同步即時報價至圖表數據
          if (card.close !== null && processedBars.length > 0) {
             const lastBar = processedBars[processedBars.length - 1];
             const todayStr = new Date().toLocaleDateString('en-CA');
@@ -192,22 +201,22 @@ export class StockService {
          card.strategySignal = snapshot?.strategy?.signal || "觀察";
          card.confidence = snapshot?.strategy?.confidence;
          
+         const yahooSearchRes = await yahooFinance.search(yahooSymbol).catch(() => null);
+         const snapshotNewsRaw = Array.isArray(snapshot?.news) ? snapshot.news : (snapshot?.news?.timeline || []);
+         card.recentNews = [
+            ...this.getRichNewsList(snapshotNewsRaw, symbol, isUS),
+            ...this.getRichNewsList((yahooSearchRes as any)?.news, symbol, isUS)
+         ].slice(0, 8);
+
+         const fallbackNews = this.getFirstNewsTitle(snapshotNewsRaw, symbol, isUS) || this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, isUS);
+         card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
+         if (!tvNews && !fallbackNews && card.tvRating?.includes("買入")) card.newsLine = `技術面動能強勁 (${card.tvRating})`;
+         
          card.insiderSells = snapshot?.insiderTransfers || [];
          card.flowScore = snapshot?.signals?.flow?.flowScore;
          card.macroRisk = snapshot?.crashWarning?.score;
          card.industry = snapshot?.globalLinkage?.profile?.sectorZh || snapshot?.industry;
          
-         const yahooSearchRes = await yahooFinance.search(yahooSymbol).catch(() => null);
-         card.recentNews = Array.isArray(snapshot?.news) ? snapshot.news : (snapshot?.news?.timeline || []);
-         const fallbackNews = this.getFirstNewsTitle(card.recentNews, symbol, isUS) || this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, isUS);
-         card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
-         
-         // 如果新聞為空，但技術評分強勢，將其作為隱性催化劑注入
-         const isStrongTechnical = card.tvRating?.includes("買入");
-         if (!tvNews && !fallbackNews && isStrongTechnical) {
-            card.newsLine = `技術面動能強勁 (${card.tvRating})`;
-         }
-
          if (!skipQuote) {
             const rating = await fetchTradingViewRating(symbol, 'taiwan');
             card.tvRating = TV_RATING_ZH[rating];
@@ -238,14 +247,31 @@ export class StockService {
 
          if (snapshot || rtQuote) {
             const snapPrice = snapshot?.data?.prices?.length ? snapshot.data.prices[snapshot.data.prices.length-1].close : null;
-            const finalPrice = rtQuote?.regularMarketPrice || snapPrice;
+            
+            // --- 智慧時段報價邏輯 ---
+            let finalPrice = rtQuote?.regularMarketPrice || snapPrice;
+            let finalChgPct = rtQuote?.regularMarketChangePercent || null;
+            let statusLabel = "";
+
+            if (rtQuote) {
+               const state = rtQuote.marketState; // PRE, REGULAR, POST, CLOSED
+               if (state === "PRE" && rtQuote.preMarketPrice) {
+                  finalPrice = rtQuote.preMarketPrice;
+                  finalChgPct = rtQuote.preMarketChangePercent;
+                  statusLabel = " (盤前)";
+               } else if ((state === "POST" || state === "CLOSED") && rtQuote.postMarketPrice) {
+                  finalPrice = rtQuote.postMarketPrice;
+                  finalChgPct = rtQuote.postMarketChangePercent;
+                  statusLabel = " (盤後)";
+               }
+            }
 
             const card: StockCard = {
                symbol,
                nameZh: String(snapshot?.normalizedTicker?.companyNameZh || rtQuote?.longName || rtQuote?.shortName || symbol),
                close: finalPrice,
-               chgPct: finalPrice === rtQuote?.regularMarketPrice ? rtQuote?.regularMarketChangePercent : null,
-               chgAbs: finalPrice === rtQuote?.regularMarketPrice ? rtQuote?.regularMarketChange : null,
+               chgPct: finalChgPct,
+               chgAbs: rtQuote?.regularMarketChange || null,
                volume: rtQuote?.regularMarketVolume || null,
                volumeVs5dPct: null, flowNet: null, flowUnit: "股", shortDir: "中立", strategySignal: "觀察", confidence: null,
                p1d: snapshot?.predictions?.upProb1D, 
@@ -253,22 +279,20 @@ export class StockService {
                p5d: snapshot?.predictions?.upProb5D, 
                support: snapshot?.keyLevels?.supportLevel, resistance: snapshot?.keyLevels?.breakoutLevel,
                bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [], chartBuffer: null,
-               industry: assetProfile?.assetProfile?.sector || snapshot?.industry || "—"
+               industry: assetProfile?.assetProfile?.sector || snapshot?.industry || "—",
+               marketStatusLabel: statusLabel
             };
             
-            // 抓取 Yahoo 備援新聞 (美股專用)
             const yahooSearchRes = await yahooFinance.search(symbol).catch(() => null);
-            const yahooNews = (yahooSearchRes as any)?.news;
+            const snapshotNewsRaw = Array.isArray(snapshot?.news) ? snapshot.news : (snapshot?.news?.timeline || []);
+            card.recentNews = [
+               ...this.getRichNewsList(snapshotNewsRaw, symbol, true),
+               ...this.getRichNewsList((yahooSearchRes as any)?.news, symbol, true)
+            ].slice(0, 8);
 
-            card.recentNews = Array.isArray(snapshot?.news) ? snapshot.news : (snapshot?.news?.timeline || []);
-            // 優先順序: TV即時 > Snapshot歷史 > Yahoo搜尋
-            const fallbackNews = this.getFirstNewsTitle(card.recentNews, symbol, true) || this.getFirstNewsTitle(yahooNews, symbol, true);
+            const fallbackNews = this.getFirstNewsTitle(snapshotNewsRaw, symbol, true) || this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, true);
             card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
-
-            // 如果新聞為空，但技術評分強勢，注入熱度訊號
-            if (!tvNews && !fallbackNews && card.tvRating?.includes("買入")) {
-               card.newsLine = `技術面呈現多頭熱度 (${card.tvRating})`;
-            }
+            if (!tvNews && !fallbackNews && card.tvRating?.includes("買入")) card.newsLine = `技術面呈現多頭熱度 (${card.tvRating})`;
 
             if (card.close !== null) {
                const todayStr = new Date().toLocaleDateString('en-CA');
