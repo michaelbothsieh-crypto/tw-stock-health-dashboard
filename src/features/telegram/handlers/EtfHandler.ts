@@ -1,6 +1,6 @@
 
 import { CommandHandler, CommandContext, BotReply } from "@/features/telegram/types";
-import { formatSignedPct } from "@/features/telegram/formatters";
+import { formatSignedPct } from "@/shared/utils/formatters";
 
 export class EtfHandler implements CommandHandler {
   canHandle(command: string): boolean {

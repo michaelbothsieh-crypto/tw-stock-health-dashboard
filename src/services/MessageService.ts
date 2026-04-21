@@ -1,7 +1,7 @@
 
 import { StockCard } from "./StockService";
 import { getTacticalPlaybook } from "@/domain/ai/playbookAgent";
-import { escapeHtml, formatPrice, formatSignedPct, buildNewsLine } from "@/features/telegram/formatters";
+import { escapeHtml, formatPrice, formatSignedPct, buildNewsLine } from "@/shared/utils/formatters";
 
 export class MessageService {
    static buildStockCardLines(card: StockCard, verdict: string = "數據整理中"): string {

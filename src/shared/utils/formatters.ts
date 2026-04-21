@@ -1,4 +1,9 @@
-﻿export type BasicBar = {
+
+/**
+ * 全局格式化器與計算工具 (Shared 層級 - SSOT)
+ */
+
+export type BasicBar = {
   high?: number;
   low?: number;
   close?: number;
@@ -9,20 +14,7 @@
 };
 
 const MAJOR_NEWS_KEYWORDS = [
-  "財測",
-  "下修",
-  "法說",
-  "制裁",
-  "訴訟",
-  "停工",
-  "併購",
-  "重大投資",
-  "增資",
-  "減資",
-  "違約",
-  "爆雷",
-  "裁員",
-  "重大缺陷",
+  "財測", "下修", "法說", "制裁", "訴訟", "停工", "併購", "重大投資", "增資", "減資", "違約", "爆雷", "裁員", "重大缺陷",
 ];
 
 function toFinite(value: unknown): number | null {

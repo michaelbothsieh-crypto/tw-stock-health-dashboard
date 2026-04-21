@@ -3,7 +3,7 @@ import { CommandHandler, CommandContext, BotReply } from "@/features/telegram/ty
 import { fetchYahooCommunityRank } from "@/infrastructure/providers/yahooRankFetch";
 import { twStockNames } from "@/data/twStockNames";
 import { yf as yahooFinance } from "@/infrastructure/providers/yahooFinanceClient";
-import { formatSignedPct } from "@/features/telegram/formatters";
+import { formatSignedPct } from "@/shared/utils/formatters";
 
 export class HotHandler implements CommandHandler {
   canHandle(command: string): boolean {

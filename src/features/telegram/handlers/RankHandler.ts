@@ -3,7 +3,7 @@ import { CommandHandler, CommandContext, BotReply } from "@/features/telegram/ty
 import { getTopRankedStocks } from "@/features/telegram/rankStore";
 import { StockService } from "@/services/StockService";
 import { twStockNames } from "@/data/twStockNames";
-import { formatSignedPct } from "@/features/telegram/formatters";
+import { formatSignedPct } from "@/shared/utils/formatters";
 import { renderRankChart } from "@/shared/utils/chartRenderer";
 
 export class RankHandler implements CommandHandler {

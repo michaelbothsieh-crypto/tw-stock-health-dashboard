@@ -4,7 +4,7 @@ import { StockService } from "@/services/StockService";
 import { MessageService } from "@/services/MessageService";
 import { recordStockSearch } from "@/features/telegram/rankStore";
 import { combineImages } from "@/shared/utils/chartRenderer";
-import { escapeHtml } from "@/features/telegram/formatters";
+import { escapeHtml } from "@/shared/utils/formatters";
 import { resolveCodeFromInputLocal } from "@/features/telegram/utils";
 
 export class StockHandler implements CommandHandler {

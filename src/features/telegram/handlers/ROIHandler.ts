@@ -2,7 +2,7 @@
 import { CommandHandler, CommandContext, BotReply } from "@/features/telegram/types";
 import { StockService } from "@/services/StockService";
 import { twStockNames } from "@/data/twStockNames";
-import { formatSignedPct } from "@/features/telegram/formatters";
+import { formatSignedPct } from "@/shared/utils/formatters";
 import { renderMultiRoiChart } from "@/shared/utils/chartRenderer";
 import { subMonths, subYears, parseISO } from "date-fns";
 import { yf as yahooFinance } from "@/infrastructure/providers/yahooFinanceClient";

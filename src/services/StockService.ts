@@ -8,7 +8,7 @@ import { renderStockChart, ChartDataPoint } from "@/shared/utils/chartRenderer";
 import { fetchTradingViewRating, TV_RATING_ZH } from "@/infrastructure/providers/tradingViewRating";
 import { isMarketOpen } from "@/shared/utils/market";
 import { resolveCodeFromInputLocal } from "@/features/telegram/botEngine"; // 暫時保留，後續可移入 Utils
-import { buildNewsLine, calcVolumeVs5d, calcSupportResistance } from "@/features/telegram/formatters";
+import { buildNewsLine, calcVolumeVs5d, calcSupportResistance } from "@/shared/utils/formatters";
 
 export interface StockCard {
    symbol: string;

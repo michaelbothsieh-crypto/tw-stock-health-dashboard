@@ -7,7 +7,7 @@ import {
   buildStanceText,
   formatPrice,
   humanizeNumber,
-} from "@/features/telegram/formatters";
+} from "@/shared/utils/formatters";
 
 type WatchRow = {
   symbol: string;
