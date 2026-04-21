@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { calculateTrend } from '../trend';
-import { PriceDaily } from '../../providers/finmind';
+import { calculateTrend } from "@/domain/signals/trend";
+import { PriceDaily } from "@/infrastructure/providers/finmind";
 
 describe('calculateTrend', () => {
     // 產生一個基礎的 mock 資料集 (N=130 才能計算)
@@ -12,14 +12,11 @@ describe('calculateTrend', () => {
             date.setDate(date.getDate() - i);
             data.push({
                 date: date.toISOString().split('T')[0],
-                stock_id: '2330',
                 open: basePrice,
-                max: basePrice * 1.01,
-                min: basePrice * 0.99,
+                high: basePrice * 1.01,
+                low: basePrice * 0.99,
                 close: basePrice,
-                Trading_Volume: baseVolume,
-                Trading_money: basePrice * baseVolume,
-                Trading_turnover: 100,
+                volume: baseVolume,
             });
         }
         return data;
@@ -68,7 +65,7 @@ describe('calculateTrend', () => {
 
     it('should add volume_missing flag if latest volume is 0', () => {
         const data = generateMockData(130, 100);
-        data[129].Trading_Volume = 0;
+        data[129].volume = 0;
         const result = calculateTrend(data);
         expect(result.risks).toContain("volume_missing");
     });

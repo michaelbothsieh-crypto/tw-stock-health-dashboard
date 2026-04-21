@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from "vitest";
-import { calculateFlow } from "../flow";
-import { InstitutionalInvestor, MarginShort } from "../../providers/finmind";
+import { calculateFlow } from "@/domain/signals/flow";
+import { InstitutionalInvestor, MarginShort } from "@/infrastructure/providers/finmind";
 
 describe("calculateFlow", () => {
   function generateInstData(days: number, name: string, netBuy: number): InstitutionalInvestor[] {
@@ -12,7 +12,6 @@ describe("calculateFlow", () => {
       date.setDate(date.getDate() - i);
       data.push({
         date: date.toISOString().split("T")[0],
-        stock_id: "2330",
         name,
         buy: netBuy > 0 ? netBuy : 0,
         sell: netBuy < 0 ? -netBuy : 0,
@@ -35,8 +34,10 @@ describe("calculateFlow", () => {
 
       data.push({
         date: date.toISOString().split("T")[0],
-        stock_id: "2330",
         MarginPurchaseTodayBalance: currentBalance,
+        MarginPurchaseBuy: 0,
+        MarginPurchaseSell: 0,
+        ShortSaleTodayBalance: 0,
       });
     }
 

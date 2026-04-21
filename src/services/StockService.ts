@@ -50,6 +50,7 @@ export interface StockCard {
    yahooSymbol?: string;
    tvRating?: string;
    marketStatusLabel?: string;
+   historyBars?: any[];
 }
 
 export class StockService {
@@ -152,7 +153,7 @@ export class StockService {
             close: null, chgPct: null, chgAbs: null, volume: null, volumeVs5dPct: null, flowNet: null, flowUnit: "張",
             shortDir: "中立", strategySignal: "觀察", confidence: null, p1d: null, p3d: null, p5d: null,
             support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "snapshot", insiderSells: [],
-            chartBuffer: null, yahooSymbol
+            chartBuffer: null, yahooSymbol, historyBars: processedBars
          };
 
          if (processedBars.length >= 2) {
@@ -200,12 +201,26 @@ export class StockService {
          
          const yahooSearchRes = await yahooFinance.search(yahooSymbol).catch(() => null);
          const snapshotNewsRaw = snapshot?.news?.timeline || (Array.isArray(snapshot?.news) ? snapshot.news : []);
+         
+         // 備援新聞方案 (FinMind)
+         let fmNews: any[] = [];
+         if (!isUS && snapshotNewsRaw.length === 0 && (!yahooSearchRes || !(yahooSearchRes as any).news || (yahooSearchRes as any).news.length === 0)) {
+            const { getTaiwanStockNews } = await import("@/infrastructure/providers/finmind");
+            const today = new Date().toISOString().split('T')[0];
+            const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            const fmRes = await getTaiwanStockNews(symbol, lastWeek, today).catch(() => null);
+            if (fmRes && fmRes.data) fmNews = fmRes.data;
+         }
+
          card.recentNews = [
             ...this.getRichNewsList(snapshotNewsRaw, symbol, isUS),
-            ...this.getRichNewsList((yahooSearchRes as any)?.news, symbol, isUS)
+            ...this.getRichNewsList((yahooSearchRes as any)?.news, symbol, isUS),
+            ...this.getRichNewsList(fmNews, symbol, isUS)
          ].slice(0, 8);
 
-         const fallbackNews = this.getFirstNewsTitle(snapshotNewsRaw, symbol, isUS) || this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, isUS);
+         const fallbackNews = this.getFirstNewsTitle(snapshotNewsRaw, symbol, isUS) || 
+                            this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, isUS) ||
+                            this.getFirstNewsTitle(fmNews, symbol, isUS);
          card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
          if (!tvNews && !fallbackNews && card.tvRating?.includes("買入")) card.newsLine = `技術面動能強勁 (${card.tvRating})`;
          
@@ -283,7 +298,15 @@ export class StockService {
                support: snapshot?.keyLevels?.supportLevel, resistance: snapshot?.keyLevels?.breakoutLevel,
                bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [], chartBuffer: null,
                industry: snapshot?.globalLinkage?.profile?.sectorZh || snapshot?.industry || assetProfile?.assetProfile?.sector || "—",
-               marketStatusLabel: statusLabel
+               marketStatusLabel: statusLabel,
+               historyBars: Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices.map((b: any) => ({
+                  date: b.date,
+                  open: b.open || b.close,
+                  high: b.high || b.close,
+                  low: b.low || b.close,
+                  close: b.close,
+                  volume: b.volume || 0
+               })) : []
             };
             
             const yahooSearchRes = await yahooFinance.search(symbol).catch(() => null);

@@ -1,6 +1,6 @@
 ﻿import { describe, it, expect } from "vitest";
-import { evaluateCrashWarning } from "../global/crash/crashEngine";
-import { MarketIndicatorResult } from "../providers/marketIndicators";
+import { evaluateCrashWarning } from "@/infrastructure/crash/crashEngine";
+import { MarketIndicatorResult } from "@/infrastructure/providers/marketIndicators";
 
 function generateMockBars(startPrice: number, dailyRet: number, days = 61): number[] {
   const closes: number[] = [];

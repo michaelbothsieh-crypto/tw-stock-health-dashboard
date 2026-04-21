@@ -1,8 +1,8 @@
 ﻿import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchRecentBars } from "../range";
-import * as finmind from "../providers/finmind";
+import { fetchRecentBars } from "@/shared/utils/range";
+import * as finmind from "@/infrastructure/providers/finmind";
 
-vi.mock("../providers/finmind");
+vi.mock("@/infrastructure/providers/finmind");
 
 describe("fetchRecentBars", () => {
   beforeEach(() => {

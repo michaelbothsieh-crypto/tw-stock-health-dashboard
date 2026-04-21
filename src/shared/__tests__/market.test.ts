@@ -1,8 +1,8 @@
 ﻿import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clearMarketCache, detectMarket } from "../market";
-import * as finmind from "../providers/finmind";
+import { clearMarketCache, detectMarket } from "@/shared/utils/market";
+import * as finmind from "@/infrastructure/providers/finmind";
 
-vi.mock("../providers/finmind", () => ({
+vi.mock("@/infrastructure/providers/finmind", () => ({
   getStockInfo: vi.fn(),
 }));
 

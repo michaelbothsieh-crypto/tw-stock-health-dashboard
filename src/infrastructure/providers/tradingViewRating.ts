@@ -21,8 +21,8 @@ export async function fetchTradingViewRating(ticker: string, market: 'taiwan' | 
   const getSymbols = (): string[] => {
     if (market === 'taiwan') {
       if (cleanTicker.includes(':')) return [cleanTicker];
-      const isProbablyTPEX = /^[34568]/.test(cleanTicker) && cleanTicker !== "3008"; 
-      return [`${isProbablyTPEX ? 'TPEX' : 'TWSE'}:${cleanTicker}`];
+      // 同時查詢 TWSE 與 TPEX，避免判斷錯誤 (例如 6257 是上市非上櫃)
+      return [`TWSE:${cleanTicker}`, `TPEX:${cleanTicker}`];
     }
     // 美股可能在不同交易所，一次查多個
     return [`NASDAQ:${cleanTicker}`, `NYSE:${cleanTicker}`, `AMEX:${cleanTicker}`];

@@ -1,6 +1,6 @@
 ﻿import { describe, expect, it } from "vitest";
-import { calculateFundamental } from "../fundamental";
-import { MonthlyRevenue } from "../../providers/finmind";
+import { calculateFundamental } from "@/domain/signals/fundamental";
+import { MonthlyRevenue } from "@/infrastructure/providers/finmind";
 
 describe("calculateFundamental", () => {
   function generateRevenueData(months: number, yoyGetter: (idx: number) => number): MonthlyRevenue[] {
@@ -11,7 +11,6 @@ describe("calculateFundamental", () => {
     for (let i = 0; i < months; i += 1) {
       data.push({
         date: `${curYear}-${String(curMonth).padStart(2, "0")}-01`,
-        stock_id: "2330",
         revenue_year: curYear,
         revenue_month: curMonth,
         revenue: 1000000 * (1 + yoyGetter(i) / 100),

@@ -67,7 +67,8 @@ export async function getFugleTechnicalIndicatorsTpex(symbol: string) {
 
 // 相容性導出
 export async function getStockInfo(symbol: string) {
-   return fetchFinmind("TaiwanStockInfo", symbol, "2020-01-01", "2020-01-01");
+   const today = new Date().toISOString().split('T')[0];
+   return fetchFinmind("TaiwanStockInfo", symbol, today, today);
 }
 
 export interface TaiwanStockNews {

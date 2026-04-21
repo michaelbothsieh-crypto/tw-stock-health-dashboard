@@ -6,6 +6,7 @@ import { formatSignedPct } from "@/shared/utils/formatters";
 import { renderMultiRoiChart } from "@/shared/utils/chartRenderer";
 import { subMonths, subYears, parseISO } from "date-fns";
 import { yf as yahooFinance } from "@/infrastructure/providers/yahooFinanceClient";
+import { resolveCodeFromInputLocal } from "@/shared/utils/ticker";
 
 export class ROIHandler implements CommandHandler {
   canHandle(command: string): boolean {
@@ -19,7 +20,11 @@ export class ROIHandler implements CommandHandler {
 
     tickerRaw = tickerRaw.replace(/[,，]+$/, "").trim();
     periodRaw = periodRaw.replace(/[,，]+$/, "").trim();
-    const tickers = tickerRaw.split(/[,，\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean).slice(0, 10);
+    const rawTickers = tickerRaw.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean).slice(0, 10);
+    const tickers = rawTickers.map(t => {
+      const resolved = /^[0-9A-Z]{2,6}(\.TW|\.TWO)?$/i.test(t) ? t : resolveCodeFromInputLocal(t);
+      return (resolved || t).toUpperCase();
+    });
     
     let startDate: Date;
     const period = periodRaw.toLowerCase();
@@ -41,7 +46,23 @@ export class ROIHandler implements CommandHandler {
        if (!live || live.close === null) return null;
 
        const history = await yahooFinance.chart(live.yahooSymbol || ticker, { period1: startDate, interval: "1d" }).catch(() => null);
-       const firstPrice = history?.quotes?.[0]?.close;
+       let historyQuotes = (history?.quotes || []).map((q: any) => ({ date: new Date(q.date), close: q.close }));
+       
+       // Fallback to historyBars from snapshot if Yahoo fails
+       if (historyQuotes.length === 0 && live.historyBars && live.historyBars.length > 0) {
+          const startStr = startDate.toISOString().split('T')[0];
+          // Find the first bar that is on or after the start date
+          const fallbackData = live.historyBars
+            .map((b: any) => ({ date: new Date(b.date), close: b.close }))
+            .filter((b: any) => b.date >= startDate)
+            .sort((a: any, b: any) => a.date.getTime() - b.date.getTime());
+          
+          if (fallbackData.length > 0) {
+             historyQuotes = fallbackData;
+          }
+       }
+
+       const firstPrice = historyQuotes[0]?.close;
        if (!firstPrice) return null;
 
        const pct = ((live.close - firstPrice) / firstPrice) * 100;
@@ -49,7 +70,7 @@ export class ROIHandler implements CommandHandler {
           symbol: ticker, 
           pct, 
           live,
-          data: (history.quotes || []).map((q: any) => ({ date: new Date(q.date), close: q.close })),
+          data: historyQuotes,
           initialPrice: firstPrice
        };
        }));
