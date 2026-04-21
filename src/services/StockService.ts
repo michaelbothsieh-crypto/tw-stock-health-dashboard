@@ -56,30 +56,34 @@ export class StockService {
       return override || process.env.BOT_BASE_URL || process.env.APP_BASE_URL || "http://localhost:3000";
    }
 
-   private static getFirstNewsTitle(news: any, symbol?: string): string | null {
+   private static getFirstNewsTitle(news: any, symbol?: string, isUS = false): string | null {
       if (!news || !Array.isArray(news) || news.length === 0) return null;
       
-      // 優先找尋中文新聞或具備代號標籤的新聞
+      const cleanSymbol = symbol?.toUpperCase();
+      
       for (const item of news) {
          const title = typeof item === 'string' ? item : (item?.title || item?.headline);
          if (!title) continue;
 
-         const isChinese = /[\u4e00-\u9fa5]/.test(title);
-         const mentionsTicker = symbol && title.toUpperCase().includes(symbol.toUpperCase());
+         const hasChinese = /[\u4e00-\u9fa5]/.test(title);
          
-         if (isChinese || mentionsTicker) return title;
+         // 如果是台股，必須包含中文或包含代號的新聞 (杜絕無關廣告)
+         if (!isUS) {
+            if (hasChinese || (cleanSymbol && title.toUpperCase().includes(cleanSymbol))) return title;
+         } else {
+            // 如果是美股，只要有新聞就回傳 (Yahoo Search 回傳的通常相關)
+            return title;
+         }
       }
 
-      // 若都沒中文，且第一條新聞至少不是亂碼，才考慮回傳
-      const first = news[0];
-      const firstTitle = typeof first === 'string' ? first : (first?.title || first?.headline);
-      return firstTitle || null;
+      return null;
    }
 
    static async fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
       const symbol = resolveCodeFromInputLocal(query);
       if (!symbol) return null;
       
+      const isUS = /^[A-Z]{1,5}$/.test(symbol.toUpperCase());
       const baseUrl = this.getSnapshotBaseUrl(overrideBaseUrl);
       try {
          const snapUrl = `${baseUrl}/api/stock/${symbol}/snapshot?mode=lite`;
@@ -98,7 +102,7 @@ export class StockService {
          let yahooSymbol = snapshot?.normalizedTicker?.yahoo;
          if (symbol === "8299") yahooSymbol = "8299.TWO";
          if (!yahooSymbol || yahooSymbol === symbol) {
-            const isProbablyTPEX = symbol.startsWith("8") || symbol.startsWith("5") || symbol.startsWith("4") || (symbol.startsWith("3") && symbol !== "3008") || symbol.toUpperCase().endsWith("B");
+            const isProbablyTPEX = /^[34568]/.test(symbol) && symbol !== "3008";
             yahooSymbol = isProbablyTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
          }
 
@@ -200,7 +204,7 @@ export class StockService {
          
          const yahooSearchRes = await yahooFinance.search(yahooSymbol).catch(() => null);
          card.recentNews = snapshot?.news || [];
-         const fallbackNews = this.getFirstNewsTitle(card.recentNews, symbol) || this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol);
+         const fallbackNews = this.getFirstNewsTitle(card.recentNews, symbol, isUS) || this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, isUS);
          card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
          
          card.insiderSells = snapshot?.insiderTransfers || [];
@@ -251,7 +255,7 @@ export class StockService {
             };
             
             card.recentNews = snapshot?.news || [];
-            card.newsLine = buildNewsLine(tvNews || this.getFirstNewsTitle(card.recentNews, symbol), 96);
+            card.newsLine = buildNewsLine(tvNews || this.getFirstNewsTitle(card.recentNews, symbol, true), 96);
 
             if (card.close !== null) {
                const todayStr = new Date().toLocaleDateString('en-CA');

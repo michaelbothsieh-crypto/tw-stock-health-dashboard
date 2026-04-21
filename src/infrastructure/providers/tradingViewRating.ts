@@ -20,7 +20,8 @@ export async function fetchTradingViewRating(ticker: string, market: 'taiwan' | 
   let symbol = ticker.toUpperCase();
   if (market === 'taiwan') {
     if (!symbol.includes(':')) {
-      const isProbablyTPEX = symbol.startsWith("8") || symbol.startsWith("5") || symbol.startsWith("4") || (symbol.startsWith("3") && symbol !== "3008") || symbol.endsWith("B");
+      // 台股上櫃代號規律: 3, 4, 5, 6, 8 開頭通常為上櫃 (TPEX)
+      const isProbablyTPEX = /^[34568]/.test(symbol) && symbol !== "3008"; 
       symbol = `${isProbablyTPEX ? 'TPEX' : 'TWSE'}:${symbol}`;
     }
   } else {
