@@ -72,10 +72,18 @@ export function syncLevel(corr: number | null | undefined): string {
   return "高";
 }
 
-export function buildStanceText(shortDir?: string | null, strategyText?: string | null, _confidence?: number | null): string {
+export function buildStanceText(shortDir?: string | null, strategyText?: string | null, _confidence?: number | null, chgPct?: number | null): string {
   const s = shortDir ?? "";
   const st = strategyText ?? "";
+  const cp = chgPct ?? 0;
 
+  // 1. 價格行為優先 (Price Action is King)
+  if (cp >= 9.5) return "強勢漲停，動能極強";
+  if (cp >= 5) return "大漲收紅，買盤強勁";
+  if (cp <= -9.5) return "跌停鎖死，恐慌殺盤";
+  if (cp <= -5) return "重挫走跌，趨勢轉弱";
+
+  // 2. 原有邏輯
   if (s.includes("偏空") || st.includes("偏空") || st.includes("減碼")) return "偏空需防守";
   if (s.includes("偏多") && (st.includes("進場") || st.includes("加碼"))) return "偏多偏積極";
   if (s.includes("偏多")) return "偏多可續抱";
@@ -117,8 +125,18 @@ export function calcSupportResistance(bars: BasicBar[]): {
     return { support: null, resistance: null, bullTarget: null, bearTarget: null };
   }
 
-  const support = Math.min(...lows);
-  const resistance = Math.max(...highs);
+  let support = Math.min(...lows);
+  let resistance = Math.max(...highs);
+  
+  const latest = bars[bars.length - 1];
+  const lastPrice = toFinite(latest?.close);
+
+  // 邏輯校準：支撐應低於現價，壓力應高於現價
+  if (lastPrice !== null) {
+     if (support > lastPrice) support = lastPrice * 0.95;
+     if (resistance < lastPrice) resistance = lastPrice * 1.05;
+  }
+
   const range = resistance - support;
 
   return {

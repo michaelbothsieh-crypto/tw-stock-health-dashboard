@@ -1,7 +1,7 @@
 
 import { StockCard } from "./StockService";
 import { getTacticalPlaybook } from "@/domain/ai/playbookAgent";
-import { escapeHtml, formatPrice, formatSignedPct, buildNewsLine } from "@/shared/utils/formatters";
+import { escapeHtml, formatPrice, formatSignedPct, buildNewsLine, buildStanceText } from "@/shared/utils/formatters";
 
 export class MessageService {
    static buildStockCardLines(card: StockCard, verdict: string = "數據整理中"): string {
@@ -34,8 +34,10 @@ export class MessageService {
 
    static async buildStockCardWithAI(card: StockCard): Promise<string> {
       try {
+         const stanceText = buildStanceText(card.shortDir, card.strategySignal, card.confidence, card.chgPct);
+         
          if (card.snapshotPlaybookCaption) {
-            const structuredPart = this.buildStockCardLines(card, card.snapshotVerdict || "觀察中");
+            const structuredPart = this.buildStockCardLines(card, card.snapshotVerdict || stanceText);
             return `${structuredPart}\n\n💬 ${escapeHtml(card.snapshotPlaybookCaption)}`;
          }
 
@@ -49,7 +51,7 @@ export class MessageService {
             technicalTrend: card.shortDir,
             flowScore: card.flowScore ?? 50,
             flowVerdict: card.shortDir,
-            recentTrend: `目前現價 ${card.close}，今日漲跌幅 ${card.chgPct?.toFixed(2)}%，成交量 ${card.volume}。`,
+            recentTrend: `今日股價表現：現價 ${card.close}，漲跌幅 ${card.chgPct?.toFixed(2)}% (${card.chgPct && card.chgPct > 9.5 ? '強勢漲停' : '趨勢強勁'})，技術評分：${card.tvRating}。`,
             trustLots: card.trustLots || 0,
             shortLots: card.shortLots || 0,
             marginLots: card.marginLots || 0,
@@ -58,7 +60,7 @@ export class MessageService {
             recentNews: card.recentNews || (card.newsLine && card.newsLine !== "—" ? [card.newsLine] : []),
          });
 
-         const structuredPart = this.buildStockCardLines(card, playbook?.verdict || "觀察中");
+         const structuredPart = this.buildStockCardLines(card, playbook?.verdict || stanceText);
          if (playbook) {
             const tgText = playbook.telegramCaption || playbook.tacticalScript;
             return `${structuredPart}\n\n💬 ${escapeHtml(tgText)}`;
