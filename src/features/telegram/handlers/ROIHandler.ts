@@ -6,7 +6,7 @@ import { formatSignedPct } from "@/shared/utils/formatters";
 import { renderMultiRoiChart } from "@/shared/utils/chartRenderer";
 import { subMonths, subYears, parseISO } from "date-fns";
 import { yf as yahooFinance } from "@/infrastructure/providers/yahooFinanceClient";
-import { resolveCodeFromInputLocal } from "@/shared/utils/ticker";
+import { resolveCodeFromInputLocal, normalizeTicker } from "@/shared/utils/ticker";
 
 export class ROIHandler implements CommandHandler {
   canHandle(command: string): boolean {
@@ -45,7 +45,8 @@ export class ROIHandler implements CommandHandler {
        const live = isUs ? await StockService.fetchLiveUsStockCard(ticker) : await StockService.fetchLiveStockCard(ticker);
        if (!live || live.close === null) return null;
 
-       const history = await yahooFinance.chart(live.yahooSymbol || ticker, { period1: startDate, interval: "1d" }).catch(() => null);
+       const targetYahooSymbol = live.yahooSymbol || normalizeTicker(ticker).yahoo;
+       const history = await yahooFinance.chart(targetYahooSymbol, { period1: startDate, interval: "1d" }).catch(() => null);
        let historyQuotes = (history?.quotes || []).map((q: any) => ({ date: new Date(q.date), close: q.close }));
        
        // Fallback to historyBars from snapshot if Yahoo fails

@@ -25,13 +25,24 @@ export function normalizeTicker(input: string): NormalizedTicker {
   const clean = input.trim().toUpperCase();
   const symbol = clean.replace(/\.(TW|TWO)$/i, "");
   
-  // 簡易判定
-  const isTW = /^[0-9]{4,6}$/.test(symbol) || symbol.endsWith("A") || symbol.endsWith("B");
+  // 台灣市場代號判定
+  const isTW = /^[0-9]{4,6}$/.test(symbol);
+  
+  let yahoo = symbol;
+  let market: NormalizedTicker['market'] = 'UNKNOWN';
+
+  if (isTW) {
+    const isTPEX = /^[34568]/.test(symbol) && symbol !== "3008";
+    market = isTPEX ? 'TPEX' : 'TWSE';
+    yahoo = isTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
+  } else {
+    market = 'NASDAQ'; // 預設美股
+  }
   
   return {
     symbol,
-    market: isTW ? 'TWSE' : 'NASDAQ', // 預設判定，後續由 detectMarket 修正
-    yahoo: isTW ? (symbol.length > 4 ? `${symbol}.TWO` : `${symbol}.TW`) : symbol,
+    market,
+    yahoo,
     finmind: symbol
   };
 }
