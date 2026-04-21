@@ -15,6 +15,7 @@ export class MessageService {
          `<b>${title} [${vText}]</b>`,
          `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）${card.isPriceRealTime === false ? "　⚠️延遲報價" : ""}`,
          `【技術】 ${card.tvRating || "—"}`,
+         `【產業】 ${card.industry || "—"}`,
          `【新聞】 ${card.newsLine || "—"}`,
       ];
 

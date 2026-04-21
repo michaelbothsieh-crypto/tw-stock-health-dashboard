@@ -206,6 +206,7 @@ export class StockService {
          card.insiderSells = snapshot?.insiderTransfers || [];
          card.flowScore = snapshot?.signals?.flow?.flowScore;
          card.macroRisk = snapshot?.crashWarning?.score;
+         card.industry = snapshot?.linkage?.profile?.sectorZh || snapshot?.industry;
          
          if (!skipQuote) {
             const rating = await fetchTradingViewRating(symbol, 'taiwan');
@@ -223,10 +224,11 @@ export class StockService {
       
       try {
          const snapUrl = `${baseUrl}/api/stock/${symbol}/snapshot?mode=lite`;
-         const [snapRes, rtQuoteRaw, tvNews] = await Promise.all([
+         const [snapRes, rtQuoteRaw, tvNews, assetProfile] = await Promise.all([
             fetch(snapUrl).catch(() => null),
             yahooFinance.quote(symbol).catch(() => null),
-            getTvLatestNewsHeadline(symbol)
+            getTvLatestNewsHeadline(symbol),
+            yahooFinance.quoteSummary(symbol, { modules: ["assetProfile"] }).catch(() => null)
          ]);
 
          const snapshot = snapRes && snapRes.ok ? await snapRes.json() : null;
@@ -250,7 +252,8 @@ export class StockService {
                p3d: snapshot?.predictions?.upProb3D, 
                p5d: snapshot?.predictions?.upProb5D, 
                support: snapshot?.keyLevels?.supportLevel, resistance: snapshot?.keyLevels?.breakoutLevel,
-               bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [], chartBuffer: null
+               bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [], chartBuffer: null,
+               industry: assetProfile?.assetProfile?.sector || snapshot?.industry || "—"
             };
             
             // 抓取 Yahoo 備援新聞 (美股專用)
