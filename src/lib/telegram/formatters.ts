@@ -166,3 +166,13 @@ export function parseSignedNumberLoose(input: string | null | undefined): number
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : null;
 }
+
+export function escapeHtml(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}

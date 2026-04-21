@@ -1,0 +1,205 @@
+
+import { subMonths } from "date-fns";
+import { twStockNames } from "@/data/twStockNames";
+import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
+import { fetchFugleQuote } from "@/lib/providers/fugleQuote";
+import { getTvLatestNewsHeadline } from "../providers/tradingViewFetch";
+import { renderStockChart, ChartDataPoint } from "../ux/chartRenderer";
+import { fetchTradingViewRating, TV_RATING_ZH } from "../providers/tradingViewRating";
+import { isMarketOpen } from "@/lib/market";
+import { resolveCodeFromInputLocal } from "./botEngine"; // 暫時保留，後續可移入 Utils
+import { buildNewsLine, calcVolumeVs5d, calcSupportResistance } from "./formatters";
+
+export interface StockCard {
+   symbol: string;
+   nameZh: string;
+   close: number | null;
+   chgPct: number | null;
+   chgAbs: number | null;
+   volume: number | null;
+   volumeVs5dPct: number | null;
+   flowNet: number | null;
+   flowUnit: string;
+   shortDir: string;
+   strategySignal: string;
+   confidence: number | null;
+   p1d: number | null;
+   p3d: number | null;
+   p5d: number | null;
+   support: number | null;
+   resistance: number | null;
+   bullTarget: number | null;
+   bearTarget: number | null;
+   overseas: any[];
+   syncLevel: string;
+   newsLine: string;
+   sourceLabel: string;
+   insiderSells: any[];
+   recentNews?: string[];
+   industry?: string;
+   trustLots?: number;
+   marginLots?: number;
+   shortLots?: number;
+   institutionalLots?: number;
+   chartBuffer: Buffer | null;
+   snapshotPlaybookCaption?: string;
+   snapshotVerdict?: string;
+   flowScore?: number;
+   macroRisk?: number;
+   isPriceRealTime?: boolean;
+   yahooSymbol?: string;
+   tvRating?: string;
+}
+
+export class StockService {
+   static getSnapshotBaseUrl(override?: string): string {
+      return override || process.env.BOT_BASE_URL || process.env.APP_BASE_URL || "http://localhost:3000";
+   }
+
+   static async fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
+      const symbol = resolveCodeFromInputLocal(query);
+      if (!symbol) return null;
+      
+      const baseUrl = this.getSnapshotBaseUrl(overrideBaseUrl);
+      try {
+         const snapUrl = `${baseUrl}/api/stock/${symbol}/snapshot?mode=lite`;
+         const controller = new AbortController();
+         const snapTimer = setTimeout(() => controller.abort(), 20000);
+
+         const tasks: Promise<any>[] = [
+            fetch(snapUrl, { signal: controller.signal }).finally(() => clearTimeout(snapTimer))
+         ];
+         if (!skipQuote) tasks.push(fetchFugleQuote(symbol));
+
+         const [snapRes, fugleQuote] = await Promise.all(tasks);
+         if (!snapRes.ok) return null;
+         const snapshot = await snapRes.json();
+
+         let yahooSymbol = snapshot?.normalizedTicker?.yahoo;
+         if (symbol === "8299") yahooSymbol = "8299.TWO";
+         if (!yahooSymbol || yahooSymbol === symbol) {
+            const isProbablyTPEX = symbol.startsWith("8") || symbol.startsWith("5") || symbol.startsWith("4") || (symbol.startsWith("3") && symbol !== "3008") || symbol.toUpperCase().endsWith("B");
+            yahooSymbol = isProbablyTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
+         }
+
+         let rtQuote: any = null;
+         if (!skipQuote) {
+            let rtQuoteRaw = fugleQuote ? null : await yahooFinance.quote(yahooSymbol).catch(() => null);
+            rtQuote = fugleQuote ? {
+               regularMarketPrice: fugleQuote.price,
+               regularMarketChangePercent: fugleQuote.changePct,
+               regularMarketChange: fugleQuote.changeAbs,
+               regularMarketVolume: fugleQuote.volume,
+               regularMarketDayHigh: fugleQuote.high,
+               regularMarketDayLow: fugleQuote.low,
+               regularMarketOpen: fugleQuote.open,
+            } : (Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw);
+         }
+
+         let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
+         let processedBars = bars.map((b: any) => ({
+            date: b.date || "",
+            open: Number(b.open || b.close || 0),
+            high: Number(b.high || b.close || 0),
+            low: Number(b.low || b.close || 0),
+            close: Number(b.close || 0),
+            volume: Number(b.volume || b.Trading_Volume || 0)
+         }));
+
+         const card: StockCard = {
+            symbol: String(snapshot?.normalizedTicker?.symbol || symbol),
+            nameZh: String(snapshot?.normalizedTicker?.companyNameZh || symbol),
+            close: null, chgPct: null, chgAbs: null, volume: null, volumeVs5dPct: null, flowNet: null, flowUnit: "張",
+            shortDir: "中立", strategySignal: "觀察", confidence: null, p1d: null, p3d: null, p5d: null,
+            support: null, resistance: null, bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "snapshot", insiderSells: [],
+            chartBuffer: null, yahooSymbol
+         };
+
+         if (processedBars.length >= 2) {
+            const latest = processedBars[processedBars.length - 1];
+            const prev = processedBars[processedBars.length - 2];
+            card.close = latest.close;
+            card.chgAbs = latest.close - prev.close;
+            card.chgPct = prev.close !== 0 ? (card.chgAbs / prev.close) * 100 : 0;
+            const volInfo = calcVolumeVs5d(processedBars);
+            card.volume = volInfo.volume;
+            card.volumeVs5dPct = volInfo.volumeVs5dPct;
+         }
+
+         if (rtQuote && typeof rtQuote.regularMarketPrice === "number") {
+            const marketOpen = isMarketOpen(symbol);
+            const diffPct = card.close !== null ? Math.abs(rtQuote.regularMarketPrice - card.close) / card.close : 0;
+            const mismatch = !marketOpen && card.close !== null && diffPct > 0.05 && diffPct < 0.8;
+            if (!mismatch) {
+               card.close = rtQuote.regularMarketPrice;
+               card.chgPct = rtQuote.regularMarketChangePercent ?? card.chgPct;
+               card.chgAbs = rtQuote.regularMarketChange ?? card.chgAbs;
+               card.volume = rtQuote.regularMarketVolume || card.volume;
+            }
+         }
+
+         const key = calcSupportResistance(processedBars);
+         card.support = snapshot?.keyLevels?.supportLevel || key.support;
+         card.resistance = snapshot?.keyLevels?.breakoutLevel || key.resistance;
+
+         if (processedBars.length >= 2) {
+            card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180).catch(() => null);
+         }
+
+         card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? Math.round(snapshot.signals.flow.foreign5D / 1000) : null;
+         card.p1d = snapshot?.predictions?.upProb1D;
+         card.shortDir = snapshot?.predictions?.upProb1D ? (snapshot.predictions.upProb1D >= 58 ? "偏多" : snapshot.predictions.upProb1D <= 42 ? "偏空" : "中立") : "中立";
+         card.strategySignal = snapshot?.strategy?.signal || "觀察";
+         card.confidence = snapshot?.strategy?.confidence;
+         card.newsLine = snapshot ? (await getTvLatestNewsHeadline(symbol) ? buildNewsLine(await getTvLatestNewsHeadline(symbol), 96) : "—") : "—";
+         card.insiderSells = snapshot?.insiderTransfers || [];
+         card.flowScore = snapshot?.signals?.flow?.flowScore;
+         card.macroRisk = snapshot?.crashWarning?.score;
+         
+         if (!skipQuote) {
+            const rating = await fetchTradingViewRating(symbol, 'taiwan');
+            card.tvRating = TV_RATING_ZH[rating];
+         }
+         return card;
+      } catch (error) { return null; }
+   }
+
+   static async fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
+      const cleanTicker = ticker.includes(":") ? ticker.split(":")[1] : ticker;
+      if (!/^[A-Z]{1,5}(\.[A-Z]{1,2})?$/i.test(cleanTicker)) return null;
+      const symbol = cleanTicker.toUpperCase();
+      const baseUrl = this.getSnapshotBaseUrl(overrideBaseUrl);
+      
+      try {
+         const snapUrl = `${baseUrl}/api/stock/${symbol}/snapshot?mode=lite`;
+         const snapRes = await fetch(snapUrl).catch(() => null);
+         const snapshot = snapRes && snapRes.ok ? await snapRes.json() : null;
+
+         const rtQuoteRaw = await yahooFinance.quote(symbol).catch(() => null);
+         const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
+
+         if (snapshot || rtQuote) {
+            const card: StockCard = {
+               symbol,
+               nameZh: String(snapshot?.normalizedTicker?.companyNameZh || rtQuote?.longName || rtQuote?.shortName || symbol),
+               close: rtQuote?.regularMarketPrice || (snapshot?.data?.prices?.length ? snapshot.data.prices[snapshot.data.prices.length-1].close : null),
+               chgPct: rtQuote?.regularMarketChangePercent || null,
+               chgAbs: rtQuote?.regularMarketChange || null,
+               volume: rtQuote?.regularMarketVolume || null,
+               volumeVs5dPct: null, flowNet: null, flowUnit: "股", shortDir: "中立", strategySignal: "觀察", confidence: null,
+               p1d: snapshot?.predictions?.upProb1D, 
+               p3d: snapshot?.predictions?.upProb3D, 
+               p5d: snapshot?.predictions?.upProb5D, 
+               support: snapshot?.keyLevels?.supportLevel, resistance: snapshot?.keyLevels?.breakoutLevel,
+               bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [], chartBuffer: null
+            };
+            if (!skipQuote) {
+               const rating = await fetchTradingViewRating(symbol, 'america');
+               card.tvRating = TV_RATING_ZH[rating];
+            }
+            return card;
+         }
+         return null;
+      } catch { return null; }
+   }
+}
