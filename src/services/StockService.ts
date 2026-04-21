@@ -72,8 +72,7 @@ export class StockService {
             if (hasChinese) return title;
          }
       }
-      const first = news[0];
-      return (typeof first === 'string' ? first : (first?.title || first?.headline)) || null;
+      return null;
    }
 
    private static getRichNewsList(news: any, symbol?: string, isUS = false): string[] {
@@ -214,9 +213,14 @@ export class StockService {
          card.flowScore = snapshot?.signals?.flow?.flowScore;
          card.macroRisk = snapshot?.crashWarning?.score;
          
+         // 產業類別 (多元對位)
+         const snapshotIndustry = snapshot?.globalLinkage?.profile?.sectorZh || 
+                                snapshot?.industry || 
+                                snapshot?.stockProfile?.sectorZh;
+
          const { resolveStockProfile } = await import("@/domain/industry/stockProfileResolver");
          const localProfile = await resolveStockProfile(symbol, card.nameZh).catch(() => null);
-         card.industry = snapshot?.globalLinkage?.profile?.sectorZh || snapshot?.industry || localProfile?.sectorZh || "—";
+         card.industry = snapshotIndustry || localProfile?.sectorZh || "—";
          
          if (!skipQuote) {
             const rating = await fetchTradingViewRating(symbol, 'taiwan');
