@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { watchlistStore, WatchlistItem } from "@/lib/stores/watchlistStore";
+import { watchlistStore, WatchlistItem } from "@/services/stores/watchlistStore";
 
 /**
  * 封裝現有的 watchlistStore，確保戰情室與全站觀察清單狀態 100% 同步。

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { mapErrorCodeToZh } from "@/i18n/zh-TW";
 
-import { isMarketOpen } from "@/lib/market";
+import { isMarketOpen } from "@/shared/utils/market";
 
 export function useStockSnapshot(ticker: string) {
   return useQuery({

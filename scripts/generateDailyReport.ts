@@ -1,13 +1,13 @@
 
 import fs from "fs";
 import path from "path";
-import { getWatchlist } from "../src/lib/config/watchlistParser";
-import { SnapshotService } from "../src/lib/api/SnapshotService";
+import { getWatchlist } from "@/infrastructure/config/watchlistParser";
+import { SnapshotService } from "@/services/SnapshotService";
 import {
   buildStanceText,
   formatPrice,
   humanizeNumber,
-} from "../src/lib/telegram/formatters";
+} from "@/features/telegram/formatters";
 
 type WatchRow = {
   symbol: string;
@@ -94,7 +94,7 @@ async function generateReport() {
   fs.writeFileSync(path.join(reportsDir, `${dateText}.md`), markdown, "utf-8");
 
   if (process.env.TELEGRAM_BOT_TOKEN) {
-     const { handleTelegramMessage } = await import("../src/lib/telegram/botEngine");
+     const { handleTelegramMessage } = await import("@/features/telegram/botEngine");
      await handleTelegramMessage(0, `📝 每日盤後報告已生成 (${dateText})，請至儀表板查看詳情。`, true);
   }
 }

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Tile } from "@/components/bento/Tile";
 import { SnapshotResponse } from "@/components/layout/types";
 import { Star, ArrowRight, Activity, Globe, MapPin, Link as LinkIcon } from "lucide-react";
-import { watchlistStore } from "@/lib/stores/watchlistStore";
+import { watchlistStore } from "@/services/stores/watchlistStore";
 
 // Adapt legacy output gracefully
 function useAdaptedLinkage(snapshot: SnapshotResponse) {

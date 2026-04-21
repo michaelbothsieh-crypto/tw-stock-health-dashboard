@@ -1,8 +1,8 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
-import { sendTelegramAlert } from "@/lib/notifications/telegram";
-import { getCache, setCache } from "@/lib/providers/redisCache";
+import { sendTelegramAlert } from "@/infrastructure/notifications/telegram";
+import { getCache, setCache } from "@/infrastructure/providers/redisCache";
 import { twStockNames } from "@/data/twStockNames";
-import { findCrossAgeDays } from "@/lib/screener/breakout";
+import { findCrossAgeDays } from "@/infrastructure/screener/breakout";
 import {
   formatTurnover,
   getBreakoutFastEma,
@@ -12,7 +12,7 @@ import {
   getBreakoutRelativeVolumeMultiplier,
   getBreakoutSlowEma,
   getBreakoutTrendEma,
-} from "@/lib/screener/constants";
+} from "@/infrastructure/screener/constants";
 
 export const dynamic = "force-dynamic";
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getMarketIndicators } from "@/lib/providers/marketIndicators";
-import { evaluateCrashWarning } from "@/lib/global/crash/crashEngine";
+import { getMarketIndicators } from "@/infrastructure/providers/marketIndicators";
+import { evaluateCrashWarning } from "@/infrastructure/crash/crashEngine";
 
 // Using edge/server with revalidate to avoid spamming Yahoo
 export const revalidate = 3600; // 1 hour

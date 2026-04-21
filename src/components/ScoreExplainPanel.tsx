@@ -3,7 +3,7 @@
 import { Info } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { riskFlagLabel } from "@/lib/riskFlags";
+import { riskFlagLabel } from "@/domain/riskFlags";
 
 export interface ExplainComponentRow {
   key: string;

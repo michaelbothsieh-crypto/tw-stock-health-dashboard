@@ -1,7 +1,7 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
-import { getCache, setCache } from "@/lib/providers/redisCache";
+import { getCache, setCache } from "@/infrastructure/providers/redisCache";
 import { twStockNames } from "@/data/twStockNames";
-import { buildBreakoutRow, BreakoutScreenerRow } from "@/lib/screener/breakout";
+import { buildBreakoutRow, BreakoutScreenerRow } from "@/infrastructure/screener/breakout";
 import {
   formatTurnover,
   getBreakoutFastEma,
@@ -11,7 +11,7 @@ import {
   getBreakoutRelativeVolumeMultiplier,
   getBreakoutSlowEma,
   getBreakoutTrendEma,
-} from "@/lib/screener/constants";
+} from "@/infrastructure/screener/constants";
 
 export const dynamic = "force-dynamic";
 

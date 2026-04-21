@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getFilteredInsiderTransfers } from "@/lib/providers/twseInsiderFetch";
+import { getFilteredInsiderTransfers } from "@/infrastructure/providers/twseInsiderFetch";
 
 export async function GET(
   req: NextRequest,

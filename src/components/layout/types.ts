@@ -1,14 +1,14 @@
-import { CrashWarningOutput } from "@/lib/global/crash/crashEngine";
+import { CrashWarningOutput } from "@/infrastructure/crash/crashEngine";
 
-import { CorrelationResult } from "@/lib/analytics/correlation";
-import { StrategyOutput } from "@/lib/strategy/types";
-import { KeyLevelsResult } from "@/lib/signals/keyLevels";
-import { UxSummaryOutput } from "@/lib/ux/summaryBuilder";
+import { CorrelationResult } from "@/domain/analytics/correlation";
+import { StrategyOutput } from "@/domain/strategy/types";
+import { KeyLevelsResult } from "@/domain/signals/keyLevels";
+import { UxSummaryOutput } from "@/shared/utils/summaryBuilder";
 import { RadarOverviewDataItem } from "@/components/charts/RadarOverview";
 
-import { StockProfile } from "@/lib/industry/stockProfileResolver";
-import { SelectedDrivers } from "@/lib/global/driverSelector";
-import { RelativeStrengthResult } from "@/lib/analytics/relativeStrength";
+import { StockProfile } from "@/domain/industry/stockProfileResolver";
+import { SelectedDrivers } from "@/infrastructure/driverSelector";
+import { RelativeStrengthResult } from "@/domain/analytics/relativeStrength";
 
 
 export type ExplainTab = "trend" | "flow" | "fundamental" | "volatility" | "news" | "prediction" | "strategy" | "consistency";
@@ -35,10 +35,10 @@ export type SnapshotResponse = {
   displayName?: string;
   crashWarning?: CrashWarningOutput;
   warnings?: string[];
-  technicals?: import('@/lib/providers/tradingViewFetch').TvTechnicalData | null;
-  technicalTactics?: import('@/lib/ux/technicalTranslator').TranslatedTechnicals | null;
-  playbook?: import('@/lib/ai/playbookAgent').ActionPlaybook;
-  insiderTransfers?: import('@/lib/providers/twseInsiderFetch').InsiderTransfer[];
+  technicals?: import('@/infrastructure/providers/tradingViewFetch').TvTechnicalData | null;
+  technicalTactics?: import('@/shared/utils/technicalTranslator').TranslatedTechnicals | null;
+  playbook?: import('@/domain/ai/playbookAgent').ActionPlaybook;
+  insiderTransfers?: import('@/infrastructure/providers/twseInsiderFetch').InsiderTransfer[];
   signals: {
     trend: { trendScore: number | null };
     flow: {

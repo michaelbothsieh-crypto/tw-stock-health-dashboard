@@ -1,5 +1,5 @@
 "use client";
-import { CrashWarningOutput } from "@/lib/global/crash/crashEngine";
+import { CrashWarningOutput } from "@/infrastructure/crash/crashEngine";
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { defaultWatchlist, stockNameMap } from "@/i18n/zh-TW";
 import { twStockNames } from "@/data/twStockNames";
-import { resolveStockName } from "@/lib/stocks/nameResolver";
-import { watchlistStore, WatchlistItem } from "@/lib/stores/watchlistStore";
+import { resolveStockName } from "@/infrastructure/stocks/nameResolver";
+import { watchlistStore, WatchlistItem } from "@/services/stores/watchlistStore";
 import { useStockSnapshot } from "@/hooks/useStockSnapshot";
 import { DesktopStockLayout } from "@/components/layout/DesktopStockLayout";
 import { MobileStockLayout } from "@/components/layout/MobileStockLayout";

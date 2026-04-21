@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { redis } from "@/lib/providers/redisCache";
+import { redis } from "@/infrastructure/providers/redisCache";
 
 export async function POST(req: NextRequest) {
   if (!redis) {

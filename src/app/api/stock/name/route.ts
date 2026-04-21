@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { twStockNames } from "@/data/twStockNames";
-import { yf as yahooFinance } from "@/lib/providers/yahooFinanceClient";
+import { yf as yahooFinance } from "@/infrastructure/providers/yahooFinanceClient";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);

@@ -1,5 +1,5 @@
 import { Tile } from "@/components/bento/Tile";
-import { TranslatedTechnicals } from "@/lib/ux/technicalTranslator";
+import { TranslatedTechnicals } from "@/shared/utils/technicalTranslator";
 import { Activity, TrendingUp, TrendingDown, Target, Shield, Zap } from "lucide-react";
 
 export function TechnicalTile({ tactics }: { tactics?: TranslatedTechnicals | null }) {

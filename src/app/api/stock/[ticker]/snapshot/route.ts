@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
-import { SnapshotService } from "@/lib/api/SnapshotService";
+import { SnapshotService } from "@/services/SnapshotService";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";

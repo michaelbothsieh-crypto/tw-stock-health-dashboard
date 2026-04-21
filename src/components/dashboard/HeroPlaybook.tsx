@@ -26,10 +26,10 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import { SnapshotResponse } from "@/components/layout/types";
-import { generatePlaybook, VerdictColor } from "@/lib/ux/playbookGenerator";
+import { generatePlaybook, VerdictColor } from "@/shared/utils/playbookGenerator";
 import { getTwseColor } from "../layout/utils";
 import { useWatchlist } from "@/hooks/useWatchlist";
-import { getSharedScoreStyle } from "@/lib/ux/scoreStyles";
+import { getSharedScoreStyle } from "@/shared/utils/scoreStyles";
 import {
     Tooltip,
     TooltipContent,

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCache } from "@/lib/providers/redisCache";
+import { getCache } from "@/infrastructure/providers/redisCache";
 
 /**
  * 專門給 LINE 等平台讀取暫存在 Redis 中的圖表 Buffer

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getFilteredInsiderTransfers } from "@/lib/providers/twseInsiderFetch";
-import { fetchStockSnapshot } from "@/lib/api/stockRouter";
-import { normalizeTicker } from "@/lib/ticker";
-import { detectMarket } from "@/lib/market";
-import { calculateFlow } from "@/lib/signals/flow";
-import { generatePushAlert } from "@/lib/ai/alertAgent";
-import { sendTelegramAlert } from "@/lib/notifications/telegram";
+import { getFilteredInsiderTransfers } from "@/infrastructure/providers/twseInsiderFetch";
+import { fetchStockSnapshot } from "@/infrastructure/stockRouter";
+import { normalizeTicker } from "@/shared/utils/ticker";
+import { detectMarket } from "@/shared/utils/market";
+import { calculateFlow } from "@/domain/signals/flow";
+import { generatePushAlert } from "@/domain/ai/alertAgent";
+import { sendTelegramAlert } from "@/infrastructure/notifications/telegram";
 
 function getWatchlist(): string[] {
   const envVal = process.env.WATCHLIST_TW?.trim();
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
 
       const investors = snapshotData.flow?.investors || [];
       const margin = snapshotData.flow?.margin || [];
-      const tradingDates = prices.map((p) => p.date);
+      const tradingDates = (prices as any[]).map((p: any) => p.date);
       
       const flowSignals = calculateFlow(tradingDates, investors, margin);
       const insiderTransfers = marketInfo.market === "TWSE" ? await getFilteredInsiderTransfers(norm.symbol) : [];

@@ -1,112 +1,72 @@
 # 台股診斷 PRO (TW Stock Health Dashboard)
 
-這是一個結合 AI 輔助與量化數據的台股/美股雙引擎決策工具。它幫你整合了技術面、籌碼對抗、基本面、海外連動與崩盤預警等關鍵數據，並透過 Web 介面與 Telegram Bot 提供即時的 AI 戰術沙盤推演。
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/michaelbothsieh-crypto/tw-stock-health-dashboard)
+[![Stack](https://img.shields.io/badge/Stack-Next.js%2015%20%7C%20AI%20%7C%20Redis-blue)](https://nextjs.org/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## 專案核心理念
-*   **決策輔助**：工具是用來協助判斷，而非取代你的獨立思考或自動交易。
-*   **數據透明**：提供可解釋的分數與訊號來源，每一項 AI 決策都能在 UI 上找到底層數據支撐。
-*   **高可用性 (3-Tier AI Fallback)**：內建三層降級機制，確保在各種 API 速率限制下，依然能產出作戰建議。
-
----
-
-## 🔥 核心亮點功能
-
-### 1. 🤖 AI 戰術實戰腳本 (Tactical Playbook)
-*   **IF-THEN 邏輯分析**：AI 不僅給出方向，還會擬定具體的戰術腳本（例如：「若能放量站穩壓力位...則有望開啟新一輪攻勢」），幫助投資人預演多種市場情境。
-*   **數據支撐透明化**：顯示 AI 決策的底層數據，包含總經狀態、籌碼強度、支撐與壓力精確位階。
-
-![AI 戰術實戰腳本](./public/screenshots/playbook.png)
-
-### 2. 📊 全方位數據判讀系統 (Data Interpretation)
-*   **分析詳解三階段**：
-    - **階段 1：方向判定**（技術 40% + 籌碼 30% + 催化劑 30%）。
-    - **階段 2：可出手度**（結合短期機率與一致性，計算回檔風險）。
-    - **階段 3：策略類型**（綜合多空條件與風險檢核後的行動建議）。
-
-![數據判讀階段](./public/screenshots/stages.png)
-
-*   **多維度指標概覽**：透過雷達圖與條狀圖，直觀呈現技術、籌碼、基本、波動、機率、同向六大維度的強弱程度。
-
-![多維度指標概覽](./public/screenshots/radar.png)
-
-### 3. ⚔️ 籌碼對抗雷達 & 內部人動向
-*   **籌碼對抗雷達 (5D)**：追蹤三大法人、投信、融資、融券的 5 日變動。AI 會自動給出結論（如：「散戶接刀」、「籌碼凌亂」或「法人鎖碼」）。
-
-![籌碼對抗雷達](./public/screenshots/flow_radar.png)
-
-*   **法人連動率**：計算外資、投信、自營商的 60 日連動係數，找出真正影響股價的核心推手。
-*   **內部人防空警報**：直連 TWSE OpenAPI，監控大筆申報轉讓，AI 自動判讀潛在拋售風險。
-
-### 4. 📈 技術戰術面板 (Technical Tactics)
-*   **關鍵位階監控**：即時顯示月線、季線、布林通道上緣等重要技術位階。
-*   **量化指標分析**：彙整均線架構（多頭/空頭）、RSI 指標（買盤佔優/超賣）、MACD 趨勢（多頭延續/轉弱），並給出具體的技術操作策略。
-
-![技術戰術面板](./public/screenshots/technical.png)
-
-### 5. 🔗 同業對標與海外連動
-*   **族群基準對比**：顯示個股與所屬產業族群指數的相對表現。
-*   **連動性排行**：列出本地同業（如日月光、京元電子等）與海外板塊的關聯度百分比，協助判斷類股輪動趨勢。
-
-![同業對標](./public/screenshots/chart_peer.png)
-
-### 6. 📱 AI 健康戰情室 (Watchlist Command Center)
-*   **全局自選股監控**：以卡片形式呈現所有自選標的之綜合健康評分。
-*   **視覺化狀態提示**：透過顏色與圖示一眼辨識標的狀態：☀️ 體質強健、☁️ 中性震盪、⛈️ 避險警報。
-
-![AI 健康戰情室](./public/screenshots/watchlist.png)
+這是一個專為專業投資人設計的 **AI 量化決策輔助系統**。它透過高度解耦的微服務架構，整合了技術指標、籌碼對抗、基本面數據與海外連動，並結合頂尖 AI 模型產出具備實戰價值的戰術腳本。
 
 ---
 
-## 🛠️ 技術架構
-*   **Frontend**: Next.js 15 (App Router) / React 19 / Tailwind CSS v4 / Recharts
-*   **AI Models**: Groq (Llama 3), Google Gemini
-*   **Data Providers**: FinMind (台股 - **免費 API 友好**), Yahoo Finance (美股/宏觀), TWSE OpenAPI (內部人)
-*   **Caching & State**: Upstash Redis (全局快取), LocalStorage (自選股狀態)
+## 🌟 核心功能矩陣
+
+### 1. 🤖 AI 戰術大腦 (Tactical Intelligence)
+*   **實戰腳本生成**：結合技術位階與籌碼流向，由 AI 產出「IF-THEN」邏輯的實戰演練建議。
+*   **多維度健康評分**：綜合技術 (40%)、籌碼 (30%) 與催化劑 (30%)，產出具備可解釋性的綜合健康指標。
+*   **回檔風險預警**：利用短期波動率與機率模型，量化目前的出手勝率與潛在回檔風險。
+
+### 2. ⚡ Telegram 智能助理 (Next-Gen Bot)
+系統提供功能強大的 Telegram Bot 入口，支援以下專業指令：
+*   🔍 `/stock [代號]`：**台美股通用查詢**。自動偵測市場並回傳深度個股卡片、即時報價與 AI 分析。
+*   🔥 `/hot [stock/etf]`：**Yahoo 社群爆紅榜**。即時掌握市場最受關注的熱門標的。
+*   📊 `/etf [代號]`：**成分股穿透分析**。解析 ETF 持股權重、YTD 績效與淨值變動。
+*   🏆 `/twrank` / `/usrank`：**強勢股掃描**。過濾水餃股後，精選昨日漲幅最強勁的 10 檔標的。
+*   📈 `/roi [代號] [期間]`：**自定義回測**。精準計算特定時間段（如 1y, YTD）的投資報酬率。
+*   🤔 `/whatis [名稱/代號]`：**AI 公司百科**。快速獲取公司背景、核心業務與近期關鍵新聞摘要。
+
+### 3. ⚔️ 籌碼與技術深度判讀
+*   **TradingView 技術溫度計**：整合 TradingView 權威評分，直觀顯示「強力買入」至「強力賣出」的技術狀態。
+*   **籌碼對抗雷達 (5D)**：追蹤三大法人與融資券的 5 日對抗態勢，輔以內部人申報轉讓監控。
+*   **海外連動分析**：計算個股與海外板塊（如 SOXX, QQQ）的連動係數，掌握類股輪動先機。
 
 ---
 
-## ⚙️ 環境變數設定 (.env.local)
-
-請在專案根目錄建立 `.env.local`，並填入以下金鑰才能完全啟動 PRO 版功能：
-
-```env
-# 1. 核心資料源 (台股籌碼與財報)
-# 前往 https://finmindtrade.com/ 取得 Token (非必填，不填則使用 FinMind 免費 API 限制)
-FINMIND_API_TOKEN="your_finmind_token"
-
-# 2. AI 戰術大腦金鑰 (Groq 為主，Gemini 為輔)
-GROQ_API_KEY="gsk_..."
-GEMINI_API_KEY="AIzaSy..."
-
-# 3. 系統全局快取 (加速回應並節省 API Quota)
-UPSTASH_REDIS_REST_URL="https://your-upstash-url.upstash.io"
-UPSTASH_REDIS_REST_TOKEN="your_upstash_token"
-
-# 4. Telegram 智能推播 (選填，若需要防空警報推播則需設定)
-TELEGRAM_BOT_TOKEN="your_bot_token"
-TELEGRAM_CHAT_ID="your_chat_id"
-
-# 5. 專屬掃描清單 (Cron Job 監聽對象，以逗號分隔)
-WATCHLIST_TW="2330,2317,2344,2615"
-```
+## 🏗️ 軟體工程實踐
+本專案經歷了深度的架構重構，嚴格遵循以下現代軟體開發標準：
+*   **SOLID & SoC**：核心邏輯已解耦為 `SnapshotService`、`StockService` 與 `MessageService`，確保職責單一且易於測試。
+*   **Strategy Pattern**：Telegram 指令分發採用策略模式，具備極高的擴充性。
+*   **SSOT (Single Source of Truth)**：統一的數據抓取與格式化接口，確保 Web 介面、API 與報表腳本數據 100% 同步。
+*   **RAII & DRY**：嚴謹的資源管理與代碼複用，杜絕重複的 API 呼叫邏輯。
 
 ---
 
-## 🚀 啟動與開發指令
+## ⚙️ 快速上手
 
+### 環境變數配置 (.env.local)
+請參考 `.env.example` 建立配置，核心金鑰包含：
+*   `GROQ_API_KEY`：AI 邏輯分析核心。
+*   `UPSTASH_REDIS_REST_URL`：全局數據快取，確保極速回應。
+*   `TELEGRAM_BOT_TOKEN`：啟動智能助理服務。
+
+### 開發指令
 ```bash
-# 安裝依賴
+# 環境安裝
 npm install
 
-# 啟動本地開發伺服器
+# 啟動開發伺服器
 npm run dev
 
-# 專案建置
+# 專案建置與型別檢查
 npm run build
-
-# 執行 TypeScript 靜態型別檢查
-npm run lint
 ```
 
+---
+
+## 📅 自動化工具
+*   **每日盤後報告**：透過 `scripts/generateDailyReport.ts` 自動產生 Markdown 格式的盤後概覽，並同步推送至 Telegram。
+*   **崩盤預警監測**：後端 Cron Job 定期執行總經壓力測試，守護投資安全。
+
+---
+
 ## 免責聲明
-本專案所有內容、AI 生成之文字、及量化數據僅供個人研究與決策輔助參考，絕對不構成任何形式的投資操作建議。入市有風險，投資需謹慎。
+本系統之所有內容、AI 生成建議及量化數據僅供學術研究與決策輔助參考，不構成任何形式的投資操作建議。金融市場具備高度風險，投資前請務必進行獨立評估。

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
-import { normalizeTicker } from "@/lib/ticker";
-import { detectMarket } from "@/lib/market";
-import { fetchRecentBars } from "@/lib/range";
-import { renderStockChart, ChartDataPoint } from "@/lib/ux/chartRenderer";
-import { calculateKeyLevels } from "@/lib/signals/keyLevels";
-import { getCache, setCache } from "@/lib/providers/redisCache";
-import { fetchFugleQuote } from "@/lib/providers/fugleQuote";
+import { normalizeTicker } from "@/shared/utils/ticker";
+import { detectMarket } from "@/shared/utils/market";
+import { fetchRecentBars } from "@/shared/utils/range";
+import { renderStockChart, ChartDataPoint } from "@/shared/utils/chartRenderer";
+import { calculateKeyLevels } from "@/domain/signals/keyLevels";
+import { getCache, setCache } from "@/infrastructure/providers/redisCache";
+import { fetchFugleQuote } from "@/infrastructure/providers/fugleQuote";
 
 /**
  * GET /api/stock/{ticker}/chart
@@ -66,13 +66,13 @@ export async function GET(
       return new NextResponse("Insufficient price data", { status: 404 });
     }
 
-    const chartData: ChartDataPoint[] = prices.map((p) => ({
+    const chartData: ChartDataPoint[] = prices.map((p: any) => ({
       date: p.date,
       open: p.open,
-      high: p.max,
-      low: p.min,
+      high: p.high || p.max,
+      low: p.low || p.min,
       close: p.close,
-      volume: p.Trading_Volume,
+      volume: p.volume || p.Trading_Volume,
     }));
 
     // 即時報價：優先 Fugle（台股），fallback Yahoo
@@ -83,7 +83,7 @@ export async function GET(
       if (fugle) {
         rtPrice = fugle.price; rtHigh = fugle.high; rtLow = fugle.low; rtOpen = fugle.open; rtVol = fugle.volume;
       } else {
-        const { yf } = await import("@/lib/providers/yahooFinanceClient");
+        const { yf } = await import("@/infrastructure/providers/yahooFinanceClient");
         const yahooSym = norm.yahoo || `${norm.symbol}.TW`;
         const rtRaw = await yf.quote(yahooSym);
         const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;

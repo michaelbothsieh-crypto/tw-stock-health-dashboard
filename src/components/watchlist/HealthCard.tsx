@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { X, Loader2, AlertCircle } from "lucide-react";
-import { getSharedScoreStyle } from "@/lib/ux/scoreStyles";
+import { getSharedScoreStyle } from "@/shared/utils/scoreStyles";
 
 interface HealthCardProps {
   ticker: string;

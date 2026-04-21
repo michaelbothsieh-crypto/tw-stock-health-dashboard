@@ -1,4 +1,4 @@
-import { redis } from "../src/lib/providers/redisCache";
+import { redis } from "@/infrastructure/providers/redisCache";
 import * as dotenv from "dotenv";
 
 dotenv.config();

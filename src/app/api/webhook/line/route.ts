@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as line from "@line/bot-sdk";
 
-import { generateBotReply, resolveCodeFromInputLocal } from "@/lib/telegram/botEngine";
+import { generateBotReply, resolveCodeFromInputLocal } from "@/features/telegram/botEngine";
 
 const config = {
   channelAccessToken: process.env.LINE_CHANNEL_ACCESS_TOKEN || "",
@@ -281,7 +281,7 @@ const reply = await generateBotReply(userText, { baseUrl: origin, chatId });
 
         // 處理動態圖表 (Buffer)
         if (reply.chartBuffer) {
-          const { setCache } = await import("@/lib/providers/redisCache");
+          const { setCache } = await import("@/infrastructure/providers/redisCache");
           const cacheId = Math.random().toString(36).substring(2, 15);
           // 快取 10 分鐘，將 Buffer 轉為 Base64 存入 Redis
           await setCache(`line:chart:${cacheId}`, reply.chartBuffer.toString("base64"), 600);
