@@ -192,8 +192,13 @@ export class StockService {
          card.strategySignal = snapshot?.strategy?.signal || "觀察";
          card.confidence = snapshot?.strategy?.confidence;
          
+         card.insiderSells = snapshot?.insiderTransfers || [];
+         card.flowScore = snapshot?.signals?.flow?.flowScore;
+         card.macroRisk = snapshot?.crashWarning?.score;
+         card.industry = snapshot?.globalLinkage?.profile?.sectorZh || snapshot?.industry;
+         
          const yahooSearchRes = await yahooFinance.search(yahooSymbol).catch(() => null);
-         card.recentNews = snapshot?.news || [];
+         card.recentNews = Array.isArray(snapshot?.news) ? snapshot.news : (snapshot?.news?.timeline || []);
          const fallbackNews = this.getFirstNewsTitle(card.recentNews, symbol, isUS) || this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, isUS);
          card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
          
@@ -203,11 +208,6 @@ export class StockService {
             card.newsLine = `技術面動能強勁 (${card.tvRating})`;
          }
 
-         card.insiderSells = snapshot?.insiderTransfers || [];
-         card.flowScore = snapshot?.signals?.flow?.flowScore;
-         card.macroRisk = snapshot?.crashWarning?.score;
-         card.industry = snapshot?.linkage?.profile?.sectorZh || snapshot?.industry;
-         
          if (!skipQuote) {
             const rating = await fetchTradingViewRating(symbol, 'taiwan');
             card.tvRating = TV_RATING_ZH[rating];
@@ -260,7 +260,7 @@ export class StockService {
             const yahooSearchRes = await yahooFinance.search(symbol).catch(() => null);
             const yahooNews = (yahooSearchRes as any)?.news;
 
-            card.recentNews = snapshot?.news || [];
+            card.recentNews = Array.isArray(snapshot?.news) ? snapshot.news : (snapshot?.news?.timeline || []);
             // 優先順序: TV即時 > Snapshot歷史 > Yahoo搜尋
             const fallbackNews = this.getFirstNewsTitle(card.recentNews, symbol, true) || this.getFirstNewsTitle(yahooNews, symbol, true);
             card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
