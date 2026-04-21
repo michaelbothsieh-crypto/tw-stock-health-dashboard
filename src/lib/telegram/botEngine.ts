@@ -294,15 +294,18 @@ async function ensureTelegramCommandsSynced() {
          headers: { "Content-Type": "application/json" },
          body: JSON.stringify({
             commands: [
-               { command: "tw", description: "查詢台股個股（例：/tw 2330）" },
-               { command: "hot", description: "Yahoo 社群爆紅榜 (例：/hot etf)" },
-               { command: "us", description: "查詢美股個股（例：/us NVDA）" },               { command: "twrank", description: "台股昨日漲幅前 10 名" },
-               { command: "usrank", description: "美股昨日漲幅前 10 名" },
-               { command: "etf", description: "查詢 ETF 持股及 YTD 表現（例：/etf 0050）" },
-               { command: "whatis", description: "分析公司做什麼及近期新聞（例：/whatis 2330）" },
-               { command: "rank", description: "列出本群熱門股票及查詢至今報酬率" },
-               { command: "roi", description: "計算指定時間段報酬率（例：/roi 2330 1m）" },
-               { command: "debug_rank", description: "診斷排行榜連動問題" },
+               { command: "tw", description: "🔍 台股查詢：個股健檢與即時報價" },
+               { command: "us", description: "🇺🇸 美股查詢：個股即時數據" },
+               { command: "hot", description: "🔥 爆紅榜：Yahoo 社群熱門瀏覽 (etf/stock)" },
+               { command: "etf", description: "📊 ETF 分析：持股內容與績效表現" },
+               { command: "twrank", description: "🏆 台股排行：昨日漲幅前 10 名" },
+               { command: "usrank", description: "🏅 美股排行：昨日漲幅前 10 名" },
+               { command: "whatis", description: "🤔 股票分析：公司簡介與近期新聞摘要" },
+               { command: "roi", description: "📈 報酬計算：自訂時間段績效 (例: /roi 2330 1y)" },
+               { command: "rank", description: "👑 本群熱門：群組內最受關注的股票" },
+               { command: "watchlist", description: "👀 觀察名單：列出目前追蹤的股票" },
+               { command: "daily", description: "📝 健檢報告：產生每日盤後分析" },
+               { command: "help", description: "💡 使用幫助：顯示完整指令說明" },
             ],         }),
       });
       commandsSynced = true;
@@ -1164,16 +1167,6 @@ export async function generateBotReply(text: string, options?: TelegramHandleOpt
       }
    }
 
-   if (command === "/debug_rank") {
-      const redisStatus = redisInstance ? "✅ 已連線" : "❌ 未連線 (請檢查環境變數)";
-      return { 
-         text: `🔍 <b>排行榜診斷資訊</b>\n\n` +
-               `群組 ID: <code>${options?.chatId || "未知"}</code>\n` +
-               `Redis 狀態: ${redisStatus}\n\n` +
-               `請先輸入 <code>/tw 2330</code> 測試是否有產生紀錄。`
-      };
-   }
-
    if (command === "/roi") {
       let [tickerRaw, periodRaw] = query.split(/\s+/);
       if (!tickerRaw || !periodRaw) return { text: "用法: /roi 股票代號(多個可用逗號分隔) 時間(1m, 3m, 6m, 1y, ytd, 或 YYYY-MM-DD)\n例如: /roi 2330,2317,NVDA 1m" };
@@ -1292,7 +1285,7 @@ export async function handleTelegramMessage(chatId: number, text: string, isBack
 
    // 1. 立即送進度訊息，讓使用者知道已收到指令
    let progressMessageId: number | null = null;
-   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/etf", "/twrank", "/usrank", "/hot"].includes(command)) {
+   if (["/tw", "/us", "/whatis", "/rank", "/roi", "/etf", "/twrank", "/usrank", "/hot", "/daily", "/watchlist"].includes(command)) {
       progressMessageId = await sendMessage(chatId, "正在搜尋資料中...");
    }
 
