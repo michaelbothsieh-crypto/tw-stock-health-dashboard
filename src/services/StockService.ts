@@ -253,8 +253,13 @@ export class StockService {
                bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [], chartBuffer: null
             };
             
+            // 抓取 Yahoo 備援新聞 (美股專用)
+            const yahooSearchRes = await yahooFinance.search(symbol).catch(() => null);
+            const yahooNews = (yahooSearchRes as any)?.news;
+
             card.recentNews = snapshot?.news || [];
-            const fallbackNews = this.getFirstNewsTitle(card.recentNews, symbol, true);
+            // 優先順序: TV即時 > Snapshot歷史 > Yahoo搜尋
+            const fallbackNews = this.getFirstNewsTitle(card.recentNews, symbol, true) || this.getFirstNewsTitle(yahooNews, symbol, true);
             card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
 
             // 如果新聞為空，但技術評分強勢，注入熱度訊號

@@ -94,6 +94,7 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
 【客觀盤勢與價格數據】
 - 現價: ${fPrice} (關鍵支撐: ${fSupport} / 關鍵壓力: ${fResistance})
 - 近期走勢: ${ctx.recentTrend || "未提供"}
+- 技術評分: ${ctx.flowVerdict || "中立"} (由 TradingView 技術指標綜合判定)
 
 【籌碼面數據】(極度重要，請納入主觀判斷邏輯)
 - 法人(外+投+自)近 5 日淨買賣: ${ctx.institutionalLots !== undefined ? `${ctx.institutionalLots} 張` : "無資料"}
@@ -104,9 +105,12 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
 - 內部人申讓警訊: ${ctx.insiderTransfers?.length ? ctx.insiderTransfers.map(i => `${i.declarer}(${i.role}) ${i.type} ${i.lots}張`).join(', ') : "無"}
 - 系統環境風險: ${fMacro} (大於 80 時大盤崩盤風險極高，策略須極端保守)
 
-【新聞驅動與事件】(必須判斷新聞題材是否真實發酵，或者只是主力倒貨的利多出盡)
-- 判斷依據: 若有新聞且法人大買、股價漲，為「發酵中」；若新聞樂觀但法人賣超或跌破支撐，為「利多出盡/騙線」。
-- 近期新聞標題與催化劑:
+【新聞與動能判定】(極度重要！請勿盲目依賴新聞文字)
+- 判斷準則：
+  1. 價格行為是最高真實：若股價今日強勢大漲(>5%)且技術評分為買入，即便新聞欄位為空，也代表「隱性利多發酵」或「資金面驅動」，嚴禁判定為『題材未發酵』。
+  2. 新聞只是驗證：若有新聞且股價漲，為「題材共振」；若新聞樂觀但股價不漲反跌，為「利多出盡」。
+  3. 無新聞時：優先觀察「技術位階」與「籌碼流向」判定目前的市場動能。
+- 近期新聞標題:
 ${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `  * ${n}`).join('\n') : "  * (近期無顯著新聞)"}
 
 
