@@ -351,4 +351,49 @@ export class StockService {
          return null;
       } catch { return null; }
    }
+
+   static async fetchLiveJpStockCard(ticker: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
+      const cleanTicker = ticker.toUpperCase().includes(".T") ? ticker.toUpperCase() : `${ticker.toUpperCase()}.T`;
+      const symbol = cleanTicker;
+      const baseUrl = this.getSnapshotBaseUrl(overrideBaseUrl);
+      
+      try {
+         // 目前日股尚無 snapshot API，主要依賴 Yahoo Finance
+         const [rtQuoteRaw, tvNews, assetProfile] = await Promise.all([
+            yahooFinance.quote(symbol).catch(() => null),
+            getTvLatestNewsHeadline(symbol),
+            yahooFinance.quoteSummary(symbol, { modules: ["assetProfile"] }).catch(() => null)
+         ]);
+
+         const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
+         if (!rtQuote || rtQuote.regularMarketPrice === undefined) return null;
+
+         const card: StockCard = {
+            symbol,
+            nameZh: String(rtQuote?.longName || rtQuote?.shortName || symbol),
+            close: rtQuote.regularMarketPrice,
+            chgPct: rtQuote.regularMarketChangePercent || null,
+            chgAbs: rtQuote.regularMarketChange || null,
+            volume: rtQuote.regularMarketVolume || null,
+            volumeVs5dPct: null, flowNet: null, flowUnit: "股", shortDir: "中立", strategySignal: "觀察", confidence: null,
+            p1d: null, p3d: null, p5d: null, 
+            support: null, resistance: null,
+            bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "yahoo", insiderSells: [], chartBuffer: null,
+            industry: assetProfile?.assetProfile?.sector || "—",
+            historyBars: []
+         };
+
+         const yahooSearchRes = await yahooFinance.search(symbol).catch(() => null);
+         card.recentNews = this.getRichNewsList((yahooSearchRes as any)?.news, symbol, true).slice(0, 8);
+         const fallbackNews = this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, true);
+         card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
+
+         if (!skipQuote) {
+            const rating = await fetchTradingViewRating(symbol, 'japan');
+            card.tvRating = TV_RATING_ZH[rating];
+         }
+
+         return card;
+      } catch { return null; }
+   }
 }

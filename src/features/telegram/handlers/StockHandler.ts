@@ -15,7 +15,7 @@ export class StockHandler implements CommandHandler {
   async handle(ctx: CommandContext): Promise<BotReply | null> {
     const { query, chatId, baseUrl } = ctx;
     if (!query) {
-      return { text: "請輸入股票代號或名稱，例如:\n/stock 2330\n/stock NVDA\n/stock 台積電" };
+      return { text: "請輸入股票代號或名稱，例如:\n/stock 2330\n/stock NVDA\n/stock 7203.T (日股)\n/stock 台積電" };
     }
 
     const tickers = query.split(/[,，\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean).slice(0, 10);
@@ -80,11 +80,23 @@ export class StockHandler implements CommandHandler {
     // 2. 判斷是否為美股代號 (1-5位純字母)
     const isUsTicker = /^[A-Z]{1,5}$/.test(cleanT);
 
-    // 3. 透過名稱解析 (僅限台股)
-    const resolvedTaiwanTicker = !isTaiwanTicker && !isUsTicker ? resolveCodeFromInputLocal(t) : null;
+    // 3. 判斷是否為日股代號 (4位數字 + .T)
+    const isJapanTicker = /^[0-9]{4}\.T$/.test(cleanT);
+
+    // 4. 透過名稱解析 (僅限台股)
+    const resolvedTaiwanTicker = !isTaiwanTicker && !isUsTicker && !isJapanTicker ? resolveCodeFromInputLocal(t) : null;
+
+    if (isJapanTicker) {
+      return await StockService.fetchLiveJpStockCard(cleanT, baseUrl, skipH, skipQ);
+    }
 
     if (isTaiwanTicker || resolvedTaiwanTicker) {
-      return await StockService.fetchLiveStockCard(resolvedTaiwanTicker || cleanT, baseUrl, skipH, skipQ);
+      const card = await StockService.fetchLiveStockCard(resolvedTaiwanTicker || cleanT, baseUrl, skipH, skipQ);
+      // 如果台股查不到，且代號是 4 位數字，嘗試日股
+      if (!card && /^[0-9]{4}$/.test(cleanT)) {
+        return await StockService.fetchLiveJpStockCard(cleanT, baseUrl, skipH, skipQ);
+      }
+      return card;
     } else if (isUsTicker) {
       return await StockService.fetchLiveUsStockCard(cleanT, baseUrl, skipH, skipQ);
     }

@@ -14,15 +14,18 @@ export const TV_RATING_ZH: Record<TVRating, string> = {
   'Unknown': '—'
 };
 
-export async function fetchTradingViewRating(ticker: string, market: 'taiwan' | 'america'): Promise<TVRating> {
+export async function fetchTradingViewRating(ticker: string, market: 'taiwan' | 'america' | 'japan'): Promise<TVRating> {
   const url = `https://scanner.tradingview.com/${market}/scan`;
-  const cleanTicker = ticker.toUpperCase();
+  const cleanTicker = ticker.toUpperCase().replace(/\.T$/, "");
 
   const getSymbols = (): string[] => {
     if (market === 'taiwan') {
       if (cleanTicker.includes(':')) return [cleanTicker];
       // 同時查詢 TWSE 與 TPEX，避免判斷錯誤 (例如 6257 是上市非上櫃)
       return [`TWSE:${cleanTicker}`, `TPEX:${cleanTicker}`];
+    }
+    if (market === 'japan') {
+      return [`TSE:${cleanTicker}`];
     }
     // 美股可能在不同交易所，一次查多個
     return [`NASDAQ:${cleanTicker}`, `NYSE:${cleanTicker}`, `AMEX:${cleanTicker}`];
