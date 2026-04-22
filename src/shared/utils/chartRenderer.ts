@@ -184,56 +184,52 @@ export async function renderStockChart(
   const visibleData = cleanData.slice(Math.max(0, cleanData.length - visibleCount));
 
   // 1. 背景
-  ctx.fillStyle = '#121212';
+  ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, width, height);
 
   // 2. 計算比例
   const allPrices = visibleData.flatMap(d => [d.high, d.low]);
-  const minPrice = Math.min(...allPrices) * 0.98;
-  const maxPrice = Math.max(...allPrices) * 1.02;
+  const minPrice = Math.min(...allPrices) * 0.99;
+  const maxPrice = Math.max(...allPrices) * 1.01;
   const priceRange = maxPrice - minPrice;
   const maxVol = Math.max(...visibleData.map(d => d.volume), 1);
 
   const getX = (index: number) => padding.left + (index * (width - padding.left - padding.right) / (visibleData.length - 1));
   const getY = (price: number) => padding.top + (maxPrice - price) * (height - padding.top - padding.bottom) / priceRange;
 
-  // 3. 繪製圖例
+  // 3. 繪製圖例 (仿 Finviz)
   ctx.font = FONT_SANS;
   ctx.textBaseline = 'middle';
 
   const drawLeg = (label: string, color: string, x: number) => {
-    ctx.fillStyle = color; ctx.fillRect(x, 30, 15, 3);
-    ctx.fillStyle = '#9ca3af'; ctx.fillText(label, x + 20, 32);
-    return x + 75;
+    ctx.fillStyle = color; ctx.fillRect(x, 30, 12, 3);
+    ctx.fillStyle = '#cccccc'; ctx.fillText(label, x + 18, 32);
+    return x + 65;
   };
   let curX = padding.left;
-  curX = drawLeg('MA5', '#ffffff', curX);
-  curX = drawLeg('MA20', '#f59e0b', curX);
-  curX = drawLeg('MA60', '#3b82f6', curX);
+  curX = drawLeg('MA5', '#cccccc', curX);
+  curX = drawLeg('MA20', '#ffeb3b', curX);
+  curX = drawLeg('MA60', '#03a9f4', curX);
 
-  ctx.fillStyle = '#ef4444'; ctx.fillRect(curX + 10, 25, 8, 12);
-  ctx.fillStyle = '#22c55e'; ctx.fillRect(curX + 20, 25, 8, 12);
-  ctx.fillStyle = '#9ca3af'; ctx.fillText('Trend (Red Up / Green Down)', curX + 35, 32);
-
-  // 3.1 繪製主標題 (僅顯示代號)
+  // 3.1 繪製主標題 (代號 + 名稱)
   const mainTitle = symbol.toUpperCase();
   ctx.save();
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold 24px ${FONT_FAMILY}`;
+  ctx.font = `bold 26px ${FONT_FAMILY}`;
   ctx.textAlign = 'center';
   ctx.fillText(mainTitle, width / 2, 32);
   ctx.restore();
 
   // 4. 繪製格線
-  ctx.strokeStyle = '#262626';
+  ctx.strokeStyle = '#1a1a1a';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 8; i++) {
     const y = padding.top + i * (height - padding.top - padding.bottom) / 8;
-    ctx.beginPath(); ctx.setLineDash([5, 5]);
+    ctx.beginPath();
     ctx.moveTo(padding.left, y); ctx.lineTo(width - padding.right, y); ctx.stroke();
-    ctx.setLineDash([]); ctx.fillStyle = '#6b7280';
+    ctx.fillStyle = '#555555';
     const p = maxPrice - i * priceRange / 8;
-    ctx.fillText(p.toFixed(1), width - padding.right + 10, y + 4);
+    ctx.fillText(p.toFixed(2), width - padding.right + 10, y);
   }
 
   // 4.1 支撐 / 壓力線
@@ -243,7 +239,7 @@ export async function renderStockChart(
     const y = getY(price);
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 4]);
+    ctx.setLineDash([4, 4]);
     ctx.beginPath();
     ctx.moveTo(padding.left, y);
     ctx.lineTo(width - padding.right, y);
@@ -255,85 +251,40 @@ export async function renderStockChart(
     ctx.textBaseline = 'middle';
     ctx.fillText(`${label} ${price.toFixed(2)}`, width - padding.right + 10, y);
   };
-  drawLevel('R', resistance, '#ef4444');
-  drawLevel('S', support, '#22c55e');
-
-  // 時間軸
-  const labelInterval = Math.ceil(visibleData.length / 6);
-  visibleData.forEach((d, i) => {
-    if (i % labelInterval === 0 || i === visibleData.length - 1) {
-      const x = getX(i);
-      ctx.fillStyle = '#6b7280'; ctx.textAlign = 'center';
-      ctx.fillText(d.date?.substring(5) || '', x, height - padding.bottom + 20);
-    }
-  });
+  drawLevel('R', resistance, '#ff3333');
+  drawLevel('S', support, '#00cc66');
 
   // 5. 繪製成交量
   const volBaseY = height - padding.bottom;
-  const barWidth = Math.max(1, (width - padding.left - padding.right) / visibleData.length * 0.6);
+  const barWidth = Math.max(1, (width - padding.left - padding.right) / visibleData.length * 0.7);
   visibleData.forEach((d, i) => {
     const x = getX(i);
     const vHeight = (d.volume / maxVol) * (height * 0.12);
-    ctx.fillStyle = d.close >= d.open ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.2)';
+    ctx.fillStyle = d.close >= d.open ? 'rgba(0, 141, 65, 0.3)' : 'rgba(230, 46, 62, 0.3)';
     ctx.fillRect(x - barWidth/2, volBaseY - vHeight, barWidth, vHeight);
   });
 
   // 6. 均線
   const drawMA = (period: number, color: string) => {
-    ctx.strokeStyle = color; ctx.lineWidth = period === 5 ? 1 : 2; ctx.beginPath();
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
     let started = false;
-    
-    // 計算 visibleData 在 cleanData 中的起始位置
     const offset = Math.max(0, cleanData.length - visibleData.length);
-    
     for (let i = 0; i < visibleData.length; i++) {
       const cleanIdx = offset + i;
       const slice = cleanData.slice(Math.max(0, cleanIdx - period + 1), cleanIdx + 1);
       if (slice.length < period) continue;
-      
       const avg = slice.reduce((sum, d) => sum + d.close, 0) / period;
       const x = getX(i); const y = getY(avg);
       if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
     }
     ctx.stroke();
   };
-  drawMA(5, '#ffffff'); drawMA(20, '#f59e0b'); drawMA(60, '#3b82f6');
+  drawMA(5, '#cccccc'); drawMA(20, '#ffeb3b'); drawMA(60, '#03a9f4');
 
-  // 7. 趨勢線
-  const drawRealTrendLines = () => {
-    const mid = Math.floor(visibleData.length / 2);
-    let p1 = { price: 0, i: 0 }, p2 = { price: 0, i: 0 };
-    visibleData.forEach((d, i) => {
-      if (i < mid && d.high > p1.price) p1 = { price: d.high, i };
-      if (i >= mid && d.high > p2.price) p2 = { price: d.high, i };
-    });
-    if (p1.price > 0 && p2.price > 0) {
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)'; ctx.setLineDash([3, 3]);
-      ctx.beginPath(); ctx.moveTo(getX(p1.i), getY(p1.price));
-      const slope = (p2.price - p1.price) / (p2.i - p1.i);
-      const endPrice = p1.price + slope * (visibleData.length - 1 - p1.i);
-      ctx.lineTo(getX(visibleData.length - 1), getY(endPrice)); ctx.stroke();
-    }
-    let s1 = { price: Infinity, i: 0 }, s2 = { price: Infinity, i: 0 };
-    visibleData.forEach((d, i) => {
-      if (i < mid && d.low < s1.price) s1 = { price: d.low, i };
-      if (i >= mid && d.low < s2.price) s2 = { price: d.low, i };
-    });
-    if (s1.price < Infinity && s2.price < Infinity) {
-      ctx.strokeStyle = 'rgba(34, 197, 94, 0.5)';
-      ctx.beginPath(); ctx.moveTo(getX(s1.i), getY(s1.price));
-      const slope = (s2.price - s1.price) / (s2.i - s1.i);
-      const endPrice = s1.price + slope * (visibleData.length - 1 - s1.i);
-      ctx.lineTo(getX(visibleData.length - 1), getY(endPrice)); ctx.stroke();
-    }
-    ctx.setLineDash([]);
-  };
-  drawRealTrendLines();
-
-  // 8. 繪製 K 線
+  // 8. 繪製 K 線 (Finviz 色系)
   visibleData.forEach((d, i) => {
     const x = getX(i);
-    const color = d.close >= d.open ? '#ef4444' : '#22c55e';
+    const color = d.close >= d.open ? '#008d41' : '#e62e3e';
     ctx.strokeStyle = color; ctx.fillStyle = color;
     ctx.beginPath(); ctx.moveTo(x, getY(d.high)); ctx.lineTo(x, getY(d.low)); ctx.stroke();
     const bTop = getY(Math.max(d.open, d.close));
