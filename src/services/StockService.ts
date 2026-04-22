@@ -350,8 +350,20 @@ export class StockService {
          card.support = key.support;
          card.resistance = key.resistance;
 
-         // 優先嘗試渲染自定義圖表 (作為基礎)
-         if (card.close !== null) {
+         // 美股優先嘗試使用 Finviz (視覺效果較好)
+         try {
+            const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
+            const chartRes = await fetch(finvizUrl, { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" } });
+            if (chartRes.ok) {
+               const buf = Buffer.from(await chartRes.arrayBuffer());
+               if (buf.length > 2000) { // 確保不是太小的錯誤佔位圖
+                  card.chartBuffer = buf;
+               }
+            }
+         } catch {}
+
+         // 若 Finviz 失敗，則嘗試自定義渲染作為備援
+         if (!card.chartBuffer && card.close !== null) {
             const todayStr = new Date().toLocaleDateString('en-CA');
             const plotBars = [...bars];
             if (plotBars.length > 0) {
@@ -363,16 +375,6 @@ export class StockService {
                card.chartBuffer = await renderStockChart(plotBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180).catch(() => null);
             }
          }
-
-         // 美股嘗試使用 Finviz (視覺效果較好)
-         try {
-            const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
-            const chartRes = await fetch(finvizUrl, { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" } });
-            if (chartRes.ok) {
-               const buf = Buffer.from(await chartRes.arrayBuffer());
-               if (buf.length > 1000) card.chartBuffer = buf; // 避免抓到空的或太小的佔位圖
-            }
-         } catch {}
 
          const yahooSearchRes = await yahooFinance.search(symbol).catch(() => null);
          const combinedNews = [
