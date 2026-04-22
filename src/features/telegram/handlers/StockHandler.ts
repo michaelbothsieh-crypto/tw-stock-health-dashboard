@@ -35,6 +35,7 @@ export class StockHandler implements CommandHandler {
     // 多檔查詢
     const cards = await Promise.all(tickers.map(t => this.processTicker(t, baseUrl, true, true)));
     const errorParts: string[] = [];
+    const summaryLines: string[] = [];
     const buffers: Buffer[] = [];
     const validSymbols: string[] = [];
 
@@ -46,6 +47,10 @@ export class StockHandler implements CommandHandler {
         if (chatId && card.close) {
           await recordStockSearch(String(chatId), card.symbol, card.close).catch(() => null);
         }
+        
+        // 收集文字摘要 (現在是非同步呼叫)
+        summaryLines.push(await MessageService.buildStockSummaryLine(card));
+
         if (card.chartBuffer) {
           buffers.push(card.chartBuffer);
           validSymbols.push(card.symbol);
@@ -61,12 +66,14 @@ export class StockHandler implements CommandHandler {
       if (combined) chartBuffers.push(combined);
     }
 
-    if (chartBuffers.length === 0 && errorParts.length > 0) {
-      return { text: errorParts.join("\n") };
+    const finalTexts = [...summaryLines, ...errorParts];
+
+    if (chartBuffers.length === 0 && finalTexts.length > 0) {
+      return { text: finalTexts.join("\n") };
     }
 
     return { 
-      text: errorParts.length > 0 ? errorParts.join("\n") : "", 
+      text: finalTexts.length > 0 ? finalTexts.join("\n") : "", 
       chartBuffers 
     };
   }
