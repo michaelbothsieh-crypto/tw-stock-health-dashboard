@@ -41,8 +41,11 @@ export class AIAnalysisService {
          });
 
          const verdict = playbook?.verdict || stanceText;
-         const caption = playbook?.telegramCaption || playbook?.tacticalScript || "";
+         let caption = playbook?.telegramCaption || playbook?.tacticalScript || "";
          
+         // 全域過濾 Emoji 圖示，確保文字純粹 (SSOT 原則)
+         caption = caption.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]/gu, "").trim();
+
          // 寫回 card 以利後續流程共用
          card.snapshotVerdict = verdict;
          card.snapshotPlaybookCaption = caption;

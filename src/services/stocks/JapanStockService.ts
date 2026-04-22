@@ -35,9 +35,16 @@ export class JapanStockService {
             volume: b.volume || 0
          })).filter((b: any) => b.close !== undefined && b.close !== null);
 
+         // 日股名稱處理：保持極簡，避免長全名
+         let displayName = symbol;
+         const rawName = rtQuote?.longName || rtQuote?.shortName || "";
+         if (rawName && rawName.length < 15 && rawName.toUpperCase() !== symbol) {
+            displayName = `${symbol} ${rawName}`;
+         }
+
          const card: StockCard = {
             symbol,
-            nameZh: String(rtQuote?.longName || rtQuote?.shortName || symbol),
+            nameZh: displayName,
             close: rtQuote.regularMarketPrice,
             chgPct: rtQuote.regularMarketChangePercent || null,
             chgAbs: rtQuote.regularMarketChange || null,

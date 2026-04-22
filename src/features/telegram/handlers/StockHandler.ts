@@ -37,7 +37,7 @@ export class StockHandler implements CommandHandler {
     }
 
     // 多檔查詢模式
-    const cards = await Promise.all(tickers.map(t => TickerResolver.resolve(t, baseUrl, true, true)));
+    const cards = await Promise.all(tickers.map(t => TickerResolver.resolve(t, baseUrl, true, false)));
     const errorParts: string[] = [];
     const summaryLines: string[] = [];
     const buffers: Buffer[] = [];

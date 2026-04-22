@@ -60,9 +60,6 @@ export class MessageService {
          aiBrief = aiBrief.split("。")[0] + "。";
       }
       
-      // 移除 AI 摘要中的 Emoji 圖示
-      aiBrief = aiBrief.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]/gu, "").trim();
-
       return `<b>${title}</b> <code>${price}(${chg})</code> <b>[${tech}]</b>${aiBrief ? ` | ${escapeHtml(aiBrief)}` : ""}`;
    }
 
