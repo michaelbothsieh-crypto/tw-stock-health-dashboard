@@ -14,8 +14,11 @@ export interface PriceDaily {
 
 const API_TOKEN = process.env.FINMIND_API_TOKEN || "";
 
-async function fetchFinmind(dataset: string, symbol: string, startDate: string, endDate: string) {
-  const url = `https://api.finmindtrade.com/api/v4/data?dataset=${dataset}&data_id=${symbol}&start_date=${startDate}&end_date=${endDate}${API_TOKEN ? `&token=${API_TOKEN}` : ""}`;
+async function fetchFinmind(dataset: string, symbol: string, startDate: string, endDate?: string) {
+  let url = `https://api.finmindtrade.com/api/v4/data?dataset=${dataset}&data_id=${symbol}&start_date=${startDate}${API_TOKEN ? `&token=${API_TOKEN}` : ""}`;
+  if (endDate && !dataset.includes("News")) {
+    url += `&end_date=${endDate}`;
+  }
   const res = await fetch(url);
   return await res.json();
 }
@@ -36,8 +39,8 @@ export async function getMonthlyRevenue(symbol: string, start: string, end: stri
   return fetchFinmind("TaiwanStockMonthRevenue", symbol, start, end);
 }
 
-export async function getTaiwanStockNews(symbol: string, start: string, end: string) {
-  return fetchFinmind("TaiwanStockNews", symbol, start, end);
+export async function getTaiwanStockNews(symbol: string, start: string) {
+  return fetchFinmind("TaiwanStockNews", symbol, start);
 }
 
 // 美股支援

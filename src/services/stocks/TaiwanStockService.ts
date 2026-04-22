@@ -122,9 +122,8 @@ export class TaiwanStockService {
             card.nameZh && card.nameZh !== symbol ? yahooFinance.search(card.nameZh).catch(() => null) : Promise.resolve(null),
             (async () => {
                const { getTaiwanStockNews } = await import("@/infrastructure/providers/finmind");
-               const today = new Date().toISOString().split('T')[0];
                const lastWeek = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-               return getTaiwanStockNews(symbol, lastWeek, today).catch(() => null);
+               return getTaiwanStockNews(symbol, lastWeek).catch(() => null);
             })()
          ]);
 
