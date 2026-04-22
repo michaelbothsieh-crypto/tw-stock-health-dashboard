@@ -152,36 +152,36 @@ export async function renderStockChart(
   resistance: number | null,
   symbol: string,
   visibleCount: number = 180,
-  options: { width?: number; height?: number } = {}
+  options: { width?: number; height?: number; chgPct?: number | null } = {}
 ): Promise<Buffer> {
   ensureFonts();
 
-  const width = options.width ?? 1200;
-  const height = options.height ?? 650;
-  const padding = { top: 70, right: 120, bottom: 70, left: 60 };
+  const width = options.width ?? 1000;
+  const height = options.height ?? 500;
+  const padding = { top: 70, right: 100, bottom: 50, left: 60 };
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
-  const FONT_SANS = `bold 13px ${FONT_FAMILY}`;
+  const FONT_SANS = `bold 12px ${FONT_FAMILY}`;
 
   const startIndex = Math.max(0, allData.length - visibleCount);
   
-  // 0. 資料清洗：排除價格異常點
-  // 先計算中位數作為基準，排除掉與中位數差異過大（例如低於 10%）的髒資料
+  // 0. 資料清洗
   const validCloses = allData.map(d => d.close).filter(c => c > 0).sort((a, b) => a - b);
   const medianPrice = validCloses.length > 0 ? validCloses[Math.floor(validCloses.length / 2)] : 0;
   
   const cleanData = allData.filter(d => {
-    const isNormal = d.close > medianPrice * 0.1 && d.close < medianPrice * 10 &&
-                     d.open > medianPrice * 0.1 && d.open < medianPrice * 10 &&
-                     d.high > medianPrice * 0.1 && d.high < medianPrice * 10 &&
-                     d.low > medianPrice * 0.1 && d.low < medianPrice * 10;
-    return isNormal;
+    return d.close > medianPrice * 0.1 && d.close < medianPrice * 10;
   });
 
   if (cleanData.length < 2) return canvas.toBuffer('image/png');
 
   const visibleData = cleanData.slice(Math.max(0, cleanData.length - visibleCount));
+  const lastBar = visibleData[visibleData.length - 1];
+  const currentPrice = lastBar.close;
+  const displayChgPct = options.chgPct ?? 0;
+  const isUp = displayChgPct >= 0;
+  const themeColor = isUp ? '#00cc66' : '#ff3333';
 
   // 1. 背景
   ctx.fillStyle = '#000000';
@@ -202,8 +202,8 @@ export async function renderStockChart(
   ctx.textBaseline = 'middle';
 
   const drawLeg = (label: string, color: string, x: number) => {
-    ctx.fillStyle = color; ctx.fillRect(x, 30, 12, 3);
-    ctx.fillStyle = '#cccccc'; ctx.fillText(label, x + 18, 32);
+    ctx.fillStyle = color; ctx.fillRect(x, 40, 12, 3);
+    ctx.fillStyle = '#cccccc'; ctx.fillText(label, x + 18, 42);
     return x + 65;
   };
   let curX = padding.left;
@@ -211,13 +211,21 @@ export async function renderStockChart(
   curX = drawLeg('MA20', '#ffeb3b', curX);
   curX = drawLeg('MA60', '#03a9f4', curX);
 
-  // 3.1 繪製主標題 (代號 + 名稱)
-  const mainTitle = symbol.toUpperCase();
+  // 3.1 繪製主標題與漲跌資訊 (仿 Finviz 頂部列)
   ctx.save();
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `bold 26px ${FONT_FAMILY}`;
   ctx.textAlign = 'center';
-  ctx.fillText(mainTitle, width / 2, 32);
+  
+  // 代號
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold 28px ${FONT_FAMILY}`;
+  const titleX = width / 2;
+  ctx.fillText(symbol.toUpperCase(), titleX - 100, 35);
+  
+  // 現價 [漲跌幅]
+  ctx.fillStyle = themeColor;
+  ctx.font = `bold 24px ${FONT_FAMILY}`;
+  const priceText = `${currentPrice.toFixed(2)} [${displayChgPct >= 0 ? '+' : ''}${displayChgPct.toFixed(2)}%]`;
+  ctx.fillText(priceText, titleX + 80, 35);
   ctx.restore();
 
   // 4. 繪製格線

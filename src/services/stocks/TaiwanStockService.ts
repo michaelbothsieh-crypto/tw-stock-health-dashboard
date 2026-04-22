@@ -108,7 +108,7 @@ export class TaiwanStockService {
          card.resistance = snapshot?.keyLevels?.breakoutLevel || key.resistance;
 
          if (processedBars.length >= 2) {
-            card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180).catch(() => null);
+            card.chartBuffer = await renderStockChart(processedBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180, { chgPct: card.chgPct }).catch(() => null);
          }
 
          card.flowNet = typeof snapshot?.signals?.flow?.foreign5D === "number" ? Math.round(snapshot.signals.flow.foreign5D / 1000) : null;
