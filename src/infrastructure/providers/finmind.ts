@@ -52,8 +52,8 @@ export async function getMonthlyRevenueUs(symbol: string, start: string, end: st
   return fetchFinmind("USStockMonthRevenue", symbol, start, end);
 }
 
-export async function getUsStockNews(symbol: string, start: string, end: string) {
-  return fetchFinmind("USStockNews", symbol, start, end);
+export async function getUsStockNews(symbol: string, start: string) {
+  return fetchFinmind("USStockNews", symbol, start);
 }
 
 export async function getInstitutionalInvestorsUs(symbol: string, start: string, end: string) {

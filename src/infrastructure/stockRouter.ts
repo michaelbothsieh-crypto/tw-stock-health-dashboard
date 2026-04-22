@@ -46,7 +46,7 @@ export async function fetchStockSnapshot(norm: NormalizedTicker) {
         getInstitutionalInvestors(symbol, format(subDays(now, 60), "yyyy-MM-dd"), today),
         getMarginShort(symbol, format(subDays(now, 60), "yyyy-MM-dd"), today),
         getMonthlyRevenue(symbol, format(subDays(now, 365), "yyyy-MM-dd"), today),
-        getTaiwanStockNews(symbol, format(subDays(now, 7), "yyyy-MM-dd"), today),
+        getTaiwanStockNews(symbol, format(subDays(now, 7), "yyyy-MM-dd")),
         getTvTechnicalIndicators(symbol)
       ]);
 
@@ -61,7 +61,7 @@ export async function fetchStockSnapshot(norm: NormalizedTicker) {
       const [priceRes, revRes, newsRes, tvTech] = await Promise.all([
         getPriceDailyUs(symbol, startDate, today).catch(() => ({ data: [] })),
         getMonthlyRevenueUs(symbol, startDate, today).catch(() => ({ data: [] })),
-        getUsStockNews(symbol, format(subDays(now, 14), "yyyy-MM-dd"), today).catch(() => ({ data: [] })),
+        getUsStockNews(symbol, format(subDays(now, 14), "yyyy-MM-dd")).catch(() => ({ data: [] })),
         getTvTechnicalIndicators(symbol)
       ]);
       results.prices = priceRes.data || [];
