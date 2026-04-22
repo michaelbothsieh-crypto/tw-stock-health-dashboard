@@ -1,0 +1,43 @@
+
+export interface StockCard {
+   symbol: string;
+   nameZh: string;
+   close: number | null;
+   chgPct: number | null;
+   chgAbs: number | null;
+   volume: number | null;
+   volumeVs5dPct: number | null;
+   flowNet: number | null;
+   flowUnit: string;
+   shortDir: string;
+   strategySignal: string;
+   confidence: number | null;
+   p1d: number | null;
+   p3d: number | null;
+   p5d: number | null;
+   support: number | null;
+   resistance: number | null;
+   bullTarget: number | null;
+   bearTarget: number | null;
+   overseas: any[];
+   syncLevel: string;
+   newsLine: string;
+   sourceLabel: string;
+   insiderSells: any[];
+   recentNews?: string[];
+   industry?: string;
+   trustLots?: number;
+   marginLots?: number;
+   shortLots?: number;
+   institutionalLots?: number;
+   chartBuffer: Buffer | null;
+   snapshotPlaybookCaption?: string;
+   snapshotVerdict?: string;
+   flowScore?: number;
+   macroRisk?: number;
+   isPriceRealTime?: boolean;
+   yahooSymbol?: string;
+   tvRating?: string;
+   marketStatusLabel?: string;
+   historyBars?: any[];
+}
