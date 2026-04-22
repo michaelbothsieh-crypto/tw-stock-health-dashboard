@@ -26,13 +26,13 @@ export class StockService {
     * 抓取即時美股卡片
     */
    static async fetchLiveUsStockCard(ticker: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
-      return UsStockService.fetchLiveCard(ticker, skipQuote);
+      return UsStockService.fetchLiveCard(ticker, overrideBaseUrl, skipHeavy, skipQuote);
    }
 
    /**
     * 抓取即時日股卡片
     */
    static async fetchLiveJpStockCard(ticker: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
-      return JapanStockService.fetchLiveCard(ticker, skipQuote);
+      return JapanStockService.fetchLiveCard(ticker, overrideBaseUrl, skipHeavy, skipQuote);
    }
 }

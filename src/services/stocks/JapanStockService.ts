@@ -9,30 +9,31 @@ import { getFirstNewsTitle, getRichNewsList, isWithinDays } from "@/shared/utils
 import { StockCard } from "./types";
 
 export class JapanStockService {
-   static async fetchLiveCard(ticker: string, skipQuote = false): Promise<StockCard | null> {
+   static async fetchLiveCard(ticker: string, _baseUrl?: string, _skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
       const cleanTicker = ticker.toUpperCase().includes(".T") ? ticker.toUpperCase() : `${ticker.toUpperCase()}.T`;
       const symbol = cleanTicker;
       
       try {
          const sixMonthsAgo = subMonths(new Date(), 6);
-         const [rtQuoteRaw, tvNews, assetProfile, history] = await Promise.all([
+         const [rtQuoteRaw, tvNews, assetProfile, chartRes] = await Promise.all([
             yahooFinance.quote(symbol).catch(() => null),
             getTvLatestNewsHeadline(symbol),
             yahooFinance.quoteSummary(symbol, { modules: ["assetProfile"] }).catch(() => null),
-            yahooFinance.historical(symbol, { period1: sixMonthsAgo }).catch(() => [])
+            yahooFinance.chart(symbol, { period1: sixMonthsAgo }).catch(() => null)
          ]);
 
          const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
          if (!rtQuote || rtQuote.regularMarketPrice === undefined) return null;
 
+         const history = chartRes?.quotes || [];
          const bars = history.map((b: any) => ({
-            date: b.date instanceof Date ? b.date.toISOString().split('T')[0] : String(b.date),
-            open: b.open || b.close,
-            high: b.high || b.close,
-            low: b.low || b.close,
+            date: b.date instanceof Date ? b.date.toISOString().split('T')[0] : String(b.date).split('T')[0],
+            open: b.open ?? b.close,
+            high: b.high ?? b.close,
+            low: b.low ?? b.close,
             close: b.close,
             volume: b.volume || 0
-         }));
+         })).filter((b: any) => b.close !== undefined && b.close !== null);
 
          const card: StockCard = {
             symbol,
