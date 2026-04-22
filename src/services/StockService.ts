@@ -85,29 +85,43 @@ export class StockService {
          const summary = item?.summary || item?.description || "";
          if (!title) continue;
          const content = summary ? `${title} | 摘要: ${summary}` : title;
-         if (!isUS) {
-            const hasChinese = /[\u4e00-\u9fa5]/.test(title);
-            if (hasChinese || (cleanSymbol && title.toUpperCase().includes(cleanSymbol))) results.push(content);
-         } else {
+         
+         // 增加更寬鬆的相關性判斷
+         const isRelevant = !cleanSymbol || 
+                           title.toUpperCase().includes(cleanSymbol) || 
+                           (isUS && cleanSymbol.split('.')[0] && title.toUpperCase().includes(cleanSymbol.split('.')[0]));
+
+         if (isRelevant) {
+            results.push(content);
+         } else if (!isUS && /[\u4e00-\u9fa5]/.test(title)) {
+            // 台股環境下，如果有中文字通常也是相關的
             results.push(content);
          }
-         if (results.length >= 5) break;
+
+         if (results.length >= 10) break;
       }
       return results;
    }
 
    private static isWithinDays(dateInput: any, days: number): boolean {
-      if (!dateInput) return false;
+      if (!dateInput) return true; // 若無日期則預設通過，由後續過濾
       try {
-         const ts = typeof dateInput === 'number' 
-            ? (dateInput > 10000000000 ? dateInput : dateInput * 1000) // 處理秒或毫秒
-            : new Date(dateInput).getTime();
-         if (isNaN(ts)) return false;
+         let ts: number;
+         if (dateInput instanceof Date) {
+            ts = dateInput.getTime();
+         } else if (typeof dateInput === 'number') {
+            // Yahoo Finance 有時返回秒數 (10位) 或毫秒 (13位)
+            ts = dateInput > 10000000000 ? dateInput : dateInput * 1000;
+         } else {
+            ts = new Date(dateInput).getTime();
+         }
+         if (isNaN(ts)) return true;
          return (Date.now() - ts) <= days * 24 * 60 * 60 * 1000;
-      } catch { return false; }
+      } catch { return true; }
    }
 
    static async fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
+// ... (fetchLiveStockCard 邏輯保持不變，已在先前更新)
       const symbol = resolveCodeFromInputLocal(query);
       if (!symbol) return null;
       
@@ -279,117 +293,112 @@ export class StockService {
       const cleanTicker = ticker.includes(":") ? ticker.split(":")[1] : ticker;
       if (!/^[A-Z]{1,5}(\.[A-Z]{1,2})?$/i.test(cleanTicker)) return null;
       const symbol = cleanTicker.toUpperCase();
-      const baseUrl = this.getSnapshotBaseUrl(overrideBaseUrl);
       
       try {
-         const snapUrl = `${baseUrl}/api/stock/${symbol}/snapshot?mode=lite`;
-         const [snapRes, rtQuoteRaw, tvNews, assetProfile] = await Promise.all([
-            fetch(snapUrl).catch(() => null),
+         const sixMonthsAgo = subMonths(new Date(), 6);
+         const [rtQuoteRaw, tvNews, assetProfile, history] = await Promise.all([
             yahooFinance.quote(symbol).catch(() => null),
             getTvLatestNewsHeadline(symbol),
-            yahooFinance.quoteSummary(symbol, { modules: ["assetProfile"] }).catch(() => null)
+            yahooFinance.quoteSummary(symbol, { modules: ["assetProfile"] }).catch(() => null),
+            yahooFinance.historical(symbol, { period1: sixMonthsAgo }).catch(() => [])
          ]);
 
-         const snapshot = snapRes && snapRes.ok ? await snapRes.json() : null;
          const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
+         if (!rtQuote || rtQuote.regularMarketPrice === undefined) return null;
 
-         if (!snapshot && (!rtQuote || rtQuote.regularMarketPrice === undefined)) return null;
+         const bars = history.map((b: any) => ({
+            date: b.date instanceof Date ? b.date.toISOString().split('T')[0] : String(b.date),
+            open: b.open || b.close,
+            high: b.high || b.close,
+            low: b.low || b.close,
+            close: b.close,
+            volume: b.volume || 0
+         }));
 
-         if (snapshot || rtQuote) {
-            const snapPrice = snapshot?.data?.prices?.length ? snapshot.data.prices[snapshot.data.prices.length-1].close : null;
-            let finalPrice = rtQuote?.regularMarketPrice || snapPrice;
-            let finalChgPct = rtQuote?.regularMarketChangePercent || null;
-            let statusLabel = "";
+         let finalPrice = rtQuote.regularMarketPrice;
+         let finalChgPct = rtQuote.regularMarketChangePercent || null;
+         let statusLabel = "";
 
-            if (rtQuote) {
-               const state = rtQuote.marketState;
-               if (state === "PRE" && rtQuote.preMarketPrice) {
-                  finalPrice = rtQuote.preMarketPrice;
-                  finalChgPct = rtQuote.preMarketChangePercent;
-                  statusLabel = " (盤前)";
-               } else if ((state === "POST" || state === "CLOSED") && rtQuote.postMarketPrice) {
-                  finalPrice = rtQuote.postMarketPrice;
-                  finalChgPct = rtQuote.postMarketChangePercent;
-                  statusLabel = " (盤後)";
-               }
-            }
-
-            const card: StockCard = {
-               symbol,
-               nameZh: String(snapshot?.normalizedTicker?.companyNameZh || rtQuote?.longName || rtQuote?.shortName || symbol),
-               close: finalPrice,
-               chgPct: finalChgPct,
-               chgAbs: rtQuote?.regularMarketChange || null,
-               volume: rtQuote?.regularMarketVolume || null,
-               volumeVs5dPct: null, flowNet: null, flowUnit: "股", shortDir: "中立", strategySignal: "觀察", confidence: null,
-               p1d: snapshot?.predictions?.upProb1D, 
-               p3d: snapshot?.predictions?.upProb3D, 
-               p5d: snapshot?.predictions?.upProb5D, 
-               support: snapshot?.keyLevels?.supportLevel, resistance: snapshot?.keyLevels?.breakoutLevel,
-               bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: snapshot ? "snapshot" : "yahoo", insiderSells: [], chartBuffer: null,
-               industry: snapshot?.globalLinkage?.profile?.sectorZh || snapshot?.industry || assetProfile?.assetProfile?.sector || "—",
-               marketStatusLabel: statusLabel,
-               historyBars: Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices.map((b: any) => ({
-                  date: b.date,
-                  open: b.open || b.close,
-                  high: b.high || b.close,
-                  low: b.low || b.close,
-                  close: b.close,
-                  volume: b.volume || 0
-               })) : []
-            };
-            
-            const yahooSearchRes = await yahooFinance.search(symbol).catch(() => null);
-            const snapshotNewsRaw = snapshot?.news?.timeline || (Array.isArray(snapshot?.news) ? snapshot.news : []);
-            
-            const combinedNews = [
-               ...snapshotNewsRaw,
-               ...(Array.isArray((yahooSearchRes as any)?.news) ? (yahooSearchRes as any).news : [])
-            ];
-
-            const recentNewsRaw = combinedNews.filter(item => 
-               this.isWithinDays(item.pubdate || item.pubDate || item.date || item.providerPublishTime, 3)
-            );
-
-            card.recentNews = this.getRichNewsList(recentNewsRaw, symbol, true).slice(0, 8);
-            if (tvNews && !card.recentNews.some(n => n.includes(tvNews))) {
-               card.recentNews.unshift(tvNews);
-            }
-
-            const fallbackNews = this.getFirstNewsTitle(recentNewsRaw, symbol, true);
-            card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
-            if (card.newsLine === "—" || !card.newsLine) card.newsLine = "無三天內新聞";
-            if (card.newsLine === "無三天內新聞" && card.tvRating?.includes("買入")) card.newsLine = `技術面呈現多頭熱度 (${card.tvRating})`;
-
-            if (card.close !== null) {
-               const todayStr = new Date().toLocaleDateString('en-CA');
-               const bars = Array.isArray(snapshot?.data?.prices) ? [...snapshot.data.prices] : [];
-               if (bars.length > 0) {
-                  const last = bars[bars.length - 1];
-                  if (last.date === todayStr) last.close = card.close;
-                  else bars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
-               } else {
-                  bars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
-               }
-               if (bars.length >= 2) {
-                  card.chartBuffer = await renderStockChart(bars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180).catch(() => null);
-               }
-            }
-
-            if (!skipQuote) {
-               const rating = await fetchTradingViewRating(symbol, 'america');
-               card.tvRating = TV_RATING_ZH[rating];
-            }
-
-            try {
-               const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
-               const chartRes = await fetch(finvizUrl, { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" } });
-               if (chartRes.ok) card.chartBuffer = Buffer.from(await chartRes.arrayBuffer());
-            } catch {}
-
-            return card;
+         const state = rtQuote.marketState;
+         if (state === "PRE" && rtQuote.preMarketPrice) {
+            finalPrice = rtQuote.preMarketPrice;
+            finalChgPct = rtQuote.preMarketChangePercent;
+            statusLabel = " (盤前)";
+         } else if ((state === "POST" || state === "CLOSED") && rtQuote.postMarketPrice) {
+            finalPrice = rtQuote.postMarketPrice;
+            finalChgPct = rtQuote.postMarketChangePercent;
+            statusLabel = " (盤後)";
          }
-         return null;
+
+         const card: StockCard = {
+            symbol,
+            nameZh: String(rtQuote?.longName || rtQuote?.shortName || symbol),
+            close: finalPrice,
+            chgPct: finalChgPct,
+            chgAbs: rtQuote?.regularMarketChange || null,
+            volume: rtQuote?.regularMarketVolume || null,
+            volumeVs5dPct: null, flowNet: null, flowUnit: "股", shortDir: "中立", strategySignal: "觀察", confidence: null,
+            p1d: null, p3d: null, p5d: null, 
+            support: null, resistance: null,
+            bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "yahoo", insiderSells: [], chartBuffer: null,
+            industry: assetProfile?.assetProfile?.sector || "—",
+            marketStatusLabel: statusLabel,
+            historyBars: bars
+         };
+
+         const key = calcSupportResistance(bars);
+         card.support = key.support;
+         card.resistance = key.resistance;
+
+         // 優先嘗試渲染自定義圖表 (作為基礎)
+         if (card.close !== null) {
+            const todayStr = new Date().toLocaleDateString('en-CA');
+            const plotBars = [...bars];
+            if (plotBars.length > 0) {
+               const last = plotBars[plotBars.length - 1];
+               if (last.date === todayStr) last.close = card.close;
+               else plotBars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
+            }
+            if (plotBars.length >= 2) {
+               card.chartBuffer = await renderStockChart(plotBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180).catch(() => null);
+            }
+         }
+
+         // 美股嘗試使用 Finviz (視覺效果較好)
+         try {
+            const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
+            const chartRes = await fetch(finvizUrl, { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" } });
+            if (chartRes.ok) {
+               const buf = Buffer.from(await chartRes.arrayBuffer());
+               if (buf.length > 1000) card.chartBuffer = buf; // 避免抓到空的或太小的佔位圖
+            }
+         } catch {}
+
+         const yahooSearchRes = await yahooFinance.search(symbol).catch(() => null);
+         const combinedNews = [
+            ...(Array.isArray((yahooSearchRes as any)?.news) ? (yahooSearchRes as any).news : [])
+         ];
+
+         const recentNewsRaw = combinedNews.filter(item => 
+            this.isWithinDays(item.pubdate || item.pubDate || item.date || item.providerPublishTime, 3)
+         );
+
+         card.recentNews = this.getRichNewsList(recentNewsRaw, symbol, true).slice(0, 8);
+         if (tvNews && !card.recentNews.some(n => n.includes(tvNews))) {
+            card.recentNews.unshift(tvNews);
+         }
+
+         const fallbackNews = this.getFirstNewsTitle(recentNewsRaw, symbol, true);
+         card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
+         if (card.newsLine === "—" || !card.newsLine) card.newsLine = "無三天內新聞";
+         if (card.newsLine === "無三天內新聞" && card.tvRating?.includes("買入")) card.newsLine = `技術面呈現多頭熱度 (${card.tvRating})`;
+
+         if (!skipQuote) {
+            const rating = await fetchTradingViewRating(symbol, 'america');
+            card.tvRating = TV_RATING_ZH[rating];
+         }
+
+         return card;
       } catch { return null; }
    }
 
@@ -410,7 +419,7 @@ export class StockService {
          if (!rtQuote || rtQuote.regularMarketPrice === undefined) return null;
 
          const bars = history.map((b: any) => ({
-            date: b.date.toISOString().split('T')[0],
+            date: b.date instanceof Date ? b.date.toISOString().split('T')[0] : String(b.date),
             open: b.open || b.close,
             high: b.high || b.close,
             low: b.low || b.close,
@@ -439,15 +448,16 @@ export class StockService {
 
          if (card.close !== null) {
             const todayStr = new Date().toLocaleDateString('en-CA');
-            if (bars.length > 0) {
-               const last = bars[bars.length - 1];
+            const plotBars = [...bars];
+            if (plotBars.length > 0) {
+               const last = plotBars[plotBars.length - 1];
                if (last.date === todayStr) last.close = card.close;
-               else bars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
+               else plotBars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
             } else {
-               bars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
+               plotBars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
             }
-            if (bars.length >= 2) {
-               card.chartBuffer = await renderStockChart(bars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180).catch(() => null);
+            if (plotBars.length >= 2) {
+               card.chartBuffer = await renderStockChart(plotBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180).catch(() => null);
             }
          }
 
