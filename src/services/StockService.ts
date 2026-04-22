@@ -96,6 +96,17 @@ export class StockService {
       return results;
    }
 
+   private static isWithinDays(dateInput: any, days: number): boolean {
+      if (!dateInput) return false;
+      try {
+         const ts = typeof dateInput === 'number' 
+            ? (dateInput > 10000000000 ? dateInput : dateInput * 1000) // 處理秒或毫秒
+            : new Date(dateInput).getTime();
+         if (isNaN(ts)) return false;
+         return (Date.now() - ts) <= days * 24 * 60 * 60 * 1000;
+      } catch { return false; }
+   }
+
    static async fetchLiveStockCard(query: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
       const symbol = resolveCodeFromInputLocal(query);
       if (!symbol) return null;
@@ -199,30 +210,49 @@ export class StockService {
          card.strategySignal = snapshot?.strategy?.signal || "觀察";
          card.confidence = snapshot?.strategy?.confidence;
          
-         const yahooSearchRes = await yahooFinance.search(yahooSymbol).catch(() => null);
+         const [yahooSearchRes, yahooSearchByName, fmRes] = await Promise.all([
+            yahooFinance.search(yahooSymbol).catch(() => null),
+            card.nameZh && card.nameZh !== symbol ? yahooFinance.search(card.nameZh).catch(() => null) : Promise.resolve(null),
+            !isUS ? (async () => {
+               const { getTaiwanStockNews } = await import("@/infrastructure/providers/finmind");
+               const today = new Date().toISOString().split('T')[0];
+               const lastWeek = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+               return getTaiwanStockNews(symbol, lastWeek, today).catch(() => null);
+            })() : Promise.resolve(null)
+         ]);
+
          const snapshotNewsRaw = snapshot?.news?.timeline || (Array.isArray(snapshot?.news) ? snapshot.news : []);
+         const fmNews = (fmRes && (fmRes as any).data) ? (fmRes as any).data : [];
+
+         const combinedNewsRaw = [
+            ...snapshotNewsRaw,
+            ...(Array.isArray((yahooSearchRes as any)?.news) ? (yahooSearchRes as any).news : []),
+            ...(Array.isArray((yahooSearchByName as any)?.news) ? (yahooSearchByName as any).news : []),
+            ...fmNews
+         ];
+
+         // 過濾出 3 天內的新聞
+         const recentCombined = combinedNewsRaw.filter(item => 
+            this.isWithinDays(item.pubdate || item.pubDate || item.date || item.providerPublishTime, 3)
+         );
+
+         card.recentNews = this.getRichNewsList(recentCombined, card.nameZh || symbol, isUS).slice(0, 10);
          
-         // 備援新聞方案 (FinMind)
-         let fmNews: any[] = [];
-         if (!isUS && snapshotNewsRaw.length === 0 && (!yahooSearchRes || !(yahooSearchRes as any).news || (yahooSearchRes as any).news.length === 0)) {
-            const { getTaiwanStockNews } = await import("@/infrastructure/providers/finmind");
-            const today = new Date().toISOString().split('T')[0];
-            const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-            const fmRes = await getTaiwanStockNews(symbol, lastWeek, today).catch(() => null);
-            if (fmRes && fmRes.data) fmNews = fmRes.data;
+         // 確保 TradingView 新聞也被納入
+         if (tvNews && !card.recentNews.some(n => n.includes(tvNews))) {
+            card.recentNews.unshift(tvNews);
          }
 
-         card.recentNews = [
-            ...this.getRichNewsList(snapshotNewsRaw, symbol, isUS),
-            ...this.getRichNewsList((yahooSearchRes as any)?.news, symbol, isUS),
-            ...this.getRichNewsList(fmNews, symbol, isUS)
-         ].slice(0, 8);
-
-         const fallbackNews = this.getFirstNewsTitle(snapshotNewsRaw, symbol, isUS) || 
-                            this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, isUS) ||
-                            this.getFirstNewsTitle(fmNews, symbol, isUS);
+         const fallbackNews = this.getFirstNewsTitle(recentCombined, card.nameZh || symbol, isUS);
          card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
-         if (!tvNews && !fallbackNews && card.tvRating?.includes("買入")) card.newsLine = `技術面動能強勁 (${card.tvRating})`;
+         
+         if (card.newsLine === "—" || !card.newsLine) {
+            card.newsLine = "無三天內新聞";
+         }
+         
+         if (card.newsLine === "無三天內新聞" && card.tvRating?.includes("買入")) {
+            card.newsLine = `技術面動能強勁 (${card.tvRating})`;
+         }
          
          card.insiderSells = snapshot?.insiderTransfers || [];
          card.flowScore = snapshot?.signals?.flow?.flowScore;
@@ -311,14 +341,25 @@ export class StockService {
             
             const yahooSearchRes = await yahooFinance.search(symbol).catch(() => null);
             const snapshotNewsRaw = snapshot?.news?.timeline || (Array.isArray(snapshot?.news) ? snapshot.news : []);
-            card.recentNews = [
-               ...this.getRichNewsList(snapshotNewsRaw, symbol, true),
-               ...this.getRichNewsList((yahooSearchRes as any)?.news, symbol, true)
-            ].slice(0, 8);
+            
+            const combinedNews = [
+               ...snapshotNewsRaw,
+               ...(Array.isArray((yahooSearchRes as any)?.news) ? (yahooSearchRes as any).news : [])
+            ];
 
-            const fallbackNews = this.getFirstNewsTitle(snapshotNewsRaw, symbol, true) || this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, true);
+            const recentNewsRaw = combinedNews.filter(item => 
+               this.isWithinDays(item.pubdate || item.pubDate || item.date || item.providerPublishTime, 3)
+            );
+
+            card.recentNews = this.getRichNewsList(recentNewsRaw, symbol, true).slice(0, 8);
+            if (tvNews && !card.recentNews.some(n => n.includes(tvNews))) {
+               card.recentNews.unshift(tvNews);
+            }
+
+            const fallbackNews = this.getFirstNewsTitle(recentNewsRaw, symbol, true);
             card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
-            if (!tvNews && !fallbackNews && card.tvRating?.includes("買入")) card.newsLine = `技術面呈現多頭熱度 (${card.tvRating})`;
+            if (card.newsLine === "—" || !card.newsLine) card.newsLine = "無三天內新聞";
+            if (card.newsLine === "無三天內新聞" && card.tvRating?.includes("買入")) card.newsLine = `技術面呈現多頭熱度 (${card.tvRating})`;
 
             if (card.close !== null) {
                const todayStr = new Date().toLocaleDateString('en-CA');
@@ -420,15 +461,20 @@ export class StockService {
             ...(Array.isArray((yahooSearchByName as any)?.news) ? (yahooSearchByName as any).news : [])
          ];
 
-         card.recentNews = this.getRichNewsList(combinedNewsRaw, symbol, true).slice(0, 8);
+         const recentNewsRaw = combinedNewsRaw.filter(item => 
+            this.isWithinDays(item.pubdate || item.pubDate || item.date || item.providerPublishTime, 3)
+         );
+
+         card.recentNews = this.getRichNewsList(recentNewsRaw, symbol, true).slice(0, 8);
          
          // 確保 TradingView 新聞也被納入
          if (tvNews && !card.recentNews.some(n => n.includes(tvNews))) {
             card.recentNews.unshift(tvNews);
          }
 
-         const fallbackNews = this.getFirstNewsTitle(combinedNewsRaw, symbol, true);
+         const fallbackNews = this.getFirstNewsTitle(recentNewsRaw, symbol, true);
          card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
+         if (card.newsLine === "—" || !card.newsLine) card.newsLine = "無三天內新聞";
 
          if (!skipQuote) {
             const rating = await fetchTradingViewRating(symbol, 'japan');
