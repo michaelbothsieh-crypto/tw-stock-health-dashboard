@@ -51,9 +51,17 @@ export class UsStockService {
             statusLabel = " (盤後)";
          }
 
+         // 美股名稱處理：保持極簡，避免長全名
+         let displayName = symbol;
+         const rawName = rtQuote?.longName || rtQuote?.shortName || "";
+         // 如果是知名簡稱且不長，則顯示，否則美股僅顯示 Ticker
+         if (rawName && rawName.length < 15 && rawName.toUpperCase() !== symbol) {
+            displayName = `${symbol} ${rawName}`;
+         }
+
          const card: StockCard = {
             symbol,
-            nameZh: String(rtQuote?.longName || rtQuote?.shortName || symbol),
+            nameZh: displayName,
             close: finalPrice,
             chgPct: finalChgPct,
             chgAbs: rtQuote?.regularMarketChange || null,

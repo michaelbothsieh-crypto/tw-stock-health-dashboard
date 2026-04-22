@@ -46,10 +46,12 @@ export class MessageService {
    static async buildStockSummaryLine(card: StockCard): Promise<string> {
       const symbol = escapeHtml(card.symbol);
       const nameZh = escapeHtml(card.nameZh);
-      const title = (nameZh && nameZh !== symbol) ? `${symbol} ${nameZh}` : symbol;
+      // 名稱處理邏輯已在 Service 層優化，此處僅做結構保護
+      const title = (nameZh && nameZh !== symbol) ? nameZh : symbol;
+      
       const price = formatPrice(card.close, 2);
       const chg = formatSignedPct(card.chgPct, 2);
-      const tech = card.tvRating || "—";
+      const tech = card.tvRating || card.shortDir || "中立";
       
       const { caption } = await AIAnalysisService.resolveAIInsight(card);
       
@@ -57,6 +59,9 @@ export class MessageService {
       if (aiBrief && aiBrief.includes("。")) {
          aiBrief = aiBrief.split("。")[0] + "。";
       }
+      
+      // 移除 AI 摘要中的 Emoji 圖示
+      aiBrief = aiBrief.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]/gu, "").trim();
 
       return `<b>${title}</b> <code>${price}(${chg})</code> <b>[${tech}]</b>${aiBrief ? ` | ${escapeHtml(aiBrief)}` : ""}`;
    }
