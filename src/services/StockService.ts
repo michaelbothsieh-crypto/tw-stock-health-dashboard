@@ -355,18 +355,27 @@ export class StockService {
    static async fetchLiveJpStockCard(ticker: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
       const cleanTicker = ticker.toUpperCase().includes(".T") ? ticker.toUpperCase() : `${ticker.toUpperCase()}.T`;
       const symbol = cleanTicker;
-      const baseUrl = this.getSnapshotBaseUrl(overrideBaseUrl);
       
       try {
-         // 目前日股尚無 snapshot API，主要依賴 Yahoo Finance
-         const [rtQuoteRaw, tvNews, assetProfile] = await Promise.all([
+         const sixMonthsAgo = subMonths(new Date(), 6);
+         const [rtQuoteRaw, tvNews, assetProfile, history] = await Promise.all([
             yahooFinance.quote(symbol).catch(() => null),
             getTvLatestNewsHeadline(symbol),
-            yahooFinance.quoteSummary(symbol, { modules: ["assetProfile"] }).catch(() => null)
+            yahooFinance.quoteSummary(symbol, { modules: ["assetProfile"] }).catch(() => null),
+            yahooFinance.historical(symbol, { period1: sixMonthsAgo }).catch(() => [])
          ]);
 
          const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
          if (!rtQuote || rtQuote.regularMarketPrice === undefined) return null;
+
+         const bars = history.map((b: any) => ({
+            date: b.date.toISOString().split('T')[0],
+            open: b.open || b.close,
+            high: b.high || b.close,
+            low: b.low || b.close,
+            close: b.close,
+            volume: b.volume || 0
+         }));
 
          const card: StockCard = {
             symbol,
@@ -380,12 +389,45 @@ export class StockService {
             support: null, resistance: null,
             bullTarget: null, bearTarget: null, overseas: [], syncLevel: "—", newsLine: "—", sourceLabel: "yahoo", insiderSells: [], chartBuffer: null,
             industry: assetProfile?.assetProfile?.sector || "—",
-            historyBars: []
+            historyBars: bars
          };
 
-         const yahooSearchRes = await yahooFinance.search(symbol).catch(() => null);
-         card.recentNews = this.getRichNewsList((yahooSearchRes as any)?.news, symbol, true).slice(0, 8);
-         const fallbackNews = this.getFirstNewsTitle((yahooSearchRes as any)?.news, symbol, true);
+         const key = calcSupportResistance(bars);
+         card.support = key.support;
+         card.resistance = key.resistance;
+
+         if (card.close !== null) {
+            const todayStr = new Date().toLocaleDateString('en-CA');
+            if (bars.length > 0) {
+               const last = bars[bars.length - 1];
+               if (last.date === todayStr) last.close = card.close;
+               else bars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
+            } else {
+               bars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
+            }
+            if (bars.length >= 2) {
+               card.chartBuffer = await renderStockChart(bars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180).catch(() => null);
+            }
+         }
+
+         const [yahooSearchRes, yahooSearchByName] = await Promise.all([
+            yahooFinance.search(symbol).catch(() => null),
+            card.nameZh && card.nameZh !== symbol ? yahooFinance.search(card.nameZh).catch(() => null) : Promise.resolve(null)
+         ]);
+
+         const combinedNewsRaw = [
+            ...(Array.isArray((yahooSearchRes as any)?.news) ? (yahooSearchRes as any).news : []),
+            ...(Array.isArray((yahooSearchByName as any)?.news) ? (yahooSearchByName as any).news : [])
+         ];
+
+         card.recentNews = this.getRichNewsList(combinedNewsRaw, symbol, true).slice(0, 8);
+         
+         // 確保 TradingView 新聞也被納入
+         if (tvNews && !card.recentNews.some(n => n.includes(tvNews))) {
+            card.recentNews.unshift(tvNews);
+         }
+
+         const fallbackNews = this.getFirstNewsTitle(combinedNewsRaw, symbol, true);
          card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
 
          if (!skipQuote) {

@@ -17,10 +17,20 @@ export interface TvTechnicalData {
 
 export async function getTvTechnicalIndicators(ticker: string): Promise<TvTechnicalData | null> {
   const isUS = /^[A-Z]+$/.test(ticker);
-  const endpoint = isUS ? "america" : "taiwan";
-  const symbols = isUS
-    ? [`NASDAQ:${ticker}`, `NYSE:${ticker}`, `AMEX:${ticker}`]
-    : [`TWSE:${ticker}`, `TPEX:${ticker}`];
+  const isJapan = /^[0-9]{4}(\.T)?$/.test(ticker);
+  
+  let endpoint = isUS ? "america" : "taiwan";
+  if (isJapan) endpoint = "japan";
+
+  let symbols: string[] = [];
+  if (isUS) {
+    symbols = [`NASDAQ:${ticker}`, `NYSE:${ticker}`, `AMEX:${ticker}`];
+  } else if (isJapan) {
+    const cleanJp = ticker.replace(".T", "");
+    symbols = [`TSE:${cleanJp}`];
+  } else {
+    symbols = [`TWSE:${ticker}`, `TPEX:${ticker}`];
+  }
 
   const cacheKey = `tv:tech:${ticker}`;
   try {
@@ -115,6 +125,7 @@ export async function getTvTechnicalIndicators(ticker: string): Promise<TvTechni
  */
 export async function getTvLatestNewsHeadline(ticker: string): Promise<string | null> {
   const isUS = /^[A-Z]+$/.test(ticker);
+  const isJapan = /^[0-9]{4}(\.T)?$/.test(ticker);
   
   const cacheKey = `tv:news:${ticker}`;
   try {
@@ -123,9 +134,15 @@ export async function getTvLatestNewsHeadline(ticker: string): Promise<string | 
   } catch (e) {}
 
   // 定義要嘗試的 Symbol
-  const candidates = isUS 
-    ? [`NASDAQ:${ticker}`, `NYSE:${ticker}`, `AMEX:${ticker}`]
-    : [`TWSE:${ticker}`, `TPEX:${ticker}`];
+  let candidates: string[] = [];
+  if (isUS) {
+    candidates = [`NASDAQ:${ticker}`, `NYSE:${ticker}`, `AMEX:${ticker}`];
+  } else if (isJapan) {
+    const cleanJp = ticker.replace(".T", "");
+    candidates = [`TSE:${cleanJp}`];
+  } else {
+    candidates = [`TWSE:${ticker}`, `TPEX:${ticker}`];
+  }
 
   for (const tvSymbol of candidates) {
     try {
