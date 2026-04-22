@@ -1,12 +1,15 @@
 
 import { CommandHandler, CommandContext, BotReply } from "@/features/telegram/types";
-import { StockService } from "@/services/StockService";
 import { MessageService } from "@/services/MessageService";
 import { recordStockSearch } from "@/features/telegram/rankStore";
 import { combineImages } from "@/shared/utils/chartRenderer";
 import { escapeHtml } from "@/shared/utils/formatters";
-import { resolveCodeFromInputLocal } from "@/features/telegram/utils";
+import { TickerResolver } from "@/features/telegram/utils/TickerResolver";
 
+/**
+ * StockHandler (Controller Layer)
+ * 負責解析使用者輸入、調度 Resolver 與 Formatter，最後回傳訊息。
+ */
 export class StockHandler implements CommandHandler {
   canHandle(command: string): boolean {
     return command === "/stock";
@@ -20,8 +23,9 @@ export class StockHandler implements CommandHandler {
 
     const tickers = query.split(/[,，\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean).slice(0, 10);
 
+    // 單檔查詢模式
     if (tickers.length === 1) {
-      const liveCard = await this.processTicker(tickers[0], baseUrl);
+      const liveCard = await TickerResolver.resolve(tickers[0], baseUrl);
       if (liveCard && liveCard.close !== null) {
         if (chatId && liveCard.close) {
           await recordStockSearch(String(chatId), liveCard.symbol, liveCard.close).catch(() => null);
@@ -32,8 +36,8 @@ export class StockHandler implements CommandHandler {
       return { text: `❌ 找不到「${tickers[0]}」的資料，請確認代號是否正確。` };
     }
 
-    // 多檔查詢
-    const cards = await Promise.all(tickers.map(t => this.processTicker(t, baseUrl, true, true)));
+    // 多檔查詢模式
+    const cards = await Promise.all(tickers.map(t => TickerResolver.resolve(t, baseUrl, true, true)));
     const errorParts: string[] = [];
     const summaryLines: string[] = [];
     const buffers: Buffer[] = [];
@@ -48,7 +52,7 @@ export class StockHandler implements CommandHandler {
           await recordStockSearch(String(chatId), card.symbol, card.close).catch(() => null);
         }
         
-        // 收集文字摘要 (現在是非同步呼叫)
+        // 收集摘要文字 (使用 SSOT 獲取 AI 洞察)
         summaryLines.push(await MessageService.buildStockSummaryLine(card));
 
         if (card.chartBuffer) {
@@ -58,6 +62,7 @@ export class StockHandler implements CommandHandler {
       }
     }
 
+    // 處理圖表合併 (每 3 檔一張圖)
     const chartBuffers: Buffer[] = [];
     for (let i = 0; i < buffers.length; i += 3) {
       const chunk = buffers.slice(i, i + 3);
@@ -76,38 +81,5 @@ export class StockHandler implements CommandHandler {
       text: finalTexts.length > 0 ? finalTexts.join("\n") : "", 
       chartBuffers 
     };
-  }
-
-  private async processTicker(t: string, baseUrl?: string, skipH = false, skipQ = false) {
-    const cleanT = t.trim().toUpperCase();
-    
-    // 1. 優先判斷是否為台股代號 (4-6位純數字, 或帶有 .TW/.TWO)
-    const isTaiwanTicker = /^[0-9]{4,6}$/.test(cleanT) || cleanT.includes('.TW') || cleanT.includes('.TWO');
-    
-    // 2. 判斷是否為美股代號 (1-5位純字母)
-    const isUsTicker = /^[A-Z]{1,5}$/.test(cleanT);
-
-    // 3. 判斷是否為日股代號 (4位數字 + .T)
-    const isJapanTicker = /^[0-9]{4}\.T$/.test(cleanT);
-
-    // 4. 透過名稱解析 (僅限台股)
-    const resolvedTaiwanTicker = !isTaiwanTicker && !isUsTicker && !isJapanTicker ? resolveCodeFromInputLocal(t) : null;
-
-    if (isJapanTicker) {
-      return await StockService.fetchLiveJpStockCard(cleanT, baseUrl, skipH, skipQ);
-    }
-
-    if (isTaiwanTicker || resolvedTaiwanTicker) {
-      const card = await StockService.fetchLiveStockCard(resolvedTaiwanTicker || cleanT, baseUrl, skipH, skipQ);
-      // 如果台股查不到，且代號是 4 位數字，嘗試日股
-      if (!card && /^[0-9]{4}$/.test(cleanT)) {
-        return await StockService.fetchLiveJpStockCard(cleanT, baseUrl, skipH, skipQ);
-      }
-      return card;
-    } else if (isUsTicker) {
-      return await StockService.fetchLiveUsStockCard(cleanT, baseUrl, skipH, skipQ);
-    }
-    
-    return null;
   }
 }
