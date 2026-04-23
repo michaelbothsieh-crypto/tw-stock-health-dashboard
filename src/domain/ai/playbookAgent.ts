@@ -67,8 +67,8 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
 }
 
 export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionPlaybook> {
-  const hourKey = Math.floor(Date.now() / 3600000);
-  const cacheKey = `playbook:v3:${ctx.ticker}:${hourKey}`;
+  const halfHourKey = Math.floor(Date.now() / 1800000);
+  const cacheKey = `playbook:v3:${ctx.ticker}:${halfHourKey}`;
 
   // Check Global Cache
   if (redis) {

@@ -28,7 +28,7 @@ export class StockHandler implements CommandHandler {
       const liveCard = await TickerResolver.resolve(tickers[0], baseUrl);
       if (liveCard && liveCard.close !== null) {
         if (chatId && liveCard.close) {
-          await recordStockSearch(String(chatId), liveCard.symbol, liveCard.close).catch(() => null);
+          recordStockSearch(String(chatId), liveCard.symbol, liveCard.close).catch(() => null);
         }
         const finalMsg = await MessageService.buildStockCardWithAI(liveCard);
         return { text: finalMsg, chartBuffer: liveCard.chartBuffer };
@@ -46,7 +46,7 @@ export class StockHandler implements CommandHandler {
         return { error: escapeHtml(`❌ ${ticker}：找不到資料。`), summary: "", buffer: null, symbol: "" };
       }
       if (chatId && card.close) {
-        await recordStockSearch(String(chatId), card.symbol, card.close).catch(() => null);
+        recordStockSearch(String(chatId), card.symbol, card.close).catch(() => null);
       }
       const summary = await MessageService.buildStockSummaryLine(card);
       return { error: "", summary, buffer: card.chartBuffer ?? null, symbol: card.symbol };

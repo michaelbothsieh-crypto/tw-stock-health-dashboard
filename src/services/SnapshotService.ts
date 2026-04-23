@@ -246,7 +246,10 @@ export class SnapshotService {
       explainBreakdown, news: { ...catalystResult, errorCode: snapshotData.meta.newsMeta.errorCode, error: snapshotData.meta.newsMeta.message }
     };
 
-    if (!debugMode) await setCache(cacheKey, payload, 600);
+    if (!debugMode) {
+      const ttl = isMarketOpen(norm.symbol) ? 300 : 1800;
+      await setCache(cacheKey, payload, ttl);
+    }
     return payload;
   }
 }
