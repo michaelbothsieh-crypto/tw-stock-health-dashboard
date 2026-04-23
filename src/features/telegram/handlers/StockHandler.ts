@@ -38,38 +38,33 @@ export class StockHandler implements CommandHandler {
 
     // 多檔查詢模式
     const cards = await Promise.all(tickers.map(t => TickerResolver.resolve(t, baseUrl, true, false)));
-    const errorParts: string[] = [];
-    const summaryLines: string[] = [];
-    const buffers: Buffer[] = [];
-    const validSymbols: string[] = [];
 
-    for (let i = 0; i < tickers.length; i++) {
+    // 並行處理所有 cards，結果保留原始順序
+    const results = await Promise.all(tickers.map(async (ticker, i) => {
       const card = cards[i];
       if (!card) {
-        errorParts.push(escapeHtml(`❌ ${tickers[i]}：找不到資料。`));
-      } else {
-        if (chatId && card.close) {
-          await recordStockSearch(String(chatId), card.symbol, card.close).catch(() => null);
-        }
-        
-        // 收集摘要文字 (使用 SSOT 獲取 AI 洞察)
-        summaryLines.push(await MessageService.buildStockSummaryLine(card));
-
-        if (card.chartBuffer) {
-          buffers.push(card.chartBuffer);
-          validSymbols.push(card.symbol);
-        }
+        return { error: escapeHtml(`❌ ${ticker}：找不到資料。`), summary: "", buffer: null, symbol: "" };
       }
-    }
+      if (chatId && card.close) {
+        await recordStockSearch(String(chatId), card.symbol, card.close).catch(() => null);
+      }
+      const summary = await MessageService.buildStockSummaryLine(card);
+      return { error: "", summary, buffer: card.chartBuffer ?? null, symbol: card.symbol };
+    }));
 
-    // 處理圖表合併 (每 3 檔一張圖)
-    const chartBuffers: Buffer[] = [];
-    for (let i = 0; i < buffers.length; i += 3) {
-      const chunk = buffers.slice(i, i + 3);
-      const chunkSymbols = validSymbols.slice(i, i + 3);
-      const combined = await combineImages(chunk, chunkSymbols);
-      if (combined) chartBuffers.push(combined);
-    }
+    const summaryLines = results.filter(r => r.summary).map(r => r.summary);
+    const errorParts = results.filter(r => r.error).map(r => r.error);
+    const buffers = results.filter(r => r.buffer).map(r => r.buffer as Buffer);
+    const validSymbols = results.filter(r => r.buffer).map(r => r.symbol);
+
+    // 處理圖表合併 (每 3 檔一張圖，並行)
+    const groups = Array.from({ length: Math.ceil(buffers.length / 3) }, (_, i) => ({
+      chunk: buffers.slice(i * 3, i * 3 + 3),
+      syms: validSymbols.slice(i * 3, i * 3 + 3),
+    }));
+    const chartBuffers = (await Promise.all(
+      groups.map(g => combineImages(g.chunk, g.syms))
+    )).filter((b): b is Buffer => b !== null && b !== undefined);
 
     const finalTexts = [...summaryLines, ...errorParts];
 

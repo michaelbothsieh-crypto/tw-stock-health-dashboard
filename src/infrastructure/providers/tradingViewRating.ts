@@ -3,6 +3,8 @@
  * TradingView 技術評分抓取工具
  */
 
+import { getCache, setCache } from "@/infrastructure/providers/redisCache";
+
 export type TVRating = 'Strong Buy' | 'Buy' | 'Neutral' | 'Sell' | 'Strong Sell' | 'Unknown';
 
 export const TV_RATING_ZH: Record<TVRating, string> = {
@@ -14,9 +16,16 @@ export const TV_RATING_ZH: Record<TVRating, string> = {
   'Unknown': '—'
 };
 
+const TV_RATING_CACHE_TTL = 86400; // 24 小時
+
 export async function fetchTradingViewRating(ticker: string, market: 'taiwan' | 'america' | 'japan'): Promise<TVRating> {
-  const url = `https://scanner.tradingview.com/${market}/scan`;
   const cleanTicker = ticker.toUpperCase().replace(/\.T$/, "");
+  const cacheKey = `tv:rating:${market}:${cleanTicker}`;
+
+  const cached = await getCache<TVRating>(cacheKey);
+  if (cached) return cached;
+
+  const url = `https://scanner.tradingview.com/${market}/scan`;
 
   const getSymbols = (): string[] => {
     if (market === 'taiwan') {
@@ -49,13 +58,16 @@ export async function fetchTradingViewRating(ticker: string, market: 'taiwan' | 
     const rows = data?.data || [];
     
     // 找出第一個有效的評分
+    let rating: TVRating = 'Unknown';
     for (const row of rows) {
       if (row.d && row.d[0] !== undefined && row.d[0] !== null) {
-        return parseRating(row.d[0]);
+        rating = parseRating(row.d[0]);
+        break;
       }
     }
-    
-    return 'Unknown';
+
+    await setCache(cacheKey, rating, TV_RATING_CACHE_TTL);
+    return rating;
   } catch (err) {
     console.error(`[TVRating] Error for ${ticker}:`, err);
     return 'Unknown';
