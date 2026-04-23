@@ -183,8 +183,8 @@ export async function renderStockChart(
   const isUp = displayChgPct >= 0;
   const themeColor = isUp ? '#00cc66' : '#ff3333';
 
-  // 1. 背景
-  ctx.fillStyle = '#000000';
+  // 1. 背景 (改為 Finviz 白色風格)
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, width, height);
 
   // 2. 計算比例
@@ -197,26 +197,26 @@ export async function renderStockChart(
   const getX = (index: number) => padding.left + (index * (width - padding.left - padding.right) / (visibleData.length - 1));
   const getY = (price: number) => padding.top + (maxPrice - price) * (height - padding.top - padding.bottom) / priceRange;
 
-  // 3. 繪製圖例 (仿 Finviz)
+  // 3. 繪製圖例 (針對白底優化配色)
   ctx.font = FONT_SANS;
   ctx.textBaseline = 'middle';
 
   const drawLeg = (label: string, color: string, x: number) => {
     ctx.fillStyle = color; ctx.fillRect(x, 40, 12, 3);
-    ctx.fillStyle = '#cccccc'; ctx.fillText(label, x + 18, 42);
+    ctx.fillStyle = '#333333'; ctx.fillText(label, x + 18, 42);
     return x + 65;
   };
   let curX = padding.left;
-  curX = drawLeg('MA5', '#cccccc', curX);
-  curX = drawLeg('MA20', '#ffeb3b', curX);
-  curX = drawLeg('MA60', '#03a9f4', curX);
+  curX = drawLeg('MA5', '#666666', curX);
+  curX = drawLeg('MA20', '#ff9900', curX);
+  curX = drawLeg('MA60', '#3b82f6', curX);
 
-  // 3.1 繪製主標題與漲跌資訊 (仿 Finviz 頂部列)
+  // 3.1 繪製主標題與漲跌資訊
   ctx.save();
   ctx.textAlign = 'center';
   
-  // 代號
-  ctx.fillStyle = '#ffffff';
+  // 代號 (改為黑色)
+  ctx.fillStyle = '#000000';
   ctx.font = `bold 28px ${FONT_FAMILY}`;
   const titleX = width / 2;
   ctx.fillText(symbol.toUpperCase(), titleX - 100, 35);
@@ -228,14 +228,14 @@ export async function renderStockChart(
   ctx.fillText(priceText, titleX + 80, 35);
   ctx.restore();
 
-  // 4. 繪製格線
-  ctx.strokeStyle = '#1a1a1a';
+  // 4. 繪製格線 (改為淺灰)
+  ctx.strokeStyle = '#e5e5e5';
   ctx.lineWidth = 1;
   for (let i = 0; i <= 8; i++) {
     const y = padding.top + i * (height - padding.top - padding.bottom) / 8;
     ctx.beginPath();
     ctx.moveTo(padding.left, y); ctx.lineTo(width - padding.right, y); ctx.stroke();
-    ctx.fillStyle = '#555555';
+    ctx.fillStyle = '#888888';
     const p = maxPrice - i * priceRange / 8;
     ctx.fillText(p.toFixed(2), width - padding.right + 10, y);
   }
@@ -259,8 +259,8 @@ export async function renderStockChart(
     ctx.textBaseline = 'middle';
     ctx.fillText(`${label} ${price.toFixed(2)}`, width - padding.right + 10, y);
   };
-  drawLevel('R', resistance, '#ff3333');
-  drawLevel('S', support, '#00cc66');
+  drawLevel('R', resistance, '#ff0000');
+  drawLevel('S', support, '#008000');
 
   // 5. 繪製成交量
   const volBaseY = height - padding.bottom;
@@ -268,11 +268,12 @@ export async function renderStockChart(
   visibleData.forEach((d, i) => {
     const x = getX(i);
     const vHeight = (d.volume / maxVol) * (height * 0.12);
-    ctx.fillStyle = d.close >= d.open ? 'rgba(0, 141, 65, 0.3)' : 'rgba(230, 46, 62, 0.3)';
+    // 白底下的成交量顏色稍淡
+    ctx.fillStyle = d.close >= d.open ? 'rgba(0, 141, 65, 0.2)' : 'rgba(230, 46, 62, 0.2)';
     ctx.fillRect(x - barWidth/2, volBaseY - vHeight, barWidth, vHeight);
   });
 
-  // 6. 均線
+  // 6. 均線 (白底優化配色)
   const drawMA = (period: number, color: string) => {
     ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
     let started = false;
@@ -287,9 +288,9 @@ export async function renderStockChart(
     }
     ctx.stroke();
   };
-  drawMA(5, '#cccccc'); drawMA(20, '#ffeb3b'); drawMA(60, '#03a9f4');
+  drawMA(5, '#666666'); drawMA(20, '#ff9900'); drawMA(60, '#3b82f6');
 
-  // 8. 繪製 K 線 (Finviz 色系)
+  // 8. 繪製 K 線
   visibleData.forEach((d, i) => {
     const x = getX(i);
     const color = d.close >= d.open ? '#008d41' : '#e62e3e';
