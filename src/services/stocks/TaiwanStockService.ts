@@ -143,7 +143,7 @@ export class TaiwanStockService {
          );
 
          card.recentNews = getRichNewsList(recentCombined, card.nameZh || symbol, false).slice(0, 10);
-         card.newsLinks = getRichNewsLinks(recentCombined, 3);
+         card.newsLinks = getRichNewsLinks(recentCombined, 1);
          
          // 確保 TradingView 新聞也被納入
          if (tvNews && !card.recentNews.some(n => n.includes(tvNews))) {

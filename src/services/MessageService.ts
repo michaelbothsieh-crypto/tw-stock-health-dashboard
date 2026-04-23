@@ -43,11 +43,9 @@ export class MessageService {
    }
 
    private static formatNewsSection(card: StockCard): string[] {
-      if (card.newsLinks && card.newsLinks.length > 0) {
-         const items = card.newsLinks.map(n =>
-            `  • <a href="${n.url}">${escapeHtml(n.title)}</a>`
-         );
-         return [`【新聞】`, ...items];
+      const top = card.newsLinks?.[0];
+      if (top) {
+         return [`【新聞】 <a href="${top.url}">${escapeHtml(top.title)}</a>`];
       }
       return [`【新聞】 ${escapeHtml(card.newsLine || "—")}`];
    }

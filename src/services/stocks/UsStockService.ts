@@ -114,7 +114,7 @@ export class UsStockService {
          );
 
          card.recentNews = getRichNewsList(recentNewsRaw, symbol, true).slice(0, 8);
-         card.newsLinks = getRichNewsLinks(recentNewsRaw, 3);
+         card.newsLinks = getRichNewsLinks(recentNewsRaw, 1);
          if (tvNews && !card.recentNews.some(n => n.includes(tvNews))) {
             card.recentNews.unshift(tvNews);
          }
