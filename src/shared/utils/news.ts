@@ -48,6 +48,20 @@ export function getRichNewsList(news: any, symbol?: string, isUS = false): strin
   return results;
 }
 
+export function getRichNewsLinks(news: any[], limit = 3): { title: string; url: string }[] {
+  const results: { title: string; url: string }[] = [];
+  for (const item of news) {
+    if (typeof item === 'string') continue;
+    const title = item?.title || item?.headline;
+    const url = item?.link || item?.url;
+    if (title && url && typeof url === 'string' && url.startsWith('http')) {
+      results.push({ title, url });
+      if (results.length >= limit) break;
+    }
+  }
+  return results;
+}
+
 export function isWithinDays(dateInput: any, days: number): boolean {
   if (!dateInput) return true; // 若無日期則預設通過，由後續過濾
   try {

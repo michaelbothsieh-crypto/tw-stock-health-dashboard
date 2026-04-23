@@ -25,6 +25,7 @@ export interface StockCard {
    sourceLabel: string;
    insiderSells: any[];
    recentNews?: string[];
+   newsLinks?: { title: string; url: string }[];
    industry?: string;
    trustLots?: number;
    marginLots?: number;

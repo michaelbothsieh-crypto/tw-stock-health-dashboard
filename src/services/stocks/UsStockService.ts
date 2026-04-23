@@ -5,7 +5,7 @@ import { getTvLatestNewsHeadline } from "@/infrastructure/providers/tradingViewF
 import { renderStockChart, ChartDataPoint } from "@/shared/utils/chartRenderer";
 import { fetchTradingViewRating, TV_RATING_ZH } from "@/infrastructure/providers/tradingViewRating";
 import { buildNewsLine, calcSupportResistance } from "@/shared/utils/formatters";
-import { getFirstNewsTitle, getRichNewsList, isWithinDays } from "@/shared/utils/news";
+import { getFirstNewsTitle, getRichNewsList, getRichNewsLinks, isWithinDays } from "@/shared/utils/news";
 import { StockCard } from "./types";
 
 export class UsStockService {
@@ -114,6 +114,7 @@ export class UsStockService {
          );
 
          card.recentNews = getRichNewsList(recentNewsRaw, symbol, true).slice(0, 8);
+         card.newsLinks = getRichNewsLinks(recentNewsRaw, 3);
          if (tvNews && !card.recentNews.some(n => n.includes(tvNews))) {
             card.recentNews.unshift(tvNews);
          }

@@ -18,12 +18,14 @@ export class MessageService {
       
       const title = (nameZh && nameZh !== symbol) ? `${symbol} ${nameZh}` : symbol;
 
+      const newsSection = this.formatNewsSection(card);
+
       const lines = [
          `<b>${title} [${vText}]</b>`,
          `【現價】 ${formatPrice(card.close, 2)}（${formatSignedPct(card.chgPct, 2)}）${card.marketStatusLabel || ""}${card.isPriceRealTime === false ? "　⚠️延遲報價" : ""}`,
          `【技術】 ${card.tvRating || "—"}`,
          `【產業】 ${card.industry || "—"}`,
-         `【新聞】 ${card.newsLine || "—"}`,
+         ...newsSection,
       ];
 
       if (card.insiderSells && card.insiderSells.length > 0) {
@@ -38,6 +40,16 @@ export class MessageService {
       }
 
       return lines.join("\n");
+   }
+
+   private static formatNewsSection(card: StockCard): string[] {
+      if (card.newsLinks && card.newsLinks.length > 0) {
+         const items = card.newsLinks.map(n =>
+            `  • <a href="${n.url}">${escapeHtml(n.title)}</a>`
+         );
+         return [`【新聞】`, ...items];
+      }
+      return [`【新聞】 ${escapeHtml(card.newsLine || "—")}`];
    }
 
    /**

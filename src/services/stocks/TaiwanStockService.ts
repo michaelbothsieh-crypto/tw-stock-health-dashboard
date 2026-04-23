@@ -7,7 +7,7 @@ import { renderStockChart, ChartDataPoint } from "@/shared/utils/chartRenderer";
 import { fetchTradingViewRating, TV_RATING_ZH } from "@/infrastructure/providers/tradingViewRating";
 import { resolveCodeFromInputLocal } from "@/shared/utils/ticker";
 import { buildNewsLine, calcVolumeVs5d, calcSupportResistance } from "@/shared/utils/formatters";
-import { getFirstNewsTitle, getRichNewsList, isWithinDays } from "@/shared/utils/news";
+import { getFirstNewsTitle, getRichNewsList, getRichNewsLinks, isWithinDays } from "@/shared/utils/news";
 import { StockCard } from "./types";
 
 export class TaiwanStockService {
@@ -143,6 +143,7 @@ export class TaiwanStockService {
          );
 
          card.recentNews = getRichNewsList(recentCombined, card.nameZh || symbol, false).slice(0, 10);
+         card.newsLinks = getRichNewsLinks(recentCombined, 3);
          
          // 確保 TradingView 新聞也被納入
          if (tvNews && !card.recentNews.some(n => n.includes(tvNews))) {
