@@ -46,13 +46,31 @@ export async function GET(
 
     // 美股（字母代號）：直接 proxy Finviz 圖片
     if (!/^\d/.test(norm.symbol)) {
-      const finvizUrl = `https://finviz.com/chart.ashx?t=${norm.symbol}&ty=c&ta=1&p=d&ext=1`;
-      const chartRes = await fetch(finvizUrl, {
-        headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" },
+      const isUsOpen = isMarketOpen(norm.symbol);
+      const period = isUsOpen ? 'd' : 'i5';
+      const finvizUrl = `https://charts2.finviz.com/chart.ashx?t=${norm.symbol}&ty=c&ta=1&p=${period}&ext=1`;
+      let chartRes = await fetch(finvizUrl, {
+        headers: { 
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", 
+          "Referer": "https://finviz.com/" 
+        },
       });
-      if (!chartRes.ok) return new NextResponse("Chart not available", { status: 404 });
-      const ab = await chartRes.arrayBuffer();
-      const pngBuffer = Buffer.from(ab);
+
+      let ab = await chartRes.arrayBuffer();
+      let pngBuffer = Buffer.from(ab);
+
+      // 如果圖表太小（通常是 "Chart not available" 的提示圖），則嘗試回退到日線
+      if (!chartRes.ok || pngBuffer.length < 5000) {
+        const fallbackUrl = `https://charts2.finviz.com/chart.ashx?t=${norm.symbol}&ty=c&ta=1&p=d`;
+        const fbRes = await fetch(fallbackUrl, {
+          headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" },
+        });
+        if (fbRes.ok) {
+          ab = await fbRes.arrayBuffer();
+          pngBuffer = Buffer.from(ab);
+        }
+      }
+
       await setCache(cacheKey, pngBuffer.toString("base64"), 300);
       return new NextResponse(pngBuffer as unknown as BodyInit, {
         status: 200,
