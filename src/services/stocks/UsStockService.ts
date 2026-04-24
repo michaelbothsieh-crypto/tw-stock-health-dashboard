@@ -6,6 +6,7 @@ import { renderStockChart, ChartDataPoint } from "@/shared/utils/chartRenderer";
 import { fetchTradingViewRating, TV_RATING_ZH } from "@/infrastructure/providers/tradingViewRating";
 import { buildNewsLine, calcSupportResistance } from "@/shared/utils/formatters";
 import { getFirstNewsTitle, getRichNewsList, getRichNewsLinks, isWithinDays } from "@/shared/utils/news";
+import { isMarketOpen } from "@/shared/utils/market";
 import { StockCard } from "./types";
 
 export class UsStockService {
@@ -81,7 +82,9 @@ export class UsStockService {
 
          // 美股優先嘗試使用 Finviz (視覺效果較好)
          try {
-            const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
+            const isUsOpen = isMarketOpen(symbol);
+            const period = isUsOpen ? 'd' : 'i5';
+            const finvizUrl = `https://finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=${period}&ext=1`;
             const chartRes = await fetch(finvizUrl, { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" } });
             if (chartRes.ok) {
                const buf = Buffer.from(await chartRes.arrayBuffer());
