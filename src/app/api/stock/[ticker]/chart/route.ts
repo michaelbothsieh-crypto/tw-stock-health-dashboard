@@ -46,9 +46,7 @@ export async function GET(
 
     // 美股（字母代號）：直接 proxy Finviz 圖片
     if (!/^\d/.test(norm.symbol)) {
-      const isUsOpen = isMarketOpen(norm.symbol);
-      const period = isUsOpen ? 'd' : 'i5';
-      const finvizUrl = `https://finviz.com/chart.ashx?t=${norm.symbol}&ty=c&ta=1&p=${period}&ext=1`;
+      const finvizUrl = `https://finviz.com/chart.ashx?t=${norm.symbol}&ty=c&ta=1&p=d&ext=1`;
       const chartRes = await fetch(finvizUrl, {
         headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" },
       });
