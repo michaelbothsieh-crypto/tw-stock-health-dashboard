@@ -48,18 +48,19 @@ export async function GET(
     if (!/^\d/.test(norm.symbol)) {
       const isUsOpen = isMarketOpen(norm.symbol);
       const period = isUsOpen ? 'd' : 'i5';
-      const finvizUrl = `https://charts2.finviz.com/chart.ashx?t=${norm.symbol}&ty=c&ta=1&p=${period}&ext=1`;
+      const finvizUrl = `https://charts2.finviz.com/chart.ashx?t=${norm.symbol}&ty=c&ta=1&p=${period}&ext=1&rev=${Date.now()}`;
       let chartRes = await fetch(finvizUrl, {
         headers: { 
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", 
-          "Referer": "https://finviz.com/" 
+          "Referer": "https://finviz.com/quote.ashx?t=" + norm.symbol,
+          "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
         },
       });
 
       let ab = await chartRes.arrayBuffer();
       let pngBuffer = Buffer.from(ab);
 
-      // 如果圖表太小（通常是 "Chart not available" 的提示圖），則嘗試回退到日線
+      // 如果圖表太小（通常是 "Chart not available" 的提示圖），則嘗試回退到穩定日線
       if (!chartRes.ok || pngBuffer.length < 5000) {
         const fallbackUrl = `https://charts2.finviz.com/chart.ashx?t=${norm.symbol}&ty=c&ta=1&p=d`;
         const fbRes = await fetch(fallbackUrl, {

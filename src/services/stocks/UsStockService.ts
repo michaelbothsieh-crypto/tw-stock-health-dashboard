@@ -83,19 +83,29 @@ export class UsStockService {
          // 美股優先嘗試使用 Finviz (視覺效果較好)
          try {
             const isUsOpen = isMarketOpen(symbol);
+            // 如果開盤中，使用日線；如果是盤後/盤前，嘗試獲取盤中圖
             const period = isUsOpen ? 'd' : 'i5';
-            // 優先嘗試包含盤後數據的網址
-            const finvizUrl = `https://charts2.finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=${period}&ext=1`;
-            const chartRes = await fetch(finvizUrl, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", "Referer": "https://finviz.com/" } });
+            
+            // 嘗試透過 charts2 並加入隨機版本號，模擬瀏覽器行為
+            const finvizUrl = `https://charts2.finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=${period}&ext=1&rev=${Date.now()}`;
+            
+            const chartRes = await fetch(finvizUrl, { 
+               headers: { 
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", 
+                  "Referer": "https://finviz.com/quote.ashx?t=" + symbol,
+                  "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+               } 
+            });
             
             if (chartRes.ok) {
                const buf = Buffer.from(await chartRes.arrayBuffer());
-               if (buf.length > 5000) { // 確保不是一張顯示 "Not Available" 的小圖
+               // Finviz 的 "Chart not available" 圖片大小通常小於 4000 bytes
+               if (buf.length > 5000) {
                   card.chartBuffer = buf;
                }
             }
 
-            // 如果失敗或圖表無效，回退到不帶 ext=1 的日線圖
+            // 如果失敗，回退到穩定日線圖 (不帶 ext=1 以確保最大相容性)
             if (!card.chartBuffer) {
                const fallbackUrl = `https://charts2.finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d`;
                const fbRes = await fetch(fallbackUrl, { headers: { "User-Agent": "Mozilla/5.0", "Referer": "https://finviz.com/" } });
