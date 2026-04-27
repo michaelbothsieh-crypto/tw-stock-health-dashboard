@@ -59,9 +59,10 @@ async function startLoadingAnimation(userId?: string) {
 
 async function forwardToLazyTube(params: {
   chatId: string;
-  command: "help" | "nlm" | "pic" | "note" | "slide" | "research";
+  command: "help" | "nlm" | "pic" | "note" | "slide" | "research" | "podcast";
   url?: string;
   prompt?: string;
+  episode_number?: string;
 }) {
   const response = await fetch(LAZYTUBE_URL, {
     method: "POST",
@@ -74,6 +75,7 @@ async function forwardToLazyTube(params: {
       command: params.command,
       url: params.url,
       prompt: params.prompt,
+      episode_number: params.episode_number,
     }),
   });
 
@@ -125,6 +127,9 @@ export async function POST(req: NextRequest) {
                   "輸入 /etf <代號> (例：/etf 0050)\n" +
                   "輸入 /rank (熱門排行)\n" +
                   "輸入 /roi <代號> <時間> (績效分析)\n\n" +
+                  "🎙️ Podcast 分析：\n" +
+                  "輸入 /podcast <RSS或Apple連結>\n" +
+                  "輸入 /podcast <連結> <集數> (指定集數)\n\n" +
                   "🎥 影片工具：\n" +
                   "輸入 /nlm <YouTube網址>\n" +
                   "輸入 /pic <YouTube網址>\n" +
@@ -181,6 +186,63 @@ export async function POST(req: NextRequest) {
               },
             ],
           });
+          continue;
+        }
+
+        // ── Podcast 指令 → 轉發 LazyTube ──────────────────────────────────
+        const podcastMatch = userText.match(/^\/podcast\b/i);
+        if (podcastMatch) {
+          const command = "podcast" as const;
+          const parts = userText.split(/\s+/);
+
+          // 解析參數：URL 和集數編號（純數字視為集數）
+          let podcastUrl: string | undefined;
+          let episodeNumber: string | undefined;
+          for (const part of parts.slice(1)) {
+            if (part.startsWith("http")) {
+              podcastUrl = part;
+            } else if (/^\d+$/.test(part)) {
+              episodeNumber = part;
+            }
+          }
+
+          await startLoadingAnimation(event.source.type === "user" ? event.source.userId : undefined);
+
+          try {
+            const { response } = await forwardToLazyTube({
+              chatId,
+              command,
+              url: podcastUrl,
+              episode_number: episodeNumber,
+            });
+
+            if (response.status === 403) {
+              await client.pushMessage({
+                to: chatId,
+                messages: [{
+                  type: "text",
+                  text: "權限不足\n請先輸入 /my_id 取得您的 LINE ID，並交給管理員加入白名單後再使用。",
+                }],
+              });
+            } else if (response.status !== 200) {
+              await client.pushMessage({
+                to: chatId,
+                messages: [{
+                  type: "text",
+                  text: "Podcast 指令轉發失敗，請稍後再試。",
+                }],
+              });
+            }
+          } catch (error) {
+            console.error("[LINE] Podcast forwarding failed:", error);
+            await client.pushMessage({
+              to: chatId,
+              messages: [{
+                type: "text",
+                text: "Podcast 指令發送時發生錯誤，請稍後再試。",
+              }],
+            });
+          }
           continue;
         }
 
