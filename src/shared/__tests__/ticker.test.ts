@@ -20,10 +20,8 @@ describe('normalizeTicker', () => {
     it('should parse symbol with .TWO suffix correctly', () => {
         const result = normalizeTicker('3231.two');
         expect(result.symbol).toBe('3231');
-        // Note: Current implementation defaults to TWSE for numeric, 
-        // and doesn't differentiate TPEX in market field yet
-        expect(result.market).toBe('TWSE');
-        expect(result.yahoo).toBe('3231.TW');
+        expect(result.market).toBe('TPEX');
+        expect(result.yahoo).toBe('3231.TWO');
     });
 
     it('should handle extra spaces', () => {

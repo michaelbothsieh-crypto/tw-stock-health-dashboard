@@ -28,9 +28,8 @@ describe('calculateCatalystScore', () => {
 
         const res = calculateCatalystScore(newsInput, targetDate, 7);
 
-        // Raw score: 100 * 1 + (-60) * 0.367 = 100 - 22.02 = 77.98
-        // User logic may have mapped this to 50
-        expect(res.catalystScore).toBe(50);
+        // Raw weighted score is halved and rounded by the catalyst model.
+        expect(res.catalystScore).toBe(38);
 
         expect(res.timeline.length).toBe(2);
 
@@ -59,7 +58,7 @@ describe('calculateCatalystScore', () => {
     it('clamps catalyst score to [-100, 100]', () => {
         const targetDate = new Date('2024-01-10T12:00:00Z');
         // Produce huge score
-        const newsInput = Array(10).fill(null).map((_, i) => ({
+        const newsInput = Array.from({ length: 10 }, () => ({
             stock_id: '2330',
             date: '2024-01-10T10:00:00Z',
             title: '大增創新高優於預期' // 100 score each

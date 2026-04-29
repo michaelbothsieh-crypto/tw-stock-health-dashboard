@@ -142,15 +142,16 @@ export class TaiwanStockService {
             isWithinDays(item.pubdate || item.pubDate || item.date || item.providerPublishTime, 3)
          );
 
-         card.recentNews = getRichNewsList(recentCombined, card.nameZh || symbol, false).slice(0, 10);
-         card.newsLinks = getRichNewsLinks(recentCombined, 1);
+         const newsAliases = [symbol, card.nameZh].filter(Boolean);
+         card.recentNews = getRichNewsList(recentCombined, newsAliases, false).slice(0, 10);
+         card.newsLinks = getRichNewsLinks(recentCombined, 1, newsAliases, false);
          
          // 確保 TradingView 新聞也被納入
          if (tvNews && !card.recentNews.some(n => n.includes(tvNews))) {
             card.recentNews.unshift(tvNews);
          }
 
-         const fallbackNews = getFirstNewsTitle(recentCombined, card.nameZh || symbol, false);
+         const fallbackNews = getFirstNewsTitle(recentCombined, newsAliases, false);
          card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
          
          if (card.newsLine === "—" || !card.newsLine) {

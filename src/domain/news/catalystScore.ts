@@ -4,7 +4,7 @@ import { classifyNews, NewsCategory } from "./classify";
 import { SentimentImpact } from "./sentiment";
 
 const POSITIVE_KEYWORDS = ["上修", "創新高", "大增", "接單", "利多", "突破", "獲利", "成長"];
-const NEGATIVE_KEYWORDS = ["下修", "衰退", "虧損", "違約", "裁罰", "風險", "警示"];
+const NEGATIVE_KEYWORDS = ["下修", "衰退", "虧損", "違約", "裁罰", "風險", "警示", "駭客", "資安"];
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
