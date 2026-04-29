@@ -5,17 +5,48 @@ import { fetchFugleQuote } from "@/infrastructure/providers/fugleQuote";
 import { getTvLatestNewsHeadline } from "@/infrastructure/providers/tradingViewFetch";
 import { renderStockChart, ChartDataPoint } from "@/shared/utils/chartRenderer";
 import { fetchTradingViewRating, TV_RATING_ZH } from "@/infrastructure/providers/tradingViewRating";
+import { fetchYahooTwStockNews } from "@/infrastructure/providers/yahooTwStockNews";
 import { resolveCodeFromInputLocal } from "@/shared/utils/ticker";
 import { buildNewsLine, calcVolumeVs5d, calcSupportResistance } from "@/shared/utils/formatters";
 import { getFirstNewsTitle, getRichNewsList, getRichNewsLinks, isWithinDays } from "@/shared/utils/news";
 import { StockCard } from "./types";
+
+type RuntimeQuote = {
+   regularMarketPrice?: number;
+   regularMarketChangePercent?: number;
+   regularMarketChange?: number;
+   regularMarketVolume?: number;
+   regularMarketDayHigh?: number;
+   regularMarketDayLow?: number;
+   regularMarketOpen?: number;
+};
+
+type RawPriceBar = {
+   date?: string;
+   open?: number;
+   high?: number;
+   low?: number;
+   close?: number;
+   volume?: number;
+   Trading_Volume?: number;
+};
+
+type NewsProviderResult = {
+   news?: unknown[];
+   data?: unknown[];
+};
+
+function toRuntimeQuote(value: unknown): RuntimeQuote | null {
+   return value && typeof value === "object" ? value as RuntimeQuote : null;
+}
 
 export class TaiwanStockService {
    static getSnapshotBaseUrl(override?: string): string {
       return override || process.env.BOT_BASE_URL || process.env.APP_BASE_URL || "http://localhost:3000";
    }
 
-   static async fetchLiveCard(query: string, overrideBaseUrl?: string, skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
+   static async fetchLiveCard(query: string, overrideBaseUrl?: string, _skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
+      void _skipHeavy;
       const symbol = resolveCodeFromInputLocal(query);
       if (!symbol) return null;
       
@@ -41,9 +72,9 @@ export class TaiwanStockService {
             yahooSymbol = isProbablyTPEX ? `${symbol}.TWO` : `${symbol}.TW`;
          }
 
-         let rtQuote: any = null;
+         let rtQuote: RuntimeQuote | null = null;
          if (!skipQuote) {
-            let rtQuoteRaw = fugleQuote ? null : await yahooFinance.quote(yahooSymbol).catch(() => null);
+            const rtQuoteRaw = fugleQuote ? null : await yahooFinance.quote(yahooSymbol).catch(() => null);
             rtQuote = fugleQuote ? {
                regularMarketPrice: fugleQuote.price,
                regularMarketChangePercent: fugleQuote.changePct,
@@ -52,11 +83,11 @@ export class TaiwanStockService {
                regularMarketDayHigh: fugleQuote.high,
                regularMarketDayLow: fugleQuote.low,
                regularMarketOpen: fugleQuote.open,
-            } : (Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw);
+            } : toRuntimeQuote(Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw);
          }
 
-         let bars = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
-         let processedBars = bars.map((b: any) => ({
+         const bars: RawPriceBar[] = Array.isArray(snapshot?.data?.prices) ? snapshot.data.prices : [];
+         const processedBars = bars.map((b) => ({
             date: b.date || "",
             open: Number(b.open || b.close || 0),
             high: Number(b.high || b.close || 0),
@@ -117,9 +148,10 @@ export class TaiwanStockService {
          card.strategySignal = snapshot?.strategy?.signal || "觀察";
          card.confidence = snapshot?.strategy?.confidence;
          
-         const [yahooSearchRes, yahooSearchByName, fmRes] = await Promise.all([
+         const [yahooSearchRes, yahooSearchByName, yahooTwNews, fmRes] = await Promise.all([
             yahooFinance.search(yahooSymbol).catch(() => null),
             card.nameZh && card.nameZh !== symbol ? yahooFinance.search(card.nameZh).catch(() => null) : Promise.resolve(null),
+            fetchYahooTwStockNews(yahooSymbol).catch(() => []),
             (async () => {
                const { getTaiwanStockNews } = await import("@/infrastructure/providers/finmind");
                const lastWeek = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -128,18 +160,21 @@ export class TaiwanStockService {
          ]);
 
          const snapshotNewsRaw = snapshot?.news?.timeline || (Array.isArray(snapshot?.news) ? snapshot.news : []);
-         const fmNews = (fmRes && (fmRes as any).data) ? (fmRes as any).data : [];
+         const yahooNews = (yahooSearchRes as NewsProviderResult | null)?.news;
+         const yahooNameNews = (yahooSearchByName as NewsProviderResult | null)?.news;
+         const fmNews = (fmRes as NewsProviderResult | null)?.data;
 
          const combinedNewsRaw = [
             ...snapshotNewsRaw,
-            ...(Array.isArray((yahooSearchRes as any)?.news) ? (yahooSearchRes as any).news : []),
-            ...(Array.isArray((yahooSearchByName as any)?.news) ? (yahooSearchByName as any).news : []),
-            ...fmNews
+            ...yahooTwNews,
+            ...(Array.isArray(yahooNews) ? yahooNews : []),
+            ...(Array.isArray(yahooNameNews) ? yahooNameNews : []),
+            ...(Array.isArray(fmNews) ? fmNews : [])
          ];
 
-         // 過濾出 3 天內的新聞
+         // 顯示用新聞取 14 天，避免個股公告晚於 3 天就被誤判為完全無新聞。
          const recentCombined = combinedNewsRaw.filter(item => 
-            isWithinDays(item.pubdate || item.pubDate || item.date || item.providerPublishTime, 3)
+            isWithinDays(item.pubdate || item.pubDate || item.date || item.providerPublishTime, 14)
          );
 
          const newsAliases = [symbol, card.nameZh].filter(Boolean);
@@ -155,10 +190,10 @@ export class TaiwanStockService {
          card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
          
          if (card.newsLine === "—" || !card.newsLine) {
-            card.newsLine = "無三天內新聞";
+            card.newsLine = "無近期新聞";
          }
          
-         if (card.newsLine === "無三天內新聞" && card.tvRating?.includes("買入")) {
+         if (card.newsLine === "無近期新聞" && card.tvRating?.includes("買入")) {
             card.newsLine = `技術面動能強勁 (${card.tvRating})`;
          }
          
@@ -180,6 +215,6 @@ export class TaiwanStockService {
             card.tvRating = TV_RATING_ZH[rating];
          }
          return card;
-      } catch (error) { return null; }
+      } catch { return null; }
    }
 }
