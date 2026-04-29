@@ -172,9 +172,9 @@ export class TaiwanStockService {
             ...(Array.isArray(fmNews) ? fmNews : [])
          ];
 
-         // 顯示用新聞取 14 天，避免個股公告晚於 3 天就被誤判為完全無新聞。
+         // 顯示用新聞只取 3 天內；舊新聞不應讓短線卡片看起來有近期事件。
          const recentCombined = combinedNewsRaw.filter(item => 
-            isWithinDays(item.pubdate || item.pubDate || item.date || item.providerPublishTime, 14)
+            isWithinDays(item.pubdate || item.pubDate || item.date || item.providerPublishTime, 3)
          );
 
          const newsAliases = [symbol, card.nameZh].filter(Boolean);
@@ -190,10 +190,10 @@ export class TaiwanStockService {
          card.newsLine = buildNewsLine(tvNews || fallbackNews, 96);
          
          if (card.newsLine === "—" || !card.newsLine) {
-            card.newsLine = "無近期新聞";
+            card.newsLine = "無三天內新聞";
          }
          
-         if (card.newsLine === "無近期新聞" && card.tvRating?.includes("買入")) {
+         if (card.newsLine === "無三天內新聞" && card.tvRating?.includes("買入")) {
             card.newsLine = `技術面動能強勁 (${card.tvRating})`;
          }
          
