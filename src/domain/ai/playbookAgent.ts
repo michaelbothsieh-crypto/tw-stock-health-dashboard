@@ -36,7 +36,6 @@ export interface ActionPlaybook {
 export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook {
 // 移除 console.log('🤖 Current AI Tier: Rule-based (Enhanced)');
 
-  const fPrice = Number(ctx.price).toFixed(2);
   const fSupport = Number(ctx.support).toFixed(2);
   const fResistance = Number(ctx.resistance).toFixed(2);
   const trend = ctx.technicalTrend || "區間震盪";
@@ -68,14 +67,14 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
 
 export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionPlaybook> {
   const halfHourKey = Math.floor(Date.now() / 1800000);
-  const cacheKey = `playbook:v3:${ctx.ticker}:${halfHourKey}`;
+  const cacheKey = `playbook:v4:${ctx.ticker}:${halfHourKey}`;
 
   // Check Global Cache
   if (redis) {
     try {
       const cached = await redis.get<ActionPlaybook>(cacheKey);
       if (cached) return cached;
-    } catch (e) {
+    } catch {
       console.warn("[Playbook] Cache read error");
     }
   }
@@ -84,9 +83,6 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
   const fPrice = Number(ctx.price).toFixed(2);
   const fSupport = Number(ctx.support).toFixed(2);
   const fResistance = Number(ctx.resistance).toFixed(2);
-  const fFlow = Number(ctx.flowScore).toFixed(1);
-  const fMacro = Number(ctx.macroRisk).toFixed(1);
-
   const prompt = `
 你是一位擁有 20 年華爾街與台股實戰經驗的頂級避險基金操盤手。請為客戶深度 analysis 股票：${ctx.stockName} (${ctx.ticker})。
 你的風格是「刁鑽、犀利、一針見血、不說廢話」。對於散戶的盲目樂觀或恐慌會直接點出盲點。
@@ -104,8 +100,9 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
 【新聞與動能判定】(極度重要！請勿盲目依賴新聞文字)
 - 判斷準則：
   1. 價格與量能是最高真實：若股價今日強勢大漲(>5%)且成交量顯著放大，即便籌碼與新聞尚未更新，也代表「主力發動」，嚴禁判定為『籌碼未跟進』或『題材未發酵』。
-  2. 爆量長紅：視為資金積極進場，應給予積極評價。
-  3. 量縮盤整：則需觀察支撐。
+  2. 若股價今日明顯下跌(<-5%)，即使 TradingView 顯示買入，也不得寫「爆量長紅」、「主力進場」、「主力發動」、「跟進」、「加碼」；應視為破線或急殺風險，先防守。
+  3. 爆量長紅：只能在今日漲幅為正且K線收紅時，視為資金積極進場。
+  4. 量縮盤整：則需觀察支撐。
 - 近期新聞標題:
 ${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `  * ${n}`).join('\n') : "  * (近期無顯著新聞)"}
 
@@ -135,7 +132,7 @@ ${ctx.recentNews && ctx.recentNews.length > 0 ? ctx.recentNews.map(n => `  * ${n
   if (redis && result) {
     try {
       await redis.set(cacheKey, result, { ex: 3600 });
-    } catch (e) {
+    } catch {
       console.warn("[Playbook] Cache write error");
     }
   }
