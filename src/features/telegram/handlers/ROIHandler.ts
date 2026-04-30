@@ -8,6 +8,32 @@ import { subMonths, subYears, parseISO } from "date-fns";
 import { yf as yahooFinance } from "@/infrastructure/providers/yahooFinanceClient";
 import { resolveCodeFromInputLocal, normalizeTicker } from "@/shared/utils/ticker";
 
+function dateKey(date: Date): string {
+  return date.toLocaleDateString("en-CA");
+}
+
+function normalizeRoiHistory(
+  quotes: { date: Date; close: number }[],
+  liveClose: number,
+): { date: Date; close: number }[] {
+  const validQuotes = quotes
+    .filter(q => q.date instanceof Date && !isNaN(q.date.getTime()))
+    .filter(q => Number.isFinite(q.close) && q.close > 0)
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  if (!Number.isFinite(liveClose) || liveClose <= 0) return validQuotes;
+
+  const todayKey = dateKey(new Date());
+  const last = validQuotes[validQuotes.length - 1];
+  if (last && dateKey(last.date) === todayKey) {
+    validQuotes[validQuotes.length - 1] = { ...last, close: liveClose };
+  } else {
+    validQuotes.push({ date: new Date(), close: liveClose });
+  }
+
+  return validQuotes;
+}
+
 export class ROIHandler implements CommandHandler {
   canHandle(command: string): boolean {
     return command === "/roi";
@@ -47,19 +73,22 @@ export class ROIHandler implements CommandHandler {
 
        const targetYahooSymbol = live.yahooSymbol || normalizeTicker(ticker).yahoo;
        const history = await yahooFinance.chart(targetYahooSymbol, { period1: startDate, interval: "1d" }).catch(() => null);
-       let historyQuotes = (history?.quotes || []).map((q: any) => ({ date: new Date(q.date), close: q.close }));
+       let historyQuotes = normalizeRoiHistory(
+          (history?.quotes || []).map((q: any) => ({ date: new Date(q.date), close: Number(q.close) })),
+          live.close
+       );
        
        // Fallback to historyBars from snapshot if Yahoo fails
        if (historyQuotes.length === 0 && live.historyBars && live.historyBars.length > 0) {
           const startStr = startDate.toISOString().split('T')[0];
           // Find the first bar that is on or after the start date
           const fallbackData = live.historyBars
-            .map((b: any) => ({ date: new Date(b.date), close: b.close }))
+            .map((b: any) => ({ date: new Date(b.date), close: Number(b.close) }))
             .filter((b: any) => b.date >= startDate)
             .sort((a: any, b: any) => a.date.getTime() - b.date.getTime());
           
           if (fallbackData.length > 0) {
-             historyQuotes = fallbackData;
+             historyQuotes = normalizeRoiHistory(fallbackData, live.close);
           }
        }
 
