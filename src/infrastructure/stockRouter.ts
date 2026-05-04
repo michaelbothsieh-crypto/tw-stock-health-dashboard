@@ -2,6 +2,7 @@
 import { normalizeTicker, NormalizedTicker } from "@/shared/utils/ticker";
 import { 
   getPriceDaily, 
+  getPriceDailyAdj,
   getInstitutionalInvestors, 
   getMarginShort, 
   getMonthlyRevenue, 
@@ -14,6 +15,7 @@ import {
   getInstitutionalInvestorsUs
 } from "@/infrastructure/providers/finmind";
 import { getTvTechnicalIndicators } from "@/infrastructure/providers/tradingViewFetch";
+import { getGoodinfoAdjustedPriceDaily } from "@/infrastructure/providers/goodinfoAdjustedPrice";
 import { format, subDays } from "date-fns";
 
 /**
@@ -41,7 +43,8 @@ export async function fetchStockSnapshot(norm: NormalizedTicker) {
 
   try {
     if (isTaiwan) {
-      const [priceRes, flowRes, marginRes, revRes, newsRes, tvTech] = await Promise.all([
+      const [priceAdjRes, priceRes, flowRes, marginRes, revRes, newsRes, tvTech] = await Promise.all([
+        getPriceDailyAdj(symbol, startDate, today).catch(() => ({ data: [] })),
         getPriceDaily(symbol, startDate, today),
         getInstitutionalInvestors(symbol, format(subDays(now, 60), "yyyy-MM-dd"), today),
         getMarginShort(symbol, format(subDays(now, 60), "yyyy-MM-dd"), today),
@@ -50,7 +53,15 @@ export async function fetchStockSnapshot(norm: NormalizedTicker) {
         getTvTechnicalIndicators(symbol)
       ]);
 
-      results.prices = priceRes.data || [];
+      const goodinfoAdj = priceAdjRes.data?.length
+        ? []
+        : await getGoodinfoAdjustedPriceDaily(symbol).catch(() => []);
+
+      results.prices = priceAdjRes.data?.length
+        ? priceAdjRes.data
+        : goodinfoAdj.length
+          ? goodinfoAdj
+          : (priceRes.data || []);
       results.flow.investors = flowRes.data || [];
       results.flow.margin = marginRes.data || [];
       results.fundamentals.revenue = revRes.data || [];

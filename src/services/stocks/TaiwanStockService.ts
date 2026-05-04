@@ -25,7 +25,9 @@ type RawPriceBar = {
    date?: string;
    open?: number;
    high?: number;
+   max?: number;
    low?: number;
+   min?: number;
    close?: number;
    volume?: number;
    Trading_Volume?: number;
@@ -90,8 +92,8 @@ export class TaiwanStockService {
          const processedBars = bars.map((b) => ({
             date: b.date || "",
             open: Number(b.open || b.close || 0),
-            high: Number(b.high || b.close || 0),
-            low: Number(b.low || b.close || 0),
+            high: Number(b.high || b.max || b.close || 0),
+            low: Number(b.low || b.min || b.close || 0),
             close: Number(b.close || 0),
             volume: Number(b.volume || b.Trading_Volume || 0)
          }));

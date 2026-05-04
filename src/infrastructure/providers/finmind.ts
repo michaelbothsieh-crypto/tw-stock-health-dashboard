@@ -27,6 +27,10 @@ export async function getPriceDaily(symbol: string, start: string, end: string) 
   return fetchFinmind("TaiwanStockPrice", symbol, start, end);
 }
 
+export async function getPriceDailyAdj(symbol: string, start: string, end: string) {
+  return fetchFinmind("TaiwanStockPriceAdj", symbol, start, end);
+}
+
 export async function getInstitutionalInvestors(symbol: string, start: string, end: string) {
   return fetchFinmind("TaiwanStockInstitutionalInvestorsBuySell", symbol, start, end);
 }
@@ -107,4 +111,3 @@ export interface MonthlyRevenue {
 export const FinmindProviderError = Error;
 // export type { TaiwanStockNews, InstitutionalInvestor, MarginShort, MonthlyRevenue } from "@/shared/types/finmind";
 // 改為在此直接定義以確保 SSOT
-
