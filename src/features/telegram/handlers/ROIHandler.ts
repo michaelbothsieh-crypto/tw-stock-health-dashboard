@@ -63,7 +63,7 @@ export class ROIHandler implements CommandHandler {
   }
 
   async handle(ctx: CommandContext): Promise<BotReply | null> {
-    const { query } = ctx;
+    const { query, baseUrl } = ctx;
     let [tickerRaw, periodRaw] = query.split(/\s+/);
     if (!tickerRaw || !periodRaw) return { text: "用法: /roi 股票代號 時間(1m, 3m, 6m, 1y, ytd, 或 YYYY-MM-DD)" };
 
@@ -91,7 +91,9 @@ export class ROIHandler implements CommandHandler {
 
     const results = await Promise.all(tickers.map(async (ticker) => {
        const isUs = /^[A-Z]{1,5}$/.test(ticker);
-       const live = isUs ? await StockService.fetchLiveUsStockCard(ticker) : await StockService.fetchLiveStockCard(ticker);
+       const live = isUs
+          ? await StockService.fetchLiveUsStockCard(ticker, baseUrl)
+          : await StockService.fetchLiveStockCard(ticker, baseUrl);
        if (!live || live.close === null) return null;
 
        const history = await fetchRoiHistory(ticker, live.yahooSymbol, startDate);
