@@ -1,4 +1,5 @@
 import { getStockInfo } from "@/infrastructure/providers/finmind";
+import { normalizeTicker } from "@/shared/utils/ticker";
 
 export type MarketType = 'TWSE' | 'TPEX' | 'UNKNOWN';
 
@@ -47,12 +48,15 @@ export async function detectMarket(symbol: string): Promise<MarketDetectionResul
     if (isUS) {
         yahoo = symbol.toUpperCase();
     } else {
+        const normalized = normalizeTicker(symbol);
         // 台灣債券 ETF (代碼以 B 結尾) 絕大多數在上櫃市場 (TPEX)
         const isBondETF = symbol.toUpperCase().endsWith('B') && symbol.length >= 5;
 
         if (market === 'TPEX' || (market === 'UNKNOWN' && isBondETF)) {
             yahoo = `${symbol}.TWO`;
             if (market === 'UNKNOWN' && isBondETF) market = 'TPEX';
+        } else if (market === 'UNKNOWN') {
+            yahoo = normalized.yahoo;
         } else {
             yahoo = `${symbol}.TW`;
         }

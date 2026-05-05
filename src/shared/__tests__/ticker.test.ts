@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeTicker } from "@/shared/utils/ticker";
+import { getYahooSymbolCandidates, normalizeTicker } from "@/shared/utils/ticker";
 
 describe('normalizeTicker', () => {
     it('should parse 4-digit symbol correctly', () => {
@@ -28,5 +28,12 @@ describe('normalizeTicker', () => {
         const result = normalizeTicker('  2317.tw  ');
         expect(result.symbol).toBe('2317');
         expect(result.market).toBe('TWSE');
+    });
+
+    it('should provide Yahoo fallback candidates for Taiwan tickers', () => {
+        expect(getYahooSymbolCandidates('3163', '3163.TW')).toEqual([
+            '3163.TW',
+            '3163.TWO',
+        ]);
     });
 });

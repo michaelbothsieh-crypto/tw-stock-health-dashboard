@@ -6,7 +6,7 @@ import { formatSignedPct } from "@/shared/utils/formatters";
 import { renderMultiRoiChart } from "@/shared/utils/chartRenderer";
 import { subMonths, subYears, parseISO } from "date-fns";
 import { yf as yahooFinance } from "@/infrastructure/providers/yahooFinanceClient";
-import { resolveCodeFromInputLocal, normalizeTicker } from "@/shared/utils/ticker";
+import { getYahooSymbolCandidates, resolveCodeFromInputLocal } from "@/shared/utils/ticker";
 
 function dateKey(date: Date): string {
   return date.toLocaleDateString("en-CA");
@@ -32,6 +32,29 @@ function normalizeRoiHistory(
   }
 
   return validQuotes;
+}
+
+type RoiHistoryQuote = {
+  date?: Date | string | number;
+  close?: number | null;
+};
+
+async function fetchRoiHistory(
+  ticker: string,
+  preferredYahooSymbol: string | null | undefined,
+  startDate: Date,
+): Promise<{ yahooSymbol: string; quotes: { date: Date; close: number }[] } | null> {
+  for (const yahooSymbol of getYahooSymbolCandidates(ticker, preferredYahooSymbol)) {
+    const history = await yahooFinance.chart(yahooSymbol, { period1: startDate, interval: "1d" }).catch(() => null);
+    const rawQuotes = (history?.quotes || []) as RoiHistoryQuote[];
+    const quotes = rawQuotes.map((q) => ({ date: new Date(q.date || 0), close: Number(q.close) }));
+
+    if (quotes.length > 0) {
+      return { yahooSymbol, quotes };
+    }
+  }
+
+  return null;
 }
 
 export class ROIHandler implements CommandHandler {
@@ -71,10 +94,9 @@ export class ROIHandler implements CommandHandler {
        const live = isUs ? await StockService.fetchLiveUsStockCard(ticker) : await StockService.fetchLiveStockCard(ticker);
        if (!live || live.close === null) return null;
 
-       const targetYahooSymbol = live.yahooSymbol || normalizeTicker(ticker).yahoo;
-       const history = await yahooFinance.chart(targetYahooSymbol, { period1: startDate, interval: "1d" }).catch(() => null);
+       const history = await fetchRoiHistory(ticker, live.yahooSymbol, startDate);
        let historyQuotes = normalizeRoiHistory(
-          (history?.quotes || []).map((q: any) => ({ date: new Date(q.date), close: Number(q.close) })),
+          history?.quotes || [],
           live.close
        );
        

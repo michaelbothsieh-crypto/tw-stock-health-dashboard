@@ -48,6 +48,17 @@ describe("detectMarket", () => {
     expect(result.yahoo).toBe("9999.TW");
   });
 
+  it("falls back to normalized Yahoo symbol when market lookup misses a likely TPEX ticker", async () => {
+    vi.mocked(finmind.getStockInfo).mockResolvedValueOnce({
+      data: [],
+      meta: { authUsed: "anon", fallbackUsed: false },
+    });
+
+    const result = await detectMarket("3163");
+    expect(result.market).toBe("UNKNOWN");
+    expect(result.yahoo).toBe("3163.TWO");
+  });
+
   it("returns UNKNOWN if type is unrecognized", async () => {
     vi.mocked(finmind.getStockInfo).mockResolvedValueOnce({
       data: [{ stock_id: "1234", type: "weird_type" } as any],

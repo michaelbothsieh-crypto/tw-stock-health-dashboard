@@ -47,6 +47,28 @@ export function normalizeTicker(input: string): NormalizedTicker {
   };
 }
 
+export function getYahooSymbolCandidates(input: string, preferred?: string | null): string[] {
+   const normalized = normalizeTicker(input);
+   const candidates = [
+      preferred,
+      normalized.yahoo,
+   ];
+
+   if (/^[0-9]{4,6}$/.test(normalized.symbol)) {
+      candidates.push(`${normalized.symbol}.TW`, `${normalized.symbol}.TWO`);
+   } else {
+      candidates.push(normalized.symbol);
+   }
+
+   return Array.from(
+      new Set(
+         candidates
+            .filter((symbol): symbol is string => Boolean(symbol && symbol.trim()))
+            .map(symbol => symbol.trim().toUpperCase())
+      )
+   );
+}
+
 export function resolveCodeFromInputLocal(query: string): string | null {
    if (!query) return null;
    const q = query.trim().toUpperCase();
