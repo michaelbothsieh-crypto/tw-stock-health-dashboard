@@ -31,7 +31,7 @@ export async function fetchStockSnapshot(norm: NormalizedTicker) {
 
   const results: any = {
     symbol,
-    displayName: symbol,
+    displayName: norm.companyNameZh || norm.displayName || symbol,
     prices: [],
     flow: { investors: [], margin: [] },
     fundamentals: { revenue: [], eps: null, revenueGrowth: null, peRatio: null },

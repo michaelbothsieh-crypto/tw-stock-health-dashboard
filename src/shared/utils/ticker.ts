@@ -24,6 +24,7 @@ if (twStockNames) {
 export function normalizeTicker(input: string): NormalizedTicker {
   const clean = input.trim().toUpperCase();
   const symbol = clean.replace(/\.(TW|TWO)$/i, "");
+  const companyNameZh = twStockNames[symbol];
   
   // 台灣市場代號判定
   const isTW = /^[0-9]{4,6}$/.test(symbol);
@@ -43,7 +44,9 @@ export function normalizeTicker(input: string): NormalizedTicker {
     symbol,
     market,
     yahoo,
-    finmind: symbol
+    finmind: symbol,
+    companyNameZh,
+    displayName: companyNameZh || symbol,
   };
 }
 

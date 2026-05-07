@@ -1,7 +1,7 @@
 
 import { getCache, setCache } from "@/infrastructure/providers/redisCache";
 import { subDays } from "date-fns";
-import { normalizeTicker } from "@/shared/utils/ticker";
+import { normalizeTicker, resolveCodeFromInputLocal } from "@/shared/utils/ticker";
 import { detectMarket, isMarketOpen } from "@/shared/utils/market";
 import { calculateTrend } from "@/domain/signals/trend";
 import { calculateFlow } from "@/domain/signals/flow";
@@ -50,7 +50,8 @@ export class SnapshotService {
     const isLite = mode === "lite";
     const warnings: string[] = [];
 
-    const norm = normalizeTicker(ticker);
+    const resolvedTicker = resolveCodeFromInputLocal(ticker) || ticker;
+    const norm = normalizeTicker(resolvedTicker);
     const marketInfo = await detectMarket(norm.symbol);
     norm.market = marketInfo.market;
     norm.yahoo = marketInfo.yahoo;

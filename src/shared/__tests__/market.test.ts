@@ -69,4 +69,13 @@ describe("detectMarket", () => {
     expect(result.market).toBe("UNKNOWN");
     expect(result.yahoo).toBe("1234.TW");
   });
+
+  it("handles malformed stock info payloads as empty lookup results", async () => {
+    vi.mocked(finmind.getStockInfo).mockResolvedValueOnce({} as any);
+
+    const result = await detectMarket("1802");
+
+    expect(result.market).toBe("UNKNOWN");
+    expect(result.yahoo).toBe("1802.TW");
+  });
 });

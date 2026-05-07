@@ -8,6 +8,7 @@ describe('normalizeTicker', () => {
         // Current implementation defaults numeric to TWSE
         expect(result.market).toBe('TWSE');
         expect(result.yahoo).toBe('2330.TW');
+        expect(result.companyNameZh).toBe('台積電');
     });
 
     it('should parse symbol with .TW suffix correctly', () => {
