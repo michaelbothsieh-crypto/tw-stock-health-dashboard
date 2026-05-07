@@ -8,6 +8,19 @@ import { buildNewsLine, calcSupportResistance } from "@/shared/utils/formatters"
 import { getFirstNewsTitle, getRichNewsList, isWithinDays } from "@/shared/utils/news";
 import { StockCard } from "./types";
 
+export function formatJapanStockName(symbol: string, longName?: string, shortName?: string): string {
+   const rawName = (longName || shortName || "").trim();
+   if (!rawName || rawName.toUpperCase() === symbol.toUpperCase()) return symbol;
+
+   return rawName
+      .replace(/\b(Co|Corporation|Corp|Ltd|Limited|Inc|Incorporated|Kabushiki Kaisha)\.?\b/gi, "")
+      .replace(/\s*,\s*/g, " ")
+      .replace(/\s+\./g, "")
+      .replace(/[,\s]+$/g, "")
+      .replace(/\s{2,}/g, " ")
+      .trim() || symbol;
+}
+
 export class JapanStockService {
    static async fetchLiveCard(ticker: string, _baseUrl?: string, _skipHeavy = false, skipQuote = false): Promise<StockCard | null> {
       const cleanTicker = ticker.toUpperCase().includes(".T") ? ticker.toUpperCase() : `${ticker.toUpperCase()}.T`;
@@ -35,12 +48,7 @@ export class JapanStockService {
             volume: b.volume || 0
          })).filter((b: any) => b.close !== undefined && b.close !== null);
 
-         // 日股名稱處理：保持極簡，避免長全名
-         let displayName = symbol;
-         const rawName = rtQuote?.longName || rtQuote?.shortName || "";
-         if (rawName && rawName.length < 15 && rawName.toUpperCase() !== symbol) {
-            displayName = `${symbol} ${rawName}`;
-         }
+         const displayName = formatJapanStockName(symbol, rtQuote?.longName, rtQuote?.shortName);
 
          const card: StockCard = {
             symbol,
