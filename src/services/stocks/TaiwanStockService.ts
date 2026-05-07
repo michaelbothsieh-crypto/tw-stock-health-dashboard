@@ -8,7 +8,7 @@ import { fetchTradingViewRating, TV_RATING_ZH } from "@/infrastructure/providers
 import { fetchYahooTwStockNews } from "@/infrastructure/providers/yahooTwStockNews";
 import { resolveCodeFromInputLocal } from "@/shared/utils/ticker";
 import { buildNewsLine, calcVolumeVs5d, calcSupportResistance } from "@/shared/utils/formatters";
-import { getFirstNewsTitle, getRichNewsList, getRichNewsLinks, isWithinDays } from "@/shared/utils/news";
+import { getFirstNewsTitle, getRichNewsList, getRichNewsLinks, selectRelevantNewsByRecency } from "@/shared/utils/news";
 import { StockCard } from "./types";
 
 type RuntimeQuote = {
@@ -174,12 +174,9 @@ export class TaiwanStockService {
             ...(Array.isArray(fmNews) ? fmNews : [])
          ];
 
-         // 顯示用新聞只取 3 天內；舊新聞不應讓短線卡片看起來有近期事件。
-         const recentCombined = combinedNewsRaw.filter(item => 
-            isWithinDays(item.pubdate || item.pubDate || item.date || item.providerPublishTime, 3)
-         );
-
          const newsAliases = [symbol, card.nameZh].filter(Boolean);
+         // 先排除無關新聞，再做 3 天優先 / 14 天 fallback，避免無關近期新聞阻斷 fallback。
+         const recentCombined = selectRelevantNewsByRecency(combinedNewsRaw, newsAliases, false, 3, 14);
          card.recentNews = getRichNewsList(recentCombined, newsAliases, false).slice(0, 10);
          card.newsLinks = getRichNewsLinks(recentCombined, 1, newsAliases, false);
          

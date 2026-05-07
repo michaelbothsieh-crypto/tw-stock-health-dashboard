@@ -11,6 +11,10 @@ type NewsItem = {
   description?: string;
   link?: string;
   url?: string;
+  date?: unknown;
+  pubdate?: unknown;
+  pubDate?: unknown;
+  providerPublishTime?: unknown;
 };
 
 function asNewsItem(item: unknown): NewsItem | null {
@@ -94,6 +98,10 @@ export function getRichNewsLinks(news: unknown[], limit = 3, symbol?: NewsAliasI
   return results;
 }
 
+export function filterRelevantNewsItems(news: unknown[], symbol?: NewsAliasInput, isUS = false): unknown[] {
+  return news.filter(item => isRelevantNewsItem(item, symbol, isUS));
+}
+
 export function isWithinDays(dateInput: unknown, days: number): boolean {
   if (!dateInput) return true; // 若無日期則預設通過，由後續過濾
   try {
@@ -111,4 +119,29 @@ export function isWithinDays(dateInput: unknown, days: number): boolean {
     if (isNaN(ts)) return true;
     return (Date.now() - ts) <= days * 24 * 60 * 60 * 1000;
   } catch { return true; }
+}
+
+export function getNewsDateInput(item: unknown): unknown {
+  const newsItem = asNewsItem(item);
+  return newsItem?.pubdate ?? newsItem?.pubDate ?? newsItem?.date ?? newsItem?.providerPublishTime;
+}
+
+export function filterNewsWithinDays(news: unknown[], days: number): unknown[] {
+  return news.filter(item => isWithinDays(getNewsDateInput(item), days));
+}
+
+export function selectNewsByRecency(news: unknown[], primaryDays: number, fallbackDays: number): unknown[] {
+  const primary = filterNewsWithinDays(news, primaryDays);
+  if (primary.length > 0) return primary;
+  return filterNewsWithinDays(news, fallbackDays);
+}
+
+export function selectRelevantNewsByRecency(
+  news: unknown[],
+  symbol: NewsAliasInput,
+  isUS: boolean,
+  primaryDays: number,
+  fallbackDays: number,
+): unknown[] {
+  return selectNewsByRecency(filterRelevantNewsItems(news, symbol, isUS), primaryDays, fallbackDays);
 }
