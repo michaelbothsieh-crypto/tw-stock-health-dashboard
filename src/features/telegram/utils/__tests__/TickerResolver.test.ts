@@ -27,4 +27,17 @@ describe("TickerResolver", () => {
       false,
     );
   });
+
+  it("resolves TPEX stock names before fetching live stock cards", async () => {
+    vi.mocked(StockService.fetchLiveStockCard).mockResolvedValueOnce(null);
+
+    await TickerResolver.resolve("信昌電", "https://stocks.example.com");
+
+    expect(StockService.fetchLiveStockCard).toHaveBeenCalledWith(
+      "6173",
+      "https://stocks.example.com",
+      false,
+      false,
+    );
+  });
 });
