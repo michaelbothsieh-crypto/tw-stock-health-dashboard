@@ -8,6 +8,8 @@ import { buildNewsLine, calcSupportResistance } from "@/shared/utils/formatters"
 import { getFirstNewsTitle, getRichNewsList, isWithinDays } from "@/shared/utils/news";
 import { StockCard } from "./types";
 
+const JAPAN_YAHOO_QUOTE_OPTIONS = { lang: "ja-JP", region: "JP" } as const;
+
 export function formatJapanStockName(symbol: string, longName?: string, shortName?: string): string {
    const rawName = (longName || shortName || "").trim();
    if (!rawName || rawName.toUpperCase() === symbol.toUpperCase()) return symbol;
@@ -29,7 +31,7 @@ export class JapanStockService {
       try {
          const sixMonthsAgo = subMonths(new Date(), 6);
          const [rtQuoteRaw, tvNews, assetProfile, chartRes] = await Promise.all([
-            yahooFinance.quote(symbol).catch(() => null),
+            yahooFinance.quote(symbol, JAPAN_YAHOO_QUOTE_OPTIONS).catch(() => null),
             getTvLatestNewsHeadline(symbol),
             yahooFinance.quoteSummary(symbol, { modules: ["assetProfile"] }).catch(() => null),
             yahooFinance.chart(symbol, { period1: sixMonthsAgo }).catch(() => null)
