@@ -97,6 +97,9 @@ export class SnapshotService {
     if (snapshotData.warnings.length > 0) warnings.push(...snapshotData.warnings);
 
     const prices = snapshotData.prices;
+    if (prices.length === 0) {
+      throw new Error(`No price history for ${norm.symbol}`);
+    }
     const legacyPrices = (prices as any[]).map((p: any) => ({ 
       date: p.date, 
       stock_id: norm.symbol, 
