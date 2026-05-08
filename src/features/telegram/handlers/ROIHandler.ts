@@ -2,7 +2,7 @@
 import { CommandHandler, CommandContext, BotReply } from "@/features/telegram/types";
 import { StockService } from "@/services/StockService";
 import { twStockNames } from "@/data/twStockNames";
-import { formatSignedPct } from "@/shared/utils/formatters";
+import { formatPrice, formatSignedPct } from "@/shared/utils/formatters";
 import { renderMultiRoiChart } from "@/shared/utils/chartRenderer";
 import { subMonths, subYears, parseISO } from "date-fns";
 import { yf as yahooFinance } from "@/infrastructure/providers/yahooFinanceClient";
@@ -125,7 +125,9 @@ export class ROIHandler implements CommandHandler {
           pct, 
           live,
           data: historyQuotes,
-          initialPrice: firstPrice
+          initialPrice: firstPrice,
+          initialDate: historyQuotes[0].date,
+          currentPrice: live.close
        };
        }));
 
@@ -139,7 +141,7 @@ export class ROIHandler implements CommandHandler {
        const isTW = /^[0-9]+$/.test(r.symbol);
        const name = twStockNames[r.symbol] || (r.live.nameZh && r.live.nameZh !== r.symbol ? r.live.nameZh : "");
        const label = (isTW && name) ? `${name}(${r.symbol})` : r.symbol;
-       return `${label}: <b>${formatSignedPct(r.pct, 2)}</b>`;
+       return `${label}: <b>${formatSignedPct(r.pct, 2)}</b>｜${dateKey(r.initialDate)} ${formatPrice(r.initialPrice, 2)} → 現在 ${formatPrice(r.currentPrice, 2)}`;
     });
 
     return { text: `📊 <b>多檔股票報酬率對比 (${periodRaw})</b>\n\n` + textLines.join("\n"), chartBuffer };
