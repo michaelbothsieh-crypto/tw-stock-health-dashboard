@@ -4,7 +4,28 @@ import { MessageService } from "@/services/MessageService";
 import { recordStockSearch } from "@/features/telegram/rankStore";
 import { combineImages } from "@/shared/utils/chartRenderer";
 import { escapeHtml } from "@/shared/utils/formatters";
+import { resolveCodeFromInputLocal } from "@/shared/utils/ticker";
 import { TickerResolver } from "@/features/telegram/utils/TickerResolver";
+
+export function parseStockQueryTickers(query: string): string[] {
+  const seen = new Set<string>();
+  const tickers: string[] = [];
+
+  for (const raw of query.split(/[,，\s]+/)) {
+    const clean = raw.trim().toUpperCase();
+    if (!clean) continue;
+
+    const resolved = resolveCodeFromInputLocal(clean) || clean;
+    const key = resolved.toUpperCase().replace(/\.(TW|TWO)$/i, "");
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    tickers.push(resolved);
+    if (tickers.length >= 10) break;
+  }
+
+  return tickers;
+}
 
 /**
  * StockHandler (Controller Layer)
@@ -21,7 +42,7 @@ export class StockHandler implements CommandHandler {
       return { text: "請輸入股票代號或名稱，例如:\n/stock 2330\n/stock NVDA\n/stock 7203.T (日股)\n/stock 台積電" };
     }
 
-    const tickers = query.split(/[,，\s]+/).map(t => t.trim().toUpperCase()).filter(Boolean).slice(0, 10);
+    const tickers = parseStockQueryTickers(query);
 
     // 單檔查詢模式
     if (tickers.length === 1) {

@@ -40,4 +40,31 @@ describe("TickerResolver", () => {
       false,
     );
   });
+
+  it("does not fall back to Japan for known Taiwan numeric tickers", async () => {
+    vi.mocked(StockService.fetchLiveStockCard).mockResolvedValueOnce(null);
+
+    await TickerResolver.resolve("2454", "https://stocks.example.com");
+
+    expect(StockService.fetchLiveStockCard).toHaveBeenCalledWith(
+      "2454",
+      "https://stocks.example.com",
+      false,
+      false,
+    );
+    expect(StockService.fetchLiveJpStockCard).not.toHaveBeenCalled();
+  });
+
+  it("keeps Japan fallback for unknown four-digit numeric tickers", async () => {
+    vi.mocked(StockService.fetchLiveStockCard).mockResolvedValueOnce(null);
+
+    await TickerResolver.resolve("7203", "https://stocks.example.com");
+
+    expect(StockService.fetchLiveJpStockCard).toHaveBeenCalledWith(
+      "7203",
+      "https://stocks.example.com",
+      false,
+      false,
+    );
+  });
 });

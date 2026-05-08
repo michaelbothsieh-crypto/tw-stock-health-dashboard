@@ -1,5 +1,6 @@
 
-import { resolveCodeFromInputLocal } from "@/features/telegram/utils";
+import { twStockNames } from "@/data/twStockNames";
+import { resolveCodeFromInputLocal } from "@/shared/utils/ticker";
 import { StockService } from "@/services/StockService";
 import { StockCard } from "@/services/stocks/types";
 
@@ -29,7 +30,8 @@ export class TickerResolver {
       if (isTaiwan || resolvedTaiwan) {
          const card = await StockService.fetchLiveStockCard(resolvedTaiwan || cleanT, baseUrl, skipH, skipQ);
          // 4. Fallback 邏輯：台股查無此號但符合日股編號規則
-         if (!card && /^[0-9]{4}$/.test(cleanT)) {
+         const isKnownTaiwanCode = Boolean(twStockNames[cleanT.replace(/\.(TW|TWO)$/i, "")]);
+         if (!card && /^[0-9]{4}$/.test(cleanT) && !isKnownTaiwanCode) {
             return await StockService.fetchLiveJpStockCard(cleanT, baseUrl, skipH, skipQ);
          }
          return card;
