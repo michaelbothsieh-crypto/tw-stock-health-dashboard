@@ -76,7 +76,8 @@ describe("ROIHandler", () => {
     expect(StockService.fetchLiveStockCard).toHaveBeenCalledWith("3163", "https://stocks.example.com");
     expect(yf.chart).toHaveBeenCalledWith("3163.TWO", expect.any(Object));
     expect(reply?.text).toContain("波若威(3163)");
-    expect(reply?.text).toContain("151.50 → 現在 1260.00");
+    expect(reply?.text).toContain("151.50 → 1260.00");
+    expect(reply?.text).not.toContain("→ 現在");
     expect(reply?.text).not.toBe("找不到指定的股票歷史資料。");
   });
 
@@ -125,7 +126,8 @@ describe("ROIHandler", () => {
     expect(yf.chart).toHaveBeenNthCalledWith(1, "3163.TW", expect.any(Object));
     expect(yf.chart).toHaveBeenNthCalledWith(2, "3163.TWO", expect.any(Object));
     expect(reply?.text).toContain("波若威(3163)");
-    expect(reply?.text).toContain("151.50 → 現在 1260.00");
+    expect(reply?.text).toContain("151.50 → 1260.00");
+    expect(reply?.text).not.toContain("→ 現在");
     expect(reply?.text).not.toBe("找不到指定的股票歷史資料。");
   });
 });
