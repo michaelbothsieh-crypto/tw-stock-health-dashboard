@@ -141,9 +141,9 @@ export class ROIHandler implements CommandHandler {
        const isTW = /^[0-9]+$/.test(r.symbol);
        const name = twStockNames[r.symbol] || (r.live.nameZh && r.live.nameZh !== r.symbol ? r.live.nameZh : "");
        const label = (isTW && name) ? `${name}(${r.symbol})` : r.symbol;
-       return `${label}: ${formatSignedPct(r.pct, 2)}\n${formatPrice(r.initialPrice, 2)} → ${formatPrice(r.currentPrice, 2)}`;
+       return `• ${label}: ${formatSignedPct(r.pct, 2)}\n  ${formatPrice(r.initialPrice, 2)} → ${formatPrice(r.currentPrice, 2)}`;
     });
 
-    return { text: `📊 <b>多檔股票報酬率對比 (${periodRaw})</b>\n\n` + textLines.join("\n"), chartBuffer };
+    return { text: `📊 <b>多檔股票報酬率對比 (${periodRaw})</b>\n\n` + textLines.join("\n\n"), chartBuffer };
   }
 }
