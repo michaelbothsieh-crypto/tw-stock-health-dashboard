@@ -21,7 +21,7 @@ export class UsStockService {
             yahooFinance.quote(symbol).catch(() => null),
             getTvLatestNewsHeadline(symbol),
             yahooFinance.quoteSummary(symbol, { modules: ["assetProfile"] }).catch(() => null),
-            yahooFinance.chart(symbol, { period1: sixMonthsAgo }).catch(() => null)
+            yahooFinance.chart(symbol, { period1: sixMonthsAgo, interval: "1d" }).catch(() => null)
          ]);
 
          const rtQuote: any = Array.isArray(rtQuoteRaw) ? rtQuoteRaw[0] : rtQuoteRaw;
@@ -80,27 +80,7 @@ export class UsStockService {
          card.support = key.support;
          card.resistance = key.resistance;
 
-         // 美股優先嘗試使用 Finviz (視覺效果較好)
-         try {
-            // 根據正確截圖，美股應使用日線圖 (p=d) 並加上 ext=1 來顯示 AH 盤後數據
-            const finvizUrl = `https://charts2.finviz.com/chart.ashx?t=${symbol}&ty=c&ta=1&p=d&ext=1`;
-            
-            const chartRes = await fetch(finvizUrl, { 
-               headers: { 
-                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", 
-                  "Referer": "https://finviz.com/quote.ashx?t=" + symbol
-               } 
-            });
-            
-            if (chartRes.ok) {
-               const buf = Buffer.from(await chartRes.arrayBuffer());
-               if (buf.length > 5000) {
-                  card.chartBuffer = buf;
-               }
-            }
-         } catch {}
-
-         if (!card.chartBuffer && card.close !== null) {
+         if (card.close !== null) {
             const todayStr = new Date().toLocaleDateString('en-CA');
             const plotBars = [...bars];
             if (plotBars.length > 0) {
@@ -109,7 +89,7 @@ export class UsStockService {
                else plotBars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
             }
             if (plotBars.length >= 2) {
-               card.chartBuffer = await renderStockChart(plotBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180).catch(() => null);
+               card.chartBuffer = await renderStockChart(plotBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180, { chgPct: card.chgPct }).catch(() => null);
             }
          }
 

@@ -8,6 +8,7 @@ import { renderStockChart, ChartDataPoint } from "@/shared/utils/chartRenderer";
 import { calculateKeyLevels } from "@/domain/signals/keyLevels";
 import { getCache, setCache } from "@/infrastructure/providers/redisCache";
 import { fetchFugleQuote } from "@/infrastructure/providers/fugleQuote";
+import { yf as yahooFinance } from "@/infrastructure/providers/yahooFinanceClient";
 
 /**
  * GET /api/stock/{ticker}/chart
@@ -44,55 +45,47 @@ export async function GET(
       });
     }
 
-    // 美股（字母代號）：直接 proxy Finviz 圖片
+    let chartData: ChartDataPoint[] = [];
+
+    // 美股（字母代號）：用 Yahoo 歷史 K 線自行繪圖，避免依賴 Finviz 圖片。
     if (!/^\d/.test(norm.symbol)) {
-      // 根據正確截圖，美股應使用日線圖 (p=d) 並加上 ext=1 來顯示 AH 盤後數據
-      const finvizUrl = `https://charts2.finviz.com/chart.ashx?t=${norm.symbol}&ty=c&ta=1&p=d&ext=1`;
-      let chartRes = await fetch(finvizUrl, {
-        headers: { 
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", 
-          "Referer": "https://finviz.com/quote.ashx?t=" + norm.symbol
-        },
-      });
-
-      if (!chartRes.ok) return new NextResponse("Chart not available", { status: 404 });
-      
-      const ab = await chartRes.arrayBuffer();
-      const pngBuffer = Buffer.from(ab);
-
-      await setCache(cacheKey, pngBuffer.toString("base64"), 300);
-      return new NextResponse(pngBuffer as unknown as BodyInit, {
-        status: 200,
-        headers: { "Content-Type": "image/png", "Cache-Control": "public, max-age=300" },
-      });
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      const chartRes = await yahooFinance.chart(norm.symbol, { period1: sixMonthsAgo, interval: "1d" });
+      chartData = (chartRes?.quotes || []).map((p: any) => ({
+        date: p.date instanceof Date ? p.date.toISOString().slice(0, 10) : String(p.date || "").slice(0, 10),
+        open: p.open ?? p.close,
+        high: p.high ?? p.close,
+        low: p.low ?? p.close,
+        close: p.close,
+        volume: p.volume || 0,
+      })).filter((p: ChartDataPoint) => Boolean(p.date) && Number.isFinite(p.close) && p.close > 0);
+    } else {
+      const rangeResult = await fetchRecentBars(norm.symbol, 180);
+      const prices = rangeResult.data;
+      chartData = prices.map((p: any) => ({
+        date: p.date,
+        open: p.open,
+        high: p.high || p.max,
+        low: p.low || p.min,
+        close: p.close,
+        volume: p.volume || p.Trading_Volume,
+      }));
     }
 
-    const rangeResult = await fetchRecentBars(norm.symbol, 180);
-    const prices = rangeResult.data;
-    if (prices.length < 2) {
+    if (chartData.length < 2) {
       return new NextResponse("Insufficient price data", { status: 404 });
     }
 
-    const chartData: ChartDataPoint[] = prices.map((p: any) => ({
-      date: p.date,
-      open: p.open,
-      high: p.high || p.max,
-      low: p.low || p.min,
-      close: p.close,
-      volume: p.volume || p.Trading_Volume,
-    }));
-
-    // 即時報價：優先 Fugle（台股），fallback Yahoo
     try {
-      const fugle = await fetchFugleQuote(norm.symbol);
       let rtPrice: number | null = null, rtHigh: number | null = null, rtLow: number | null = null, rtOpen: number | null = null, rtVol: number | null = null;
 
+      const fugle = /^\d/.test(norm.symbol) ? await fetchFugleQuote(norm.symbol) : null;
       if (fugle) {
         rtPrice = fugle.price; rtHigh = fugle.high; rtLow = fugle.low; rtOpen = fugle.open; rtVol = fugle.volume;
       } else {
-        const { yf } = await import("@/infrastructure/providers/yahooFinanceClient");
-        const yahooSym = norm.yahoo || `${norm.symbol}.TW`;
-        const rtRaw = await yf.quote(yahooSym);
+        const yahooSym = /^\d/.test(norm.symbol) ? (norm.yahoo || `${norm.symbol}.TW`) : norm.symbol;
+        const rtRaw = await yahooFinance.quote(yahooSym);
         const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;
         if (rt && typeof rt.regularMarketPrice === "number") {
           rtPrice = rt.regularMarketPrice;
