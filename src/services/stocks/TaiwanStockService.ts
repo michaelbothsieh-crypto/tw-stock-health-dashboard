@@ -128,11 +128,17 @@ export class TaiwanStockService {
          if (card.close !== null && processedBars.length > 0) {
             const lastBar = processedBars[processedBars.length - 1];
             const todayStr = new Date().toLocaleDateString('en-CA');
+            const rtOpen = rtQuote?.regularMarketOpen ?? card.close ?? 0;
+            const rtHigh = rtQuote?.regularMarketDayHigh ?? card.close ?? 0;
+            const rtLow = rtQuote?.regularMarketDayLow ?? card.close ?? 0;
             if (lastBar.date === todayStr) {
                lastBar.close = card.close;
+               lastBar.open = rtOpen;
+               lastBar.high = Math.max(lastBar.high, rtHigh);
+               lastBar.low = Math.min(lastBar.low, rtLow);
                if (card.volume) lastBar.volume = card.volume;
             } else {
-               processedBars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
+               processedBars.push({ date: todayStr, open: rtOpen, high: rtHigh, low: rtLow, close: card.close, volume: card.volume || 0 });
             }
          }
 

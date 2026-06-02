@@ -85,8 +85,17 @@ export class UsStockService {
             const plotBars = [...bars];
             if (plotBars.length > 0) {
                const last = plotBars[plotBars.length - 1];
-               if (last.date === todayStr) last.close = card.close;
-               else plotBars.push({ date: todayStr, open: card.close, high: card.close, low: card.close, close: card.close, volume: card.volume || 0 });
+               const rtOpen = rtQuote.regularMarketOpen ?? card.close ?? 0;
+               const rtHigh = rtQuote.regularMarketDayHigh ?? card.close ?? 0;
+               const rtLow = rtQuote.regularMarketDayLow ?? card.close ?? 0;
+               if (last.date === todayStr) {
+                  last.close = card.close;
+                  last.open = rtOpen;
+                  last.high = Math.max(last.high, rtHigh);
+                  last.low = Math.min(last.low, rtLow);
+               } else {
+                  plotBars.push({ date: todayStr, open: rtOpen, high: rtHigh, low: rtLow, close: card.close, volume: card.volume || 0 });
+               }
             }
             if (plotBars.length >= 2) {
                card.chartBuffer = await renderStockChart(plotBars as ChartDataPoint[], card.support, card.resistance, card.symbol, 180, { chgPct: card.chgPct }).catch(() => null);

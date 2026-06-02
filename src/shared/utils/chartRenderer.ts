@@ -259,8 +259,7 @@ export async function renderStockChart(
     ctx.textBaseline = 'middle';
     ctx.fillText(`${label} ${price.toFixed(2)}`, width - padding.right + 10, y);
   };
-  drawLevel('R', resistance, '#ff0000');
-  drawLevel('S', support, '#008000');
+
 
   // 5. 繪製成交量
   const volBaseY = height - padding.bottom;
