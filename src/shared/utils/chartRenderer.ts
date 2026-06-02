@@ -206,26 +206,26 @@ export async function renderStockChart(
     ctx.fillStyle = '#333333'; ctx.fillText(label, x + 18, 42);
     return x + 65;
   };
-  let curX = padding.left;
+  let curX = width - padding.right - 220;
   curX = drawLeg('MA5', '#666666', curX);
   curX = drawLeg('MA20', '#ff9900', curX);
   curX = drawLeg('MA60', '#3b82f6', curX);
 
-  // 3.1 繪製主標題與漲跌資訊
   ctx.save();
-  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
   
-  // 代號 (改為黑色)
+  let currentX = padding.left;
+  
   ctx.fillStyle = '#000000';
-  ctx.font = `bold 28px ${FONT_FAMILY}`;
-  const titleX = width / 2;
-  ctx.fillText(symbol.toUpperCase(), titleX - 100, 35);
+  ctx.font = `bold 18px ${FONT_FAMILY}`;
+  ctx.fillText(symbol.toUpperCase(), currentX, 35);
+  currentX += ctx.measureText(symbol.toUpperCase()).width + 15;
   
-  // 現價 [漲跌幅]
   ctx.fillStyle = themeColor;
-  ctx.font = `bold 24px ${FONT_FAMILY}`;
+  ctx.font = `bold 18px ${FONT_FAMILY}`;
   const priceText = `${currentPrice.toFixed(2)} [${displayChgPct >= 0 ? '+' : ''}${displayChgPct.toFixed(2)}%]`;
-  ctx.fillText(priceText, titleX + 80, 35);
+  ctx.fillText(priceText, currentX, 35);
   ctx.restore();
 
   // 4. 繪製格線 (改為淺灰)
