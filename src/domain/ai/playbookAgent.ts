@@ -56,12 +56,18 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
       ? `📉 ${ctx.stockName} 偏空，壓力在 ${fResistance}，守不住 ${fSupport} 就跑，別接飛刀！`
       : `⚠️ ${ctx.stockName} 整理中，${fSupport}-${fResistance} 區間操作，等方向明確再出手。`;
 
+  const shortSummary = trend.includes("多")
+    ? `偏多，守${fSupport}可續抱`
+    : trend.includes("空")
+    ? `偏空，壓力${fResistance}觀望`
+    : `區間 ${fSupport}–${fResistance}，靜待方向`;
+
   return {
     verdict: trend.includes("多") ? "偏多看待" : trend.includes("空") ? "偏空需防守" : "震盪整理",
     verdictColor: trend.includes("多") ? "red" : trend.includes("空") ? "green" : "slate",
     tacticalScript: analysis,
     telegramCaption: tgCaption,
-    shortSummary: "區間整理中，靜待表態"
+    shortSummary,
   };
 }
 

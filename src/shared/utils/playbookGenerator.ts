@@ -7,6 +7,8 @@ export interface ActionPlaybook {
     verdict: string;
     /** 評級對應的語意色票 */
     verdictColor: VerdictColor;
+    /** HeroPlaybook 主顯示文字（與 playbookAgent.ActionPlaybook 對齊） */
+    tacticalScript: string;
     /** 具體操作 SOP，長度 2–3 */
     actionSteps: string[];
     /** 重要觀察對象，長度 1–2 */
@@ -129,9 +131,13 @@ export function generatePlaybook(snapshot: SnapshotResponse): ActionPlaybook {
         }
     }
 
+    // tacticalScript: 供 HeroPlaybook 顯示，取第一個 action step（去掉序號前綴）
+    const tacticalScript = actionSteps[0]?.replace(/^\d+\.\s*/, '') || `目前盤勢待確認，支撐 ${keyLevels.supportLevel?.toFixed(1) ?? '--'}，壓力 ${keyLevels.breakoutLevel?.toFixed(1) ?? '--'}，方向明確後再行動。`;
+
     return {
         verdict,
         verdictColor,
+        tacticalScript,
         actionSteps: actionSteps.slice(0, 3),
         watchTargets: watchTargets.slice(0, 2),
         insiderComment

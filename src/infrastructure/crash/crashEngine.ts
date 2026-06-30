@@ -291,7 +291,7 @@ export function evaluateCrashWarning(marketData: MarketIndicatorResult): CrashWa
           summary: "目前無法取得足夠市場資料，暫時無法評估風險",
           triggersTop: ["市場資料取得失敗", "請稍後再試"],
           macroIndicators: {
-            vix: { value: 0, status: "資料不足", variant: "neutral" },
+            vix: { value: undefined, status: "資料不足", variant: "neutral" },
             soxx: { trend: "趨勢不明", status: "中性", variant: "neutral" },
             liquidity: { status: "評估中", variant: "neutral" },
             systemRisk: { status: "資料不足", variant: "neutral" }
@@ -339,7 +339,7 @@ export function evaluateCrashWarning(marketData: MarketIndicatorResult): CrashWa
           summary: "計算結果無效 (NaN)，暫時無法評估風險",
           triggersTop: ["資料不足：計算結果無效"],
           macroIndicators: {
-            vix: { value: 0, status: "資料不足", variant: "neutral" },
+            vix: { value: undefined, status: "資料不足", variant: "neutral" },
             soxx: { trend: "趨勢不明", status: "中性", variant: "neutral" },
             liquidity: { status: "評估中", variant: "neutral" },
             systemRisk: { status: "資料不足", variant: "neutral" }
@@ -399,7 +399,7 @@ export function evaluateCrashWarning(marketData: MarketIndicatorResult): CrashWa
   // --- Macro Radar Indicators (Pro Max) ---
   const macroIndicators = {
     vix: {
-      value: vixStats?.current ?? 0,
+      value: vixStats?.current,
       status: vixStats ? (vixStats.current >= 30 ? "恐慌升溫" : vixStats.current >= 25 ? "波動偏高" : vixStats.current >= 20 ? "情緒偏緊" : "情緒平穩") : "資料不足",
       variant: (vixStats ? (vixStats.current >= 30 ? "negative" : vixStats.current >= 20 ? "neutral" : "positive") : "neutral") as 'positive' | 'neutral' | 'negative'
     },

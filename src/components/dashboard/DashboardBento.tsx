@@ -238,14 +238,16 @@ export function DashboardBento({ initialTicker = "2330" }: { initialTicker?: str
   }, [ticker]);
 
   const radarData = snapshot
-    ? [
-      { label: "技術", value: snapshot.signals.trend.trendScore ?? 50 },
-      { label: "籌碼", value: snapshot.signals.flow.flowScore ?? 50 },
-      { label: "基本", value: snapshot.signals.fundamental.fundamentalScore ?? 50 },
+    ? ([
+      { label: "技術", value: snapshot.signals.trend.trendScore },
+      { label: "籌碼", value: snapshot.signals.flow.flowScore },
+      { label: "基本", value: snapshot.signals.fundamental.fundamentalScore },
       { label: "波動", value: snapshot.shortTermVolatility.volatilityScore },
-      { label: "機率", value: snapshot.predictions.upProb5D || snapshot.predictions.upProb3D },
+      { label: "機率", value: snapshot.predictions.upProb5D || snapshot.predictions.upProb3D || null },
       { label: "同向", value: snapshot.consistency.score },
-    ]
+    ] as Array<{ label: string; value: number | null }>).filter(
+      (r): r is { label: string; value: number } => r.value !== null && r.value !== undefined
+    )
     : [];
 
   const layoutProps = {

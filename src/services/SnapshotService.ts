@@ -58,36 +58,38 @@ export class SnapshotService {
     if (marketInfo.ambiguous) warnings.push("ambiguous_market");
     if (norm.market === "UNKNOWN") warnings.push("market_unknown");
 
-    // 1. 即時報價
-    let liveQuote: any = null;
-    try {
-      const { yf } = await import("@/infrastructure/providers/yahooFinanceClient");
-      const yahooSym = this.isTaiwanStock(norm.symbol) ? (norm.yahoo || `${norm.symbol}.TW`) : norm.symbol;
-      const rtRaw = await yf.quote(yahooSym);
-      const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;
-      if (rt && typeof rt.regularMarketPrice === "number") {
-        liveQuote = {
-          price: rt.regularMarketPrice,
-          previousClose: rt.regularMarketPreviousClose || 0,
-          changePct: typeof rt.regularMarketChangePercent === "number"
-            ? rt.regularMarketChangePercent
-            : rt.regularMarketPreviousClose ? ((rt.regularMarketPrice - rt.regularMarketPreviousClose) / rt.regularMarketPreviousClose) * 100 : 0,
-          high: rt.regularMarketDayHigh,
-          low: rt.regularMarketDayLow,
-        };
-      }
-    } catch (e) { console.warn("[SnapshotService] live quote failed", e); }
-
-    // 2. 快取檢查
+    // 1 & 2. 即時報價 + 快取 — 並行執行，cache hit 省去等待報價的額外延遲
     const cacheKey = `snapshot:${norm.symbol}:v3:${mode}`;
-    if (!debugMode) {
-      const cached = await getCache<any>(cacheKey);
-      if (cached) {
-        if (liveQuote) {
-          cached.realTimeQuote = { price: liveQuote.price, changePct: liveQuote.changePct, isRealTime: true, time: new Date().toISOString() };
-        }
-        return cached;
+    const yahooSym = this.isTaiwanStock(norm.symbol) ? (norm.yahoo || `${norm.symbol}.TW`) : norm.symbol;
+
+    const [liveQuote, cached] = await Promise.all([
+      (async (): Promise<any | null> => {
+        try {
+          const { yf } = await import("@/infrastructure/providers/yahooFinanceClient");
+          const rtRaw = await yf.quote(yahooSym);
+          const rt: any = Array.isArray(rtRaw) ? rtRaw[0] : rtRaw;
+          if (rt && typeof rt.regularMarketPrice === "number") {
+            return {
+              price: rt.regularMarketPrice,
+              previousClose: rt.regularMarketPreviousClose || 0,
+              changePct: typeof rt.regularMarketChangePercent === "number"
+                ? rt.regularMarketChangePercent
+                : rt.regularMarketPreviousClose ? ((rt.regularMarketPrice - rt.regularMarketPreviousClose) / rt.regularMarketPreviousClose) * 100 : 0,
+              high: rt.regularMarketDayHigh,
+              low: rt.regularMarketDayLow,
+            };
+          }
+        } catch (e) { console.warn("[SnapshotService] live quote failed", e); }
+        return null;
+      })(),
+      debugMode ? Promise.resolve(null) : getCache<any>(cacheKey),
+    ]);
+
+    if (cached) {
+      if (liveQuote) {
+        cached.realTimeQuote = { price: liveQuote.price, changePct: liveQuote.changePct, isRealTime: true, time: new Date().toISOString() };
       }
+      return cached;
     }
 
     // 3. 抓取基礎 Snapshot 資料
@@ -237,6 +239,13 @@ export class SnapshotService {
        });
     }
 
+    // 法人連動率 & 技術戰術（本機計算，無需額外 I/O）
+    const institutionCorrelation = calculateInstitutionCorrelation(
+      (prices as any[]).map((p: any) => ({ date: p.date, close: p.close })),
+      snapshotData.flow?.investors || []
+    );
+    const technicalTactics = snapshotData.technicals ? translateTechnicals(snapshotData.technicals) : null;
+
     const payload = {
       stockName: companyNameZh || norm.symbol, score: Math.round(strategy.confidence), shortSummary: playbookResult.shortSummary,
       normalizedTicker: { ...norm, companyNameZh, displayName },
@@ -245,13 +254,15 @@ export class SnapshotService {
       data: { prices: prices.slice(-120) },
       playbook: playbookResult, insiderTransfers, signals: { trend: trendSignals, flow: flowSignals, fundamental: fundamentalSignals },
       shortTermVolatility, shortTerm, predictions, consistency, strategy, globalLinkage, crashWarning, keyLevels,
+      institutionCorrelation, technicalTactics,
       realTimeQuote: { price: latestClose, changePct: liveQuote?.changePct, isRealTime: !!liveQuote, time: new Date().toISOString() },
       uxSummary, aiSummary: { stance: aiExplanation.stance, confidence: aiExplanation.confidence, keyPoints: aiExplanation.keyPoints.slice(0, 5), risks: aiExplanation.risks.slice(0, 3) },
       explainBreakdown, news: { ...catalystResult, errorCode: snapshotData.meta.newsMeta.errorCode, error: snapshotData.meta.newsMeta.message }
     };
 
     if (!debugMode) {
-      const ttl = isMarketOpen(norm.symbol) ? 300 : 1800;
+      // 開盤中 5 分鐘；收盤後 2 小時（資料不再更新）
+      const ttl = isMarketOpen(norm.symbol) ? 300 : 7200;
       await setCache(cacheKey, payload, ttl);
     }
     return payload;

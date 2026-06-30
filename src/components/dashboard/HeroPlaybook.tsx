@@ -171,7 +171,7 @@ export function HeroPlaybook({
     // 解析名稱與代號 (格式預期為 "2330 台積電")
     const parts = currentStockLabel.split(" ");
     const tickerCode = parts[0];
-    const stockName = parts.slice(1).join(" ") || "台灣上市";
+    const stockName = parts.slice(1).join(" ") || tickerCode;
 
     return (
         <TooltipProvider delayDuration={200}>
@@ -202,7 +202,7 @@ export function HeroPlaybook({
                                     <TooltipTrigger asChild>
                                         <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-[10px] text-muted-foreground hover:bg-white/10 transition-colors cursor-help whitespace-nowrap">
                                             <Activity className="h-3 w-3" />
-                                            VIX {indicators.vix.value?.toFixed(1)}
+                                            VIX {indicators.vix.value != null && indicators.vix.value > 0 ? indicators.vix.value.toFixed(1) : "—"}
                                         </div>
                                     </TooltipTrigger>
                                     <TooltipContent side="bottom" className="max-w-xs z-[100] bg-neutral-900 border-neutral-800">
