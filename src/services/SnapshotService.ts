@@ -175,7 +175,9 @@ export class SnapshotService {
 
     // 技術面動能作為隱性催化劑優化
     let finalCatalystScore = catalystResult.catalystScore;
-    const tvRating = await fetchTradingViewRating(norm.symbol, this.isTaiwanStock(norm.symbol) ? 'taiwan' : 'america');
+    const tvRating = isLite
+      ? "Neutral"
+      : await fetchTradingViewRating(norm.symbol, this.isTaiwanStock(norm.symbol) ? 'taiwan' : 'america');
     if (snapshotData.news.length < 3 && tvRating.includes('Buy')) {
         finalCatalystScore = Math.max(finalCatalystScore, tvRating === 'Strong Buy' ? 60 : 30);
     }
