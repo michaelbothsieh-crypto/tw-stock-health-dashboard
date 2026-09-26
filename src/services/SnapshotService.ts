@@ -31,7 +31,7 @@ import { getTvTechnicalIndicators } from "@/infrastructure/providers/tradingView
 import { fetchTradingViewRating } from "@/infrastructure/providers/tradingViewRating";
 import { translateTechnicals } from "@/shared/utils/technicalTranslator";
 import { fetchStockSnapshot } from "@/infrastructure/stockRouter";
-import { getTacticalPlaybook } from "@/domain/ai/playbookAgent";
+import { generateRuleBasedPlaybook } from "@/domain/ai/playbookAgent";
 import { getFilteredInsiderTransfers } from "@/infrastructure/providers/twseInsiderFetch";
 
 const LIVE_QUOTE_TIMEOUT_MS = 700;
@@ -74,7 +74,7 @@ export class SnapshotService {
     if (norm.market === "UNKNOWN") warnings.push("market_unknown");
 
     // 1 & 2. 即時報價 + 快取 — 並行執行，cache hit 省去等待報價的額外延遲
-    const cacheKey = `snapshot:${norm.symbol}:v3:${mode}`;
+    const cacheKey = `snapshot:${norm.symbol}:v4:${mode}`;
     const yahooSym = this.isTaiwanStock(norm.symbol) ? (norm.yahoo || `${norm.symbol}.TW`) : norm.symbol;
 
     const [liveQuote, cached] = await Promise.all([
@@ -228,7 +228,7 @@ export class SnapshotService {
              const drivers = selectDrivers((prices as any[]).map((p: any)=>({date:p.date,close:p.close})), usMap, globalData);
              return { linkage: { profile, drivers, relativeStrength: calculateRelativeStrength((prices as any[]).map((p: any)=>({date:p.date,close:p.close})), drivers.sector, globalData), twPeerLinkage: peers } };
           })(),
-          getMarketIndicators({ symbols: ["^VIX", "^MOVE", "SOXX", "QQQ", "^DXY", "DX-Y.NYB", "UUP", "USDJPY=X", "JPY=X"], rangeDays: 65 }),
+          getMarketIndicators({ symbols: ["^VIX", "^MOVE", "SOXX", "QQQ", "DX-Y.NYB", "UUP", "USDJPY=X", "JPY=X"], rangeDays: 65 }),
           this.isTaiwanStock(norm.symbol) ? getFilteredInsiderTransfers(norm.symbol).catch(()=>[]) : Promise.resolve([])
        ]);
        globalLinkage = gl.linkage;
@@ -236,9 +236,11 @@ export class SnapshotService {
        crashWarning = evaluateCrashWarning(mkt);
        if (crashWarning.score !== null) strategy.confidence *= (1 - crashWarning.score / 150);
 
-       playbookResult = await getTacticalPlaybook({
+       // The dashboard must not wait on external LLM providers. The deterministic
+       // playbook uses the same market inputs and keeps first paint responsive.
+       playbookResult = generateRuleBasedPlaybook({
           ticker: norm.symbol, stockName: companyNameZh || norm.symbol, price: latestClose,
-          support: keyLevels.supportLevel || 0, resistance: keyLevels.breakoutLevel || 0,
+          support: keyLevels.supportLevel, resistance: keyLevels.breakoutLevel,
           macroRisk: crashWarning.score ?? 0, technicalTrend: (trendSignals.trendScore ?? 0) > 60 ? "偏多" : "中立",
           flowScore: flowSignals.flowScore ?? 50,
           smartMoneyFlow: flowSignals.smartMoneyFlow,

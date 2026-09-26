@@ -14,7 +14,7 @@ export async function callGemini<T>(prompt: string, options: LLMOptions = {}): P
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-3.8-flash",
     generationConfig: {
       temperature: options.temperature ?? 0,
       responseMimeType: options.jsonMode ? "application/json" : "text/plain",

@@ -6,8 +6,8 @@ export interface PlaybookContext {
   ticker: string;
   stockName: string;
   price: number;
-  support: number;
-  resistance: number;
+  support: number | null;
+  resistance: number | null;
   macroRisk: number; // 0-100
   technicalTrend: string; // e.g. "多頭延續", "空頭轉強"
   flowScore: number; // 0-100
@@ -36,8 +36,14 @@ export interface ActionPlaybook {
 export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook {
 // 移除 console.log('🤖 Current AI Tier: Rule-based (Enhanced)');
 
-  const fSupport = Number(ctx.support).toFixed(2);
-  const fResistance = Number(ctx.resistance).toFixed(2);
+  const support = typeof ctx.support === "number" && Number.isFinite(ctx.support) && ctx.support > 0
+    ? ctx.support.toFixed(2)
+    : null;
+  const resistance = typeof ctx.resistance === "number" && Number.isFinite(ctx.resistance) && ctx.resistance > 0
+    ? ctx.resistance.toFixed(2)
+    : null;
+  const fSupport = support ?? "尚未形成";
+  const fResistance = resistance ?? "尚未形成";
   const trend = ctx.technicalTrend || "區間震盪";
 
   // 根據不同盤勢產生更具深度的分析內容
@@ -46,21 +52,31 @@ export function generateRuleBasedPlaybook(ctx: PlaybookContext): ActionPlaybook 
     analysis = `近期股價表現強勢，目前維持在 ${fSupport} 之上的多頭結構。考量到市場對該產業的前景預期，若能放量站穩壓力位 ${fResistance}，則有望開啟新一輪攻勢，建議在支撐未破前維持偏多操作思維。`;
   } else if (trend.includes("空") || trend.includes("防守")) {
     analysis = `受限於近期市場利空因素干擾，股價走勢偏弱且在 ${fResistance} 附近遭遇明顯賣壓。當前應密切留意 ${fSupport} 支撐是否守住，若失守恐引發另一波價格修正，操作上建議提高現金水位並保守看待。`;
-  } else {
+  } else if (support && resistance) {
     analysis = `股價目前處於 ${fSupport} 與 ${fResistance} 之間的盤整區間，市場多空力道呈現拉鋸，並在靜待下一個重大新聞時事帶動。在方向性未明確表態前，建議採取低買高賣的區間策略，並觀察近期走勢的突破跡象。`;
+  } else if (support) {
+    analysis = `股價目前在 ${fSupport} 支撐上方震盪，但上方壓力尚未形成可靠價位。方向未明前宜控制部位，觀察量價是否出現明確突破訊號。`;
+  } else if (resistance) {
+    analysis = `股價目前在 ${fResistance} 壓力下方整理，但下方支撐尚未形成可靠價位。方向未明前宜保守操作，等待支撐與量價訊號確認。`;
+  } else {
+    analysis = "目前支撐與壓力資料不足，無法建立可靠的盤整區間。方向未明前宜控制部位，等待更多價格資料確認。";
   }
 
   const tgCaption = trend.includes("多")
     ? `📈 ${ctx.stockName} 走多！守穩支撐 ${fSupport} 可續抱，目標看 ${fResistance}，破底停損勿戀戰。`
     : trend.includes("空")
       ? `📉 ${ctx.stockName} 偏空，壓力在 ${fResistance}，守不住 ${fSupport} 就跑，別接飛刀！`
-      : `⚠️ ${ctx.stockName} 整理中，${fSupport}-${fResistance} 區間操作，等方向明確再出手。`;
+      : support && resistance
+        ? `⚠️ ${ctx.stockName} 整理中，${fSupport}-${fResistance} 區間操作，等方向明確再出手。`
+        : `⚠️ ${ctx.stockName} 整理中，關鍵價位尚未完整形成，等方向明確再出手。`;
 
   const shortSummary = trend.includes("多")
     ? `偏多，守${fSupport}可續抱`
     : trend.includes("空")
     ? `偏空，壓力${fResistance}觀望`
-    : `區間 ${fSupport}–${fResistance}，靜待方向`;
+    : support && resistance
+      ? `區間 ${fSupport}–${fResistance}，靜待方向`
+      : "關鍵價位未完整，靜待方向";
 
   return {
     verdict: trend.includes("多") ? "偏多看待" : trend.includes("空") ? "偏空需防守" : "震盪整理",
@@ -87,8 +103,12 @@ export async function getTacticalPlaybook(ctx: PlaybookContext): Promise<ActionP
 
   // --- Data Pre-processing ---
   const fPrice = Number(ctx.price).toFixed(2);
-  const fSupport = Number(ctx.support).toFixed(2);
-  const fResistance = Number(ctx.resistance).toFixed(2);
+  const fSupport = typeof ctx.support === "number" && ctx.support > 0
+    ? ctx.support.toFixed(2)
+    : "無可靠價位";
+  const fResistance = typeof ctx.resistance === "number" && ctx.resistance > 0
+    ? ctx.resistance.toFixed(2)
+    : "無可靠價位";
   const prompt = `
 你是一位擁有 20 年華爾街與台股實戰經驗的頂級避險基金操盤手。請為客戶深度 analysis 股票：${ctx.stockName} (${ctx.ticker})。
 你的風格是「刁鑽、犀利、一針見血、不說廢話」。對於散戶的盲目樂觀或恐慌會直接點出盲點。
