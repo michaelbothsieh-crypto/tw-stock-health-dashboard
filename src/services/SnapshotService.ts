@@ -207,7 +207,7 @@ export class SnapshotService {
     const uxSummary = buildUxSummary({ direction: aiExplanation.stance, strategyConfidence: strategy.confidence, consistencyLevel: consistency.level, topRiskFlag: riskFlags[0], keyLevels });
     
     // 5. 複雜數據組裝 (Full Mode Only)
-    let playbookResult: any = { shortSummary: explainBreakdown.trend.reasons[0]?.replace('。', '') || "趨勢分析中" };
+    let playbookResult: any;
     let globalLinkage: any = null, insiderTransfers: any[] = [], crashWarning: any = { score: 0 };
 
     if (!isLite) {
@@ -236,25 +236,26 @@ export class SnapshotService {
        crashWarning = evaluateCrashWarning(mkt);
        if (crashWarning.score !== null) strategy.confidence *= (1 - crashWarning.score / 150);
 
-       // The dashboard must not wait on external LLM providers. The deterministic
-       // playbook uses the same market inputs and keeps first paint responsive.
-       playbookResult = generateRuleBasedPlaybook({
-          ticker: norm.symbol, stockName: companyNameZh || norm.symbol, price: latestClose,
-          support: keyLevels.supportLevel, resistance: keyLevels.breakoutLevel,
-          macroRisk: crashWarning.score ?? 0, technicalTrend: (trendSignals.trendScore ?? 0) > 60 ? "偏多" : "中立",
-          flowScore: flowSignals.flowScore ?? 50,
-          smartMoneyFlow: flowSignals.smartMoneyFlow,
-          retailSentiment: flowSignals.retailSentiment,
-          flowVerdict: flowSignals.flowVerdict,
-          institutionalLots: flowSignals.institutionalLots,
-          trustLots: flowSignals.trustLots,
-          marginLots: flowSignals.marginLots,
-          shortLots: flowSignals.shortLots,
-          insiderTransfers,
-          recentTrend: `目前價 ${latestClose.toFixed(1)}，SMA20 ${trendSignals.sma20?.toFixed(1)}`,
-          recentNews: snapshotData.news.slice(0, 5).map((n:any) => typeof n === 'string' ? n : `[${n.date?.split(' ')[0]}] ${n.title}`)
-       });
     }
+
+    // Both lite and full responses need a complete, safe playbook. Keep this
+    // deterministic so the first screen never waits on an external LLM.
+    playbookResult = generateRuleBasedPlaybook({
+      ticker: norm.symbol, stockName: companyNameZh || norm.symbol, price: latestClose,
+      support: keyLevels.supportLevel, resistance: keyLevels.breakoutLevel,
+      macroRisk: crashWarning.score ?? 0, technicalTrend: (trendSignals.trendScore ?? 0) > 60 ? "偏多" : "中立",
+      flowScore: flowSignals.flowScore ?? 50,
+      smartMoneyFlow: flowSignals.smartMoneyFlow,
+      retailSentiment: flowSignals.retailSentiment,
+      flowVerdict: flowSignals.flowVerdict,
+      institutionalLots: flowSignals.institutionalLots,
+      trustLots: flowSignals.trustLots,
+      marginLots: flowSignals.marginLots,
+      shortLots: flowSignals.shortLots,
+      insiderTransfers,
+      recentTrend: `目前價 ${latestClose.toFixed(1)}，SMA20 ${trendSignals.sma20?.toFixed(1)}`,
+      recentNews: snapshotData.news.slice(0, 5).map((n:any) => typeof n === 'string' ? n : `[${n.date?.split(' ')[0]}] ${n.title}`)
+    });
 
     // 法人連動率 & 技術戰術（本機計算，無需額外 I/O）
     const institutionCorrelation = calculateInstitutionCorrelation(

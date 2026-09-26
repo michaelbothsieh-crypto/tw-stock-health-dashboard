@@ -22,7 +22,7 @@ import { format, subDays } from "date-fns";
 
 function getProviderTimeoutMs(): number {
   const value = Number(process.env.STOCK_ROUTER_PROVIDER_TIMEOUT_MS);
-  return Number.isFinite(value) && value > 0 ? value : 5000;
+  return Number.isFinite(value) && value > 0 ? value : 2000;
 }
 
 function withProviderTimeout<T>(
