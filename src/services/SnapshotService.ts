@@ -148,7 +148,9 @@ export class SnapshotService {
     const shortTerm = calculateShortTermSignals(legacyPrices, trendSignals, shortTermVolatility);
     const catalystResult = calculateCatalystScore(snapshotData.news || [], new Date(latestDate), 7);
     const aiExplanation = generateExplanation(norm.symbol, trendSignals, flowSignals, fundamentalSignals, catalystResult);
-    const calibration = await getCalibrationModel(["2330", "2317", "2454", "3231"]);
+    const calibration = isLite
+      ? { a: 1, b: 0, sampleSize: 0, bins: [] }
+      : await getCalibrationModel(["2330", "2317", "2454", "3231"]);
     const predictions = predictProbabilities({ ...trendSignals, ...flowSignals, ...fundamentalSignals, ...catalystResult, ...shortTermVolatility, ...shortTerm, calibration });
     const consistency = calculateConsistency({ ...trendSignals, ...flowSignals, ...fundamentalSignals, ...catalystResult, ...shortTerm, upProb5D: predictions.upProb5D });
     const riskFlags = [...trendSignals.risks, ...flowSignals.risks, ...fundamentalSignals.risks, ...shortTerm.breakdown.riskFlags];
