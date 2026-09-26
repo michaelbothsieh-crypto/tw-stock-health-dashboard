@@ -1,7 +1,9 @@
+"use client";
+
+import dynamic from "next/dynamic";
 import { ChevronDown, Info, ArrowRight, AlertCircle, Shield, Target, Activity, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { HeroPlaybook } from "@/components/dashboard/HeroPlaybook";
 import { Tile } from "@/components/bento/Tile";
-import { StockChart } from "@/components/StockChart";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { GlobalLinkageTile } from "@/components/tiles/GlobalLinkageTile";
@@ -9,6 +11,11 @@ import { TechnicalTile } from "@/components/tiles/TechnicalTile";
 import { FlowRadarTile } from "@/components/tiles/FlowRadarTile";
 import { DashboardLayoutProps, ExplainTab } from "./types";
 import { EXPLAIN_TABS, formatScoreAsPercent, chipColorClass, chipBarColorClass, directionLabel, strategyLabel, ExplainComponentsTable } from "./utils";
+
+const StockChart = dynamic(
+  () => import("@/components/StockChart").then((module) => module.StockChart),
+  { ssr: false, loading: () => <div className="h-80 animate-pulse rounded-xl bg-neutral-900/60" /> },
+);
 
 export function MobileStockLayout({
   snapshot,

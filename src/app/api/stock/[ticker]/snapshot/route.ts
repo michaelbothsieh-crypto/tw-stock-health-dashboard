@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { SnapshotService } from "@/services/SnapshotService";
 
 export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
 
 /**
  * 股票健康檢查快照 API (重構後遵循 SOLID 原則)
@@ -20,7 +19,12 @@ export async function GET(
 
     const snapshot = await SnapshotService.getSnapshot(ticker, { debug, mode });
     
-    return NextResponse.json(snapshot);
+    return NextResponse.json(snapshot, {
+      headers: {
+        // Keep repeat visits fast while allowing the CDN to refresh stock data in the background.
+        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+      },
+    });
   } catch (error: unknown) {
     console.error("[API] Snapshot Error:", error);
     const message = error instanceof Error ? error.message : "Internal Server Error";

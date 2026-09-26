@@ -34,6 +34,21 @@ import { fetchStockSnapshot } from "@/infrastructure/stockRouter";
 import { getTacticalPlaybook } from "@/domain/ai/playbookAgent";
 import { getFilteredInsiderTransfers } from "@/infrastructure/providers/twseInsiderFetch";
 
+const LIVE_QUOTE_TIMEOUT_MS = 700;
+
+async function settleWithin<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timeout = setTimeout(() => resolve(null), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 export interface SnapshotOptions {
   debug?: boolean;
   mode?: "full" | "lite";
@@ -63,7 +78,7 @@ export class SnapshotService {
     const yahooSym = this.isTaiwanStock(norm.symbol) ? (norm.yahoo || `${norm.symbol}.TW`) : norm.symbol;
 
     const [liveQuote, cached] = await Promise.all([
-      (async (): Promise<any | null> => {
+      settleWithin((async (): Promise<any | null> => {
         try {
           const { yf } = await import("@/infrastructure/providers/yahooFinanceClient");
           const rtRaw = await yf.quote(yahooSym);
@@ -81,7 +96,7 @@ export class SnapshotService {
           }
         } catch (e) { console.warn("[SnapshotService] live quote failed", e); }
         return null;
-      })(),
+      })(), LIVE_QUOTE_TIMEOUT_MS),
       debugMode ? Promise.resolve(null) : getCache<any>(cacheKey),
     ]);
 

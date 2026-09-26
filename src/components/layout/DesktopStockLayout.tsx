@@ -1,8 +1,9 @@
+"use client";
+
+import dynamic from "next/dynamic";
 import { AlertCircle, Shield, Target, Activity, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { HeroPlaybook } from "@/components/dashboard/HeroPlaybook";
 import { Tile } from "@/components/bento/Tile";
-import { RadarOverview } from "@/components/charts/RadarOverview";
-import { StockChart } from "@/components/StockChart";
 import { GlobalLinkageTile } from "@/components/tiles/GlobalLinkageTile";
 import { TechnicalTile } from "@/components/tiles/TechnicalTile";
 import { FlowRadarTile } from "@/components/tiles/FlowRadarTile";
@@ -11,6 +12,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DashboardLayoutProps, ExplainTab } from "./types";
 import { EXPLAIN_TABS, formatScoreAsPercent, scoreToneClass, chipColorClass, chipBarColorClass, directionLabel, strategyLabel, ExplainComponentsTable } from "./utils";
 import { riskFlagLabel } from "@/domain/riskFlags";
+
+const StockChart = dynamic(
+  () => import("@/components/StockChart").then((module) => module.StockChart),
+  { ssr: false, loading: () => <div className="h-80 animate-pulse rounded-xl bg-neutral-900/60" /> },
+);
+
+const RadarOverview = dynamic(
+  () => import("@/components/charts/RadarOverview").then((module) => module.RadarOverview),
+  { ssr: false, loading: () => <div className="h-56 w-full animate-pulse rounded-xl bg-neutral-900/60" /> },
+);
 
 export function DesktopStockLayout({
   snapshot,
